@@ -10,7 +10,8 @@ on:
       - internal/**
       - frontend/**
       - scripts/apply-overlay.sh
-      - scripts/apply-v2.py
+      - scripts/apply-v2*.py
+      - scripts/v2_patchlib.py
       - overlay/**
       - .github/workflows/prebuild.yml
 
