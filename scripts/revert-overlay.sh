@@ -3,31 +3,38 @@ set -euo pipefail
 
 SRC=${1:-}
 BACKUP=${2:-}
-if [[ -z "$SRC" || -z "$BACKUP" ]]; then
-  echo "Usage: $0 /path/to/3x-ui-source /path/to/.dualcore-backup-YYYYMMDD-HHMMSS" >&2
-  exit 2
-fi
-for file in \
-  internal/database/db.go \
-  internal/web/controller/api.go \
-  frontend/src/routes.tsx \
-  frontend/src/layouts/AppSidebar.tsx; do
-  if [[ ! -f "$BACKUP/$file" ]]; then
-    echo "Invalid backup; missing $file" >&2
-    exit 1
-  fi
+[[ -n "$SRC" && -n "$BACKUP" ]] || { echo "Usage: $0 /path/to/3x-ui-source /path/to/.dualcore-backup-*" >&2; exit 2; }
+modified=(
+  internal/database/model/model.go
+  internal/web/service/inbound.go
+  internal/web/service/client_crud.go
+  internal/web/service/client_inbound_apply.go
+  internal/web/service/inbound_clients.go
+  internal/web/service/xray.go
+  internal/web/runtime/local.go
+  internal/sub/service.go
+  internal/sub/json_service.go
+  internal/sub/clash_service.go
+  frontend/src/schemas/primitives/protocol.ts
+  frontend/src/schemas/protocols/inbound/index.ts
+  frontend/src/lib/xray/inbound-defaults.ts
+  frontend/src/lib/xray/protocol-capabilities.ts
+  frontend/src/pages/inbounds/form/protocols/index.ts
+  frontend/src/pages/inbounds/form/InboundFormModal.tsx
+  frontend/src/pages/clients/ClientFormModal.tsx
+  frontend/src/pages/clients/ClientBulkAddModal.tsx
+)
+for f in "${modified[@]}"; do
+  [[ -f "$BACKUP/$f" ]] || { echo "Invalid backup; missing $f" >&2; exit 1; }
+  cp "$BACKUP/$f" "$SRC/$f"
 done
-
-cp "$BACKUP/internal/database/db.go" "$SRC/internal/database/db.go"
-cp "$BACKUP/internal/web/controller/api.go" "$SRC/internal/web/controller/api.go"
-cp "$BACKUP/frontend/src/routes.tsx" "$SRC/frontend/src/routes.tsx"
-cp "$BACKUP/frontend/src/layouts/AppSidebar.tsx" "$SRC/frontend/src/layouts/AppSidebar.tsx"
 rm -rf "$SRC/internal/singbox"
-rm -f "$SRC/internal/database/model/singbox.go"
-rm -f "$SRC/internal/web/service/singbox.go"
-rm -f "$SRC/internal/web/controller/singbox.go"
-rm -rf "$SRC/frontend/src/pages/singbox"
+rm -f \
+  "$SRC/internal/database/model/singbox_protocols.go" \
+  "$SRC/internal/sub/singbox_links.go" \
+  "$SRC/internal/sub/singbox_clash.go" \
+  "$SRC/frontend/src/schemas/protocols/inbound/singbox.ts" \
+  "$SRC/frontend/src/pages/inbounds/form/protocols/singbox.tsx"
 
-
-echo "Dual-core source overlay reverted from: $BACKUP"
-echo "The singbox_inbounds database table is intentionally NOT dropped."
+echo "3Xpatcher V2 source overlay reverted from: $BACKUP"
+echo "Database rows/tables are intentionally not dropped."
