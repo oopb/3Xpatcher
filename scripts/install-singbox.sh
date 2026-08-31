@@ -134,4 +134,8 @@ systemctl is-active --quiet x-ui-singbox.service
 echo "Installed $($BIN/sing-box version | head -n1)"
 echo "Service: x-ui-singbox.service"
 echo "Config:  $CONF/config.json"
-[[ -n "$old" ]] && echo "Previous runtime backup: $old"
+if [[ -n "$old" ]]; then
+  echo "Previous runtime backup: $old"
+fi
+
+exit 0
