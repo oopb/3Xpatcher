@@ -3,7 +3,7 @@ name: Prebuild patched 3x-ui
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, v2-integrated-work]
     paths:
       - VERSION
       - UPSTREAM_COMPAT
@@ -143,6 +143,7 @@ jobs:
           if-no-files-found: error
 
   publish:
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     steps:
