@@ -1,0 +1,16 @@
+[Unit]
+Description=3x-ui Supplemental sing-box Core
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=LD_LIBRARY_PATH=/usr/local/x-ui-singbox/bin
+ExecStart=/usr/local/x-ui-singbox/bin/sing-box run -c /usr/local/x-ui-singbox/config/config.json
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=1048576
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

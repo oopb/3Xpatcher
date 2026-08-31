@@ -1,0 +1,17 @@
+{
+  "remark": "ShadowTLS-v3-10443",
+  "enable": true,
+  "listen": "::",
+  "port": 10443,
+  "protocol": "shadowtls",
+  "tag": "shadowtls-10443",
+  "settings": {
+    "users": [{"name":"alice","password":"change-me-shadowtls"}],
+    "handshakeServer": "www.microsoft.com",
+    "handshakePort": 443,
+    "strictMode": true,
+    "wildcardSNI": "off",
+    "innerMethod": "2022-blake3-aes-128-gcm",
+    "innerPassword": "MDEyMzQ1Njc4OWFiY2RlZg=="
+  }
+}

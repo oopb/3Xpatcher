@@ -1,0 +1,15 @@
+{
+  "remark": "TUIC-443",
+  "enable": true,
+  "listen": "::",
+  "port": 443,
+  "protocol": "tuic",
+  "tag": "tuic-443",
+  "settings": {
+    "users": [{"name":"alice","uuid":"550e8400-e29b-41d4-a716-446655440000","password":"change-me"}],
+    "congestionControl": "cubic",
+    "heartbeat": "10s",
+    "zeroRTTHandshake": false,
+    "tls": {"enabled":true,"certificatePath":"/root/cert/fullchain.pem","keyPath":"/root/cert/privkey.pem"}
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "remark": "Naive-9443",
+  "enable": true,
+  "listen": "::",
+  "port": 9443,
+  "protocol": "naive",
+  "tag": "naive-9443",
+  "settings": {
+    "network": "tcp",
+    "users": [{"username":"alice","password":"change-me"}],
+    "tls": {"enabled":true,"certificatePath":"/root/cert/fullchain.pem","keyPath":"/root/cert/privkey.pem"}
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "remark": "AnyTLS-8443",
+  "enable": true,
+  "listen": "::",
+  "port": 8443,
+  "protocol": "anytls",
+  "tag": "anytls-8443",
+  "settings": {
+    "users": [{"name":"alice","password":"change-me"}],
+    "tls": {"enabled":true,"certificatePath":"/root/cert/fullchain.pem","keyPath":"/root/cert/privkey.pem"}
+  }
+}
