@@ -50,6 +50,8 @@ type TLSSettings struct {
 	ALPN            []string `json:"alpn,omitempty"`
 	CertificatePath string   `json:"certificatePath,omitempty"`
 	KeyPath         string   `json:"keyPath,omitempty"`
+	Certificate     []string `json:"certificate,omitempty"`
+	Key             []string `json:"key,omitempty"`
 }
 
 type TUICUser struct {
@@ -352,13 +354,19 @@ func renderTLS(s TLSSettings) (map[string]any, error) {
 	if !s.Enabled {
 		return nil, errors.New("TLS must be enabled for this protocol")
 	}
-	if strings.TrimSpace(s.CertificatePath) == "" || strings.TrimSpace(s.KeyPath) == "" {
-		return nil, errors.New("TLS certificatePath and keyPath are required")
-	}
-	m := map[string]any{
-		"enabled":          true,
-		"certificate_path": s.CertificatePath,
-		"key_path":         s.KeyPath,
+	m := map[string]any{"enabled": true}
+	if strings.TrimSpace(s.CertificatePath) != "" || strings.TrimSpace(s.KeyPath) != "" {
+		if strings.TrimSpace(s.CertificatePath) == "" || strings.TrimSpace(s.KeyPath) == "" {
+			return nil, errors.New("TLS certificatePath and keyPath must be provided together")
+		}
+		m["certificate_path"] = s.CertificatePath
+		m["key_path"] = s.KeyPath
+	} else {
+		if len(s.Certificate) == 0 || len(s.Key) == 0 {
+			return nil, errors.New("TLS certificate and key are required")
+		}
+		m["certificate"] = s.Certificate
+		m["key"] = s.Key
 	}
 	if s.ServerName != "" {
 		m["server_name"] = s.ServerName
