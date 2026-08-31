@@ -100,6 +100,17 @@ func (r Runtime) Apply(config []byte) error {
 		return err
 	}
 
+	// Reconcile is called from several native 3x-ui lifecycle paths. Avoid
+	// restarting sing-box when the canonical rendered config is byte-identical;
+	// this keeps an unrelated Xray restart from bouncing supplemental sessions.
+	if oldExists && bytes.Equal(bytes.TrimSpace(old), bytes.TrimSpace(config)) {
+		status, _ := r.Status()
+		if status == "active" {
+			return nil
+		}
+		return r.Restart()
+	}
+
 	tmp, err := os.CreateTemp(dir, ".config-*.json")
 	if err != nil {
 		return err
