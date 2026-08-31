@@ -28,7 +28,6 @@ rm -f "$SRC/internal/web/service/singbox.go"
 rm -f "$SRC/internal/web/controller/singbox.go"
 rm -rf "$SRC/frontend/src/pages/singbox"
 
-gofmt -w "$SRC/internal/database/db.go" "$SRC/internal/web/controller/api.go"
 
 echo "Dual-core source overlay reverted from: $BACKUP"
 echo "The singbox_inbounds database table is intentionally NOT dropped."

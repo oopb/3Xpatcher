@@ -4,13 +4,13 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-echo '[1/5] Go renderer tests'
+echo '[1/6] Go renderer tests'
 go test ./internal/singbox
 
-echo '[2/5] Shell syntax'
-bash -n scripts/*.sh tests/*.sh
+echo '[2/6] Shell syntax'
+bash -n install.sh rollback.sh scripts/*.sh tests/*.sh
 
-echo '[3/5] Example JSON + V1 protocol boundary'
+echo '[3/6] Example JSON + V1 protocol boundary'
 python3 - <<'PY'
 from pathlib import Path
 import json
@@ -34,7 +34,7 @@ if "value: 'snell'" in page:
 print('examples/UI protocol boundary: OK')
 PY
 
-echo '[4/5] Xray isolation static guard'
+echo '[4/6] Xray isolation static guard'
 # Supplemental runtime code may mention Xray in comments/documentation, but it
 # must not invoke known Xray lifecycle/update operations or binary paths.
 if grep -RniE --include='*.go' --include='*.sh' \
@@ -44,7 +44,17 @@ if grep -RniE --include='*.go' --include='*.sh' \
   exit 1
 fi
 
-echo '[5/5] Overlay + frontend route + rollback smoke'
+echo '[5/6] One-click installer safety guard'
+grep -q 'sha256sum "$XUI_DIR"/bin/xray-' install.sh
+grep -q 'install -m 0755 "$WORK/x-ui-patched" "$XUI_DIR/x-ui"' install.sh
+if grep -nE '(rm -rf|install|cp|mv).*(xray-linux|/bin/xray)' install.sh; then
+  echo 'One-click installer must never write/delete the Xray binary.' >&2
+  exit 1
+fi
+grep -q 'restoring the original binary' install.sh
+grep -q 'PANEL_VERSION_BEFORE' rollback.sh
+
+echo '[6/6] Overlay + frontend route + rollback smoke'
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 src="$tmp/3x-ui"

@@ -2,7 +2,7 @@
 
 目标：在 **不替换、不接管 Xray core 生命周期** 的前提下，为 3x-ui 增加一个独立的 sing-box supplemental core，并在现有 3x-ui React 面板里管理它。
 
-当前版本：`0.2.0-ui-alpha`
+当前版本：`0.3.0-oneclick-alpha`
 
 ## V1 协议范围
 
@@ -145,6 +145,59 @@ CRUD 变更会根据 DB 中全部 enabled supplemental inbounds 重建一份完�
 
 systemd unit：`x-ui-singbox.service`
 
+
+## 一键安装（现有 3x-ui）
+
+Debian / Ubuntu / Armbian，systemd，amd64 / arm64：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/install.sh)
+```
+
+脚本默认**保持当前已安装的 3x-ui 稳定版本**：例如本机 `x-ui -v` 返回 `3.7.0`，就下载 `v3.7.0` 源码、应用 dual-core overlay、构建并只替换 `/usr/local/x-ui/x-ui`。不会替换 `/usr/local/x-ui/bin/xray-*`。
+
+完整流程：
+
+1. 检测现有 3x-ui、systemd、CPU/OS；
+2. 备份原面板 binary、`/etc/x-ui` 和 Xray SHA256；
+3. 自动准备 Go / Node 构建工具链；
+4. 低内存 VPS 自动创建临时 swap；
+5. 下载对应 3x-ui stable 源码；
+6. 应用补丁并运行 sing-box renderer 单测；
+7. 构建 React 前端和 patched `x-ui`；
+8. 安装/更新最新 stable sing-box；
+9. 仅替换面板 `x-ui` binary 并重启一次 `x-ui.service`；
+10. 校验服务状态、Panel 版本和所有 Xray binary hash；
+11. 任一步失败自动恢复原 `x-ui`。
+
+安装过程中会重启一次 `x-ui.service`，因此其 Xray 子进程可能短暂重连一次；安装完成后 Xray 与 sing-box 的运行、更新路径互相独立。
+
+指定上游版本：
+
+```bash
+UPSTREAM_REF=v3.7.0 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/install.sh)
+```
+
+保留构建目录用于排错：
+
+```bash
+KEEP_WORK=1 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/install.sh)
+```
+
+### 一键回滚
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/rollback.sh)
+```
+
+默认只恢复原 3x-ui binary，不删除 sing-box 配置。若确认要连 supplemental core 一起清除：
+
+```bash
+PURGE_SINGBOX=1 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/rollback.sh)
+```
+
+安装状态保存在 `/etc/3xpatcher/install.env`，原 binary / 配置备份保存在 `/var/lib/3xpatcher/backups/`。
+
 ## 应用到 3x-ui 源码
 
 ```bash
@@ -248,7 +301,7 @@ ShadowTLS hidden inner 支持：
 
 ## 仍未完成
 
-`0.2.0-ui-alpha` 还不是最终的一键生产版。下一阶段主要是：
+`0.3.0-oneclick-alpha` 已提供一键源码构建/安装/自动回滚，但还不是最终生产版。下一阶段主要是：
 
 1. subscription URI / sing-box JSON / Clash Meta 输出；
 2. sing-box user traffic stats、quota、expiry；
