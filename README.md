@@ -1,25 +1,23 @@
-# 3x-ui Dual Core Patch — V1 UI alpha
+# 3Xpatcher — 3x-ui Dual Core Patch
 
-目标：在 **不替换、不接管 Xray core 生命周期** 的前提下，为 3x-ui 增加一个独立的 sing-box supplemental core，并在现有 3x-ui React 面板里管理它。
+在**不替换、不接管 Xray core 生命周期**的前提下，为 3x-ui 增加独立的 sing-box supplemental core，并在现有 3x-ui React 面板中管理它。
 
-当前版本：`0.3.0-oneclick-alpha`
+当前版本：`0.4.0-prebuilt-alpha`
 
-## V1 协议范围
-
-用户可见协议固定为：
+## V1 协议
 
 - TUIC
 - AnyTLS
 - ShadowTLS v3
 - Naive
 
-V1 **不开放 Snell**，即使安装到的 stable sing-box binary 已经支持 Snell；也不重复开放 VLESS / VMess / Trojan / Shadowsocks / Hysteria2 等继续由 Xray 管理的协议。
+V1 不开放 Snell，也不重复开放 VLESS / VMess / Trojan / Shadowsocks / Hysteria2 等继续由 Xray 管理的协议。
 
-## 隔离原则
+## 架构
 
 ```text
 3x-ui
-├── 原有 Xray core               # 原升级、重启、配置逻辑保持原样
+├── 原有 Xray core               # 原配置、更新、重启逻辑保持原样
 └── sing-box supplemental core   # /usr/local/x-ui-singbox
     ├── TUIC
     ├── AnyTLS
@@ -27,290 +25,174 @@ V1 **不开放 Snell**，即使安装到的 stable sing-box binary 已经支持 
     └── Naive
 ```
 
-本补丁：
+补丁新增独立 `singbox_inbounds` 模型、`/panel/api/singbox/*` API、`/panel/singbox` React 页面以及独立 `x-ui-singbox.service`。原 Xray `inbounds` 表和 `/usr/local/x-ui/bin/xray-*` 不由 3Xpatcher 修改。
 
-- 不替换 Xray binary；
-- 不调用 Xray update / restart / stop；
-- 不把 supplemental 协议写进原 Xray `inbounds` 表；
-- sing-box 配置失败不会用错误配置覆盖当前可运行配置；
-- 源码 overlay 可回滚；
-- 卸载 sing-box core 不会删除或停止 Xray。
+## 快速安装
 
-## 已实现
-
-### 1. 独立数据库模型
-
-新增 `singbox_inbounds`：
-
-- `internal/database/model/singbox.go`
-- `scripts/apply-overlay.sh` 将 `&model.SingboxInbound{}` 加入当前 3x-ui v3 的 `allModels()`，由上游 GORM migration 创建表。
-
-原 `Inbound`/`inbounds` 继续只归 Xray 使用。
-
-### 2. 四协议配置生成器
-
-`internal/singbox/config.go`
-
-- 对 TUIC / AnyTLS / ShadowTLS v3 / Naive 做协议级校验；
-- 仅生成 enabled rows；
-- 明确拒绝 Snell 和 Xray 重复协议；
-- TUIC 默认 congestion control 为 `cubic`；
-- TLS 协议要求真实 certificate/key path；
-- ShadowTLS 固定 v3。
-
-ShadowTLS v3 会自动生成隐藏的 injectable Shadowsocks 2022 inbound：
-
-```text
-shadowtls:<tag>
-    detour -> shadowsocks:<tag>-inner
-```
-
-隐藏 Shadowsocks 只是 carrier 注入实现，不会出现在用户协议选择器里。
-
-### 3. 安全运行时
-
-`internal/singbox/runtime.go`
-
-每次配置变化：
-
-1. 生成临时配置；
-2. `sing-box check -c <temp>`；
-3. 校验成功后原子替换 `/usr/local/x-ui-singbox/config/config.json`；
-4. 只重启 `x-ui-singbox.service`；
-5. 如果新配置启动失败，恢复旧配置并重启旧配置。
-
-### 4. 独立 API
-
-- `GET  /panel/api/singbox/list`
-- `GET  /panel/api/singbox/get/:id`
-- `GET  /panel/api/singbox/status`
-- `POST /panel/api/singbox/add`
-- `POST /panel/api/singbox/update/:id`
-- `POST /panel/api/singbox/del/:id`
-- `POST /panel/api/singbox/setEnable/:id`
-- `POST /panel/api/singbox/check`
-- `POST /panel/api/singbox/restart`
-
-CRUD 变更会根据 DB 中全部 enabled supplemental inbounds 重建一份完整 sing-box config。
-
-### 5. React 面板
-
-新增：
-
-`frontend/src/pages/singbox/SingboxInboundsPage.tsx`
-
-源码 overlay 会同时注入：
-
-- `frontend/src/routes.tsx` → `/panel/singbox`
-- `frontend/src/layouts/AppSidebar.tsx` → `Sing-box`
-
-页面目前支持：
-
-- core status / version；
-- Refresh；
-- `sing-box check`；
-- restart supplemental core；
-- inbound list；
-- create / edit / delete；
-- enable / disable；
-- TUIC / AnyTLS / ShadowTLS v3 / Naive 专用表单；
-- TUIC UUID/password generator；
-- ShadowTLS hidden inner Shadowsocks key generator。
-
-如果 sing-box binary/service 尚未安装，status 会显示 unavailable，但数据库列表仍可读取，不会因为 status endpoint 失败而把管理页面一起打坏。
-
-### 6. stable sing-box 安装/更新
-
-`scripts/install-singbox.sh`
-
-- 读取 SagerNet/sing-box 官方 GitHub `releases/latest`；
-- 只接受 `vMAJOR.MINOR.PATCH` 且 `draft=false`、`prerelease=false`；
-- Linux amd64 / arm64；
-- 使用 GitHub release asset 提供的 SHA256 digest 校验 tarball；
-- 新 binary 替换前先用当前 config 执行 `check`；
-- runtime 独立安装到 `/usr/local/x-ui-singbox`；
-- 若新 binary 启动失败，回滚上一套 binary directory。
-
-目录：
-
-```text
-/usr/local/x-ui-singbox/
-├── bin/
-│   ├── sing-box
-│   └── *.so               # 官方 archive 有则保留
-├── config/
-│   └── config.json
-└── backup/
-```
-
-systemd unit：`x-ui-singbox.service`
-
-
-## 一键安装（现有 3x-ui）
-
-Debian / Ubuntu / Armbian，systemd，amd64 / arm64：
+支持 Debian / Ubuntu / Armbian、systemd、amd64 / arm64，并要求机器上已经安装官方 3x-ui。
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/install.sh)
 ```
 
-脚本默认**保持当前已安装的 3x-ui 稳定版本**：例如本机 `x-ui -v` 返回 `3.7.0`，就下载 `v3.7.0` 源码、应用 dual-core overlay、构建并只替换 `/usr/local/x-ui/x-ui`。不会替换 `/usr/local/x-ui/bin/xray-*`。
+### 0.4.0 起不再默认在 VPS 上编译
 
-完整流程：
+旧版一键脚本会在目标 VPS 下载 3x-ui 源码、Node、Go 和大量依赖，然后本地构建。小磁盘/小内存机器容易耗时较长，并可能在 Go/CGO 编译阶段占满根分区。
 
-1. 检测现有 3x-ui、systemd、CPU/OS；
-2. 备份原面板 binary、`/etc/x-ui` 和 Xray SHA256；
-3. 自动准备 Go / Node 构建工具链；
-4. 低内存 VPS 自动创建临时 swap；
-5. 下载对应 3x-ui stable 源码；
-6. 应用补丁并运行 sing-box renderer 单测；
-7. 构建 React 前端和 patched `x-ui`；
-8. 安装/更新最新 stable sing-box；
-9. 仅替换面板 `x-ui` binary 并重启一次 `x-ui.service`；
-10. 校验服务状态、Panel 版本和所有 Xray binary hash；
-11. 任一步失败自动恢复原 `x-ui`。
+现在改为：
 
-安装过程中会重启一次 `x-ui.service`，因此其 Xray 子进程可能短暂重连一次；安装完成后 Xray 与 sing-box 的运行、更新路径互相独立。
+1. 读取当前 `/usr/local/x-ui/x-ui -v`；
+2. 按当前 3x-ui 版本寻找 `prebuilt-vX.Y.Z` 兼容构建；
+3. 校验 GitHub release asset SHA256 digest；
+4. 校验包内 `PATCH_VERSION / UPSTREAM_REF / ARCH`；
+5. 备份当前 `x-ui`、`/etc/x-ui` 和所有 Xray binary SHA256；
+6. 安装/更新 stable sing-box；
+7. 只替换 `/usr/local/x-ui/x-ui`；
+8. 重启一次 `x-ui.service` 并验证状态；
+9. 再次校验 Xray binary SHA256；
+10. 激活失败则自动恢复原 panel binary。
 
-指定上游版本：
+因此目标 VPS **不需要 Node.js、Go、npm install、Go module download 或本地 CGO 编译**。正常安装只需要下载一个预编译 patched panel 和 sing-box runtime。
 
-```bash
-UPSTREAM_REF=v3.7.0 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/install.sh)
+当前预编译兼容的官方 3x-ui 版本写在：
+
+```text
+UPSTREAM_COMPAT
 ```
 
-保留构建目录用于排错：
+如果当前 3x-ui 版本还没有对应预编译包，安装器会快速退出，不会自动回退到耗时源码编译。
 
-```bash
-KEEP_WORK=1 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/install.sh)
+## 为什么仍然属于“源码 Patch 架构”
+
+预编译并没有改变补丁结构。GitHub Actions 仍然执行：
+
+```text
+官方 3x-ui 对应版本源码
+        ↓
+scripts/apply-overlay.sh
+        ↓
+加入 Sing-box React 页面 / API / DB model
+        ↓
+npm build
+        ↓
+Go + CGO static build
+        ↓
+预编译 patched x-ui
 ```
 
-### 一键回滚
+区别只是把耗时构建从 VPS 移到了 GitHub Actions。
+
+## 前端修改
+
+Overlay 新增：
+
+```text
+frontend/src/pages/singbox/SingboxInboundsPage.tsx
+```
+
+并对官方源码做两个小型注入：
+
+```text
+frontend/src/routes.tsx
+  + /panel/singbox
+
+frontend/src/layouts/AppSidebar.tsx
+  + Sing-box
+```
+
+原 Dashboard / Inbounds / Clients / Settings / Xray 页面不被替换。
+
+## sing-box runtime
+
+安装目录：
+
+```text
+/usr/local/x-ui-singbox/
+├── bin/
+│   ├── sing-box
+│   └── *.so
+├── config/
+│   └── config.json
+└── backup/
+```
+
+systemd：
+
+```text
+x-ui-singbox.service
+```
+
+配置更新流程：
+
+```text
+DB
+ → render temp config
+ → sing-box check
+ → atomic replace
+ → restart x-ui-singbox.service only
+ → failed: restore previous config
+```
+
+## 一键回滚
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/rollback.sh)
 ```
 
-默认只恢复原 3x-ui binary，不删除 sing-box 配置。若确认要连 supplemental core 一起清除：
+默认恢复安装前的 3x-ui panel binary，同时保留 sing-box runtime/config 和 `singbox_inbounds` 数据。
+
+完全清除 supplemental runtime：
 
 ```bash
 PURGE_SINGBOX=1 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/rollback.sh)
 ```
 
-安装状态保存在 `/etc/3xpatcher/install.env`，原 binary / 配置备份保存在 `/var/lib/3xpatcher/backups/`。
+安装状态：
 
-## 应用到 3x-ui 源码
+```text
+/etc/3xpatcher/install.env
+```
+
+备份：
+
+```text
+/var/lib/3xpatcher/backups/
+```
+
+## 3x-ui 升级
+
+Xray Core 单独升级不需要重新安装 3Xpatcher。
+
+如果升级 **3x-ui Panel 本体**，官方 updater 会替换 patched `/usr/local/x-ui/x-ui`，因此 Sing-box 页面/API 会暂时消失，但 `/usr/local/x-ui-singbox` 和 supplemental 配置不会被官方 updater 删除。
+
+新 3x-ui 版本需要先由 3Xpatcher CI 生成对应兼容预编译包，然后重新运行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/install.sh)
+```
+
+如果上游 route/sidebar/API patch point 已变化，`apply-overlay.sh` 会 fail closed，CI 不会发布该版本的预编译 patched panel。
+
+## 开发 / 源码 Overlay
 
 ```bash
 ./scripts/apply-overlay.sh /path/to/3x-ui
 ```
 
-脚本会先验证当前上游 patch points，验证失败则 fail closed，不猜测修改位置。随后：
+它会先验证 patch points，再复制 supplemental backend/frontend 代码并注入 DB/API/route/sidebar。
 
-1. 备份 `db.go` / `api.go` / `routes.tsx` / `AppSidebar.tsx`；
-2. 复制 supplemental backend 与 React 页面；
-3. 注入 DB model；
-4. 注入 `/panel/api/singbox`；
-5. 注入 `/panel/singbox` 前端 route；
-6. 注入 sidebar item；
-7. `gofmt` Go 文件。
-
-之后使用 **3x-ui 上游自己的构建流程**：
-
-```bash
-make typecheck
-make test
-make build
-```
-
-正式安装时应在满足上游当前 Go/Node 版本要求的构建环境执行。
-
-### 回滚源码 overlay
+源码恢复：
 
 ```bash
 ./scripts/revert-overlay.sh /path/to/3x-ui /path/to/3x-ui/.dualcore-backup-YYYYMMDD-HHMMSS
 ```
 
-回滚不会 DROP `singbox_inbounds`，防止误删配置。
+回滚现在按备份文件**原样恢复**，不会在恢复后再次 `gofmt`，因此可做字节级 hash 对比。
 
-## 安装 / 更新 sing-box core
-
-```bash
-sudo ./scripts/install-singbox.sh
-```
-
-更新到最新 stable：
-
-```bash
-sudo ./scripts/update-singbox.sh
-```
-
-卸载 binary/service、保留 config/backups：
-
-```bash
-sudo ./scripts/uninstall-singbox.sh
-```
-
-连 supplemental core 数据目录一起删：
-
-```bash
-sudo PURGE=1 ./scripts/uninstall-singbox.sh
-```
-
-这些脚本都不会删除或停止 Xray。
-
-## API payload 示例
-
-见 `examples/`。
-
-TUIC 示例默认使用 `cubic`：
-
-```json
-{
-  "users": [{"name":"alice","uuid":"550e8400-e29b-41d4-a716-446655440000","password":"..."}],
-  "congestionControl": "cubic",
-  "heartbeat": "10s",
-  "zeroRTTHandshake": false,
-  "tls": {
-    "enabled": true,
-    "certificatePath": "/path/fullchain.pem",
-    "keyPath": "/path/privkey.pem"
-  }
-}
-```
-
-ShadowTLS hidden inner 支持：
-
-- `2022-blake3-aes-128-gcm`：16-byte 标准 Base64 key；
-- `2022-blake3-aes-256-gcm`：32-byte 标准 Base64 key；
-- `2022-blake3-chacha20-poly1305`：32-byte 标准 Base64 key。
-
-## Smoke test
+## 测试
 
 ```bash
 ./tests/smoke.sh
 ```
 
-当前 smoke 覆盖：
-
-- Go renderer unit tests；
-- shell syntax；
-- example JSON / V1 protocol allowlist；
-- supplemental 源码 Xray lifecycle 静态隔离 guard；
-- backend + frontend overlay 注入；
-- overlay rollback 后原文件 hash 恢复。
-
-## 仍未完成
-
-`0.3.0-oneclick-alpha` 已提供一键源码构建/安装/自动回滚，但还不是最终生产版。下一阶段主要是：
-
-1. subscription URI / sing-box JSON / Clash Meta 输出；
-2. sing-box user traffic stats、quota、expiry；
-3. 端口冲突检查（Xray 与 sing-box 共用宿主端口空间）；
-4. 更完整的 certificate 复用/选择 UI；
-5. patch-aware 3x-ui Panel Updater；
-6. 在真实当前 3x-ui full source 上跑完整 `make verify`；
-7. 在真实 stable sing-box binary 上对四协议生成结果跑 integration `sing-box check`。
-
-## 当前验证边界
-
-本源码包已经完成 renderer/unit/static/overlay/rollback 测试，但当前执行环境无法完成最终上游集成验证：本地 Go/Node 版本低于当前 3x-ui upstream 构建要求，且 shell 环境不能直接下载官方 release binary。因此目前不能把它标记为 production-ready。
+覆盖：renderer unit tests、shell syntax、V1 protocol allowlist、Xray isolation、overlay、前端 route/sidebar 注入以及字节级 source rollback。
