@@ -2,7 +2,7 @@
 
 在**不替换、不接管 Xray core 生命周期**的前提下，为 3x-ui 增加独立的 sing-box supplemental core，并在现有 3x-ui React 面板中管理它。
 
-当前版本：`0.4.0-prebuilt-alpha`
+当前版本：`0.4.1-prebuilt-alpha`
 
 ## V1 协议
 
