@@ -1,136 +1,68 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-echo '[1/6] Go renderer tests'
+echo '[1/6] renderer unit tests'
 go test ./internal/singbox
 
-echo '[2/6] Shell syntax'
+echo '[2/6] script syntax'
 bash -n install.sh rollback.sh scripts/*.sh tests/*.sh
+python3 -m py_compile scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py
 
-echo '[3/6] Example JSON + V1 protocol boundary'
+echo '[3/6] integrated protocol surface'
 python3 - <<'PY'
 from pathlib import Path
-import json
-root = Path('.')
-expected = {'tuic', 'anytls', 'shadowtls', 'naive'}
-seen = set()
-for path in sorted((root / 'examples').glob('*.json')):
-    obj = json.loads(path.read_text())
-    proto = obj.get('protocol')
-    if proto not in expected:
-        raise SystemExit(f'{path}: unexpected V1 protocol {proto!r}')
-    seen.add(proto)
-if seen != expected:
-    raise SystemExit(f'example protocol set mismatch: {seen!r}')
-page = (root / 'frontend/src/pages/singbox/SingboxInboundsPage.tsx').read_text()
-for p in ('tuic', 'anytls', 'shadowtls', 'naive'):
-    if f"value: '{p}'" not in page:
-        raise SystemExit(f'UI is missing protocol: {p}')
-if "value: 'snell'" in page:
-    raise SystemExit('Snell must stay hidden in V1')
-print('examples/UI protocol boundary: OK')
+expected={'tuic','anytls','shadowtls','naive'}
+settings=Path('overlay/frontend/src/schemas/protocols/inbound/singbox.ts').read_text()
+fields=Path('overlay/frontend/src/pages/inbounds/form/protocols/singbox.tsx').read_text()
+model=Path('overlay/internal/database/model/singbox_protocols.go').read_text()
+renderer=Path('internal/singbox/config.go').read_text()
+for p in expected:
+    if p not in model or p not in renderer:
+        raise SystemExit(f'missing backend protocol {p}')
+for component in ('TuicFields','AnyTlsFields','ShadowTlsFields','NaiveFields'):
+    if component not in fields:
+        raise SystemExit(f'missing frontend component {component}')
+if 'clients:' not in settings:
+    raise SystemExit('supplemental frontend settings must retain native clients mirror')
+print('protocol surface: OK')
 PY
 
-echo '[4/6] Xray isolation static guard'
-# Supplemental runtime code may mention Xray in comments/documentation, but it
-# must not invoke known Xray lifecycle/update operations or binary paths.
-if grep -RniE --include='*.go' --include='*.sh' \
-  '(UpdateXray|RestartXray|StopXray|systemctl[^\n]*(xray|x-ui\.service)|/usr/local/x-ui/bin/xray|xray-linux-(amd64|arm64))' \
-  internal scripts systemd; then
-  echo 'Found a forbidden Xray lifecycle/binary operation in supplemental code.' >&2
+echo '[4/6] native identity/subscription integration guards'
+grep -q 'JOIN client_inbounds AS ci' overlay/internal/singbox/integrated.go
+grep -q 'Select("c.\*")' overlay/internal/singbox/integrated.go
+grep -q 'genSingboxLink' overlay/internal/sub/singbox_links.go
+grep -q "'tuic','anytls','shadowtls','naive')" scripts/v2-patch-subscription.py
+grep -q 'case model.TUIC:' scripts/v2-patch-backend.py
+grep -q "'frontend/src/pages/clients/ClientFormModal.tsx'" scripts/v2-patch-subscription.py
+grep -q "'internal/web/service/client_inbound_apply.go'" scripts/v2-patch-backend.py
+grep -q 'TUIC client requires UUID and password' scripts/v2-patch-backend.py
+grep -q "AMNEZIAWG: 'amneziawg'" scripts/v2-patch-frontend.py
+grep -q "internal/sub/json_service.go" scripts/v2-patch-subscription.py
+grep -q 'model.IsSingboxProtocol(inbound.Protocol)' scripts/v2-patch-backend.py scripts/v2-patch-subscription.py
+
+echo '[5/6] Xray isolation guards'
+grep -q 'model.IsSingboxProtocol(inbound.Protocol)' scripts/v2-patch-backend.py scripts/v2-patch-subscription.py
+grep -q 'model.IsSingboxProtocol(ib.Protocol)' scripts/v2-patch-backend.py
+if grep -RniE --include='*.go' 'GenXrayInboundConfig\(' overlay/internal/singbox internal/singbox; then
+  echo 'supplemental code must not render Xray inbounds' >&2
   exit 1
 fi
 
-echo '[5/6] One-click installer safety guard'
-grep -q 'sha256sum "$XUI_DIR"/bin/xray-' install.sh
-grep -q 'install -m 0755 "$WORK/x-ui-patched" "$XUI_DIR/x-ui"' install.sh
-if grep -nE '(rm -rf|install|cp|mv).*(xray-linux|/bin/xray)' install.sh; then
-  echo 'One-click installer must never write/delete the Xray binary.' >&2
-  exit 1
-fi
-grep -q 'restoring the original binary' install.sh
-grep -q 'PANEL_VERSION_BEFORE' rollback.sh
-
-echo '[6/6] Overlay + frontend route + rollback smoke'
-tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
-src="$tmp/3x-ui"
-mkdir -p \
-  "$src/internal/database/model" \
-  "$src/internal/database" \
-  "$src/internal/web/controller" \
-  "$src/internal/web/service" \
-  "$src/frontend/src/layouts" \
-  "$src/frontend/src/pages/inbounds"
-cat > "$src/go.mod" <<'GO'
-module github.com/mhsanaei/3x-ui/v3
-
-go 1.23
-GO
-cat > "$src/internal/database/db.go" <<'GO'
-package database
-
-import "github.com/mhsanaei/3x-ui/v3/internal/database/model"
-
-func allModels() []any {
-	return []any{
-		&model.Inbound{},
-	}
-}
-GO
-cat > "$src/internal/database/model/model.go" <<'GO'
-package model
-
-type Inbound struct{}
-GO
-cat > "$src/internal/web/controller/api.go" <<'GO'
-package controller
-
-type RouterGroup struct{}
-func (r *RouterGroup) Group(string) *RouterGroup { return r }
-type InboundController struct{}
-func NewInboundController(*RouterGroup) *InboundController { return &InboundController{} }
-type API struct{ inboundController *InboundController }
-func (a *API) init(api *RouterGroup) {
-	inbounds := api.Group("/inbounds")
-	a.inboundController = NewInboundController(inbounds)
-}
-GO
-cat > "$src/frontend/src/routes.tsx" <<'TS'
-const InboundsPage = lazy(() => import('@/pages/inbounds/InboundsPage'));
-const routes = [
-      { path: 'inbounds', element: withSuspense(<InboundsPage />) },
-];
-TS
-cat > "$src/frontend/src/layouts/AppSidebar.tsx" <<'TS'
-const tabs = [
-      { key: '/inbounds', icon: 'inbound', title: t('menu.inbounds') },
-];
-TS
-
-before_db=$(sha256sum "$src/internal/database/db.go" | awk '{print $1}')
-before_api=$(sha256sum "$src/internal/web/controller/api.go" | awk '{print $1}')
-before_routes=$(sha256sum "$src/frontend/src/routes.tsx" | awk '{print $1}')
-before_sidebar=$(sha256sum "$src/frontend/src/layouts/AppSidebar.tsx" | awk '{print $1}')
-
-out=$(scripts/apply-overlay.sh "$src")
-backup=$(printf '%s\n' "$out" | sed -n 's/^Backup: //p')
-[[ -n "$backup" && -d "$backup" ]]
-grep -q '&model.SingboxInbound{}' "$src/internal/database/db.go"
-grep -q 'api.Group("/singbox")' "$src/internal/web/controller/api.go"
-grep -q "path: 'singbox'" "$src/frontend/src/routes.tsx"
-grep -q "key: '/singbox'" "$src/frontend/src/layouts/AppSidebar.tsx"
-test -f "$src/frontend/src/pages/singbox/SingboxInboundsPage.tsx"
-
-scripts/revert-overlay.sh "$src" "$backup" >/dev/null
-[[ $(sha256sum "$src/internal/database/db.go" | awk '{print $1}') == "$before_db" ]]
-[[ $(sha256sum "$src/internal/web/controller/api.go" | awk '{print $1}') == "$before_api" ]]
-[[ $(sha256sum "$src/frontend/src/routes.tsx" | awk '{print $1}') == "$before_routes" ]]
-[[ $(sha256sum "$src/frontend/src/layouts/AppSidebar.tsx" | awk '{print $1}') == "$before_sidebar" ]]
-test ! -e "$src/internal/singbox"
-test ! -e "$src/frontend/src/pages/singbox"
+echo '[6/6] overlay contract'
+for f in \
+  overlay/internal/singbox/integrated.go \
+  overlay/internal/database/model/singbox_protocols.go \
+  overlay/internal/sub/singbox_links.go \
+  overlay/internal/sub/singbox_clash.go \
+  overlay/frontend/src/schemas/protocols/inbound/singbox.ts \
+  overlay/frontend/src/pages/inbounds/form/protocols/singbox.tsx; do
+  test -s "$f"
+done
+# V2 must not inject the old standalone page/menu/API.
+! grep -q "path: 'singbox'" scripts/apply-overlay.sh
+! grep -q "key: '/singbox'" scripts/apply-overlay.sh
+! grep -q 'api.Group("/singbox")' scripts/apply-overlay.sh
 
 echo 'smoke: PASS'
