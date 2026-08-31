@@ -10,6 +10,8 @@ on:
       - internal/**
       - frontend/**
       - scripts/apply-overlay.sh
+      - scripts/apply-v2.py
+      - overlay/**
       - .github/workflows/prebuild.yml
 
 permissions:
@@ -53,6 +55,7 @@ jobs:
           set -euo pipefail
           ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
           cp internal/singbox/config_test.go source/internal/singbox/config_test.go
+          cp overlay/internal/singbox/integrated_test.go source/internal/singbox/integrated_test.go
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -66,8 +69,8 @@ jobs:
         working-directory: source
         run: go test ./internal/singbox
 
-      - name: Remove overlay-only unit test from production source
-        run: rm -f source/internal/singbox/config_test.go
+      - name: Remove overlay-only unit tests from production source
+        run: rm -f source/internal/singbox/config_test.go source/internal/singbox/integrated_test.go
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
