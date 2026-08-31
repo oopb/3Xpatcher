@@ -81,6 +81,8 @@ V2 不维护第二套用户：
 
 Mihomo/Clash 输出目前支持 TUIC、AnyTLS、ShadowTLS；Naive 暂不写入 Mihomo YAML，因为当前没有可安全依赖的原生 Naive proxy 类型。
 
+3x-ui 的 Xray JSON subscription (`/json`) 无法表达这四种 sing-box-only 协议，因此会显式跳过它们，而不是生成无效的空代理配置；需要 supplemental 节点时使用 raw subscription 或 Mihomo/Clash。
+
 > 当前 alpha 尚未把 sing-box 的实时字节统计合并回 3x-ui/Xray traffic counters。Client enable/expiry/attachment/订阅身份已统一，但 supplemental traffic accounting 是后续工作。
 
 ## 安装
