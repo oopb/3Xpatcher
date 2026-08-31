@@ -270,7 +270,7 @@ main() {
 
   echo
   ok "Installation complete."
-  echo "Panel:        $PANEL_VERSION -> $TARGET_VESION"
+  echo "Panel:        $PANEL_VERSION -> $TARGET_VERSION"
   echo "Upstream ref: $UPSTREAM_REF"
   echo "Install mode: prebuilt"
   echo "Backup:       $BACKUP_DIR"
