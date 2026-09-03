@@ -21,7 +21,7 @@ const listenTuning = {
   disableTCPKeepAlive: z.boolean().default(false),
   tcpKeepAlive: z.string().default(''),
   tcpKeepAliveInterval: z.string().default(''),
-  udpFragment: z.boolean().default(false),
+  udpFragment: z.boolean().optional(),
   udpTimeout: z.string().default(''),
 };
 
