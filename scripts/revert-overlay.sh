@@ -11,16 +11,19 @@ modified=(
   internal/web/service/client_inbound_apply.go
   internal/web/service/inbound_clients.go
   internal/web/service/xray.go
+  internal/web/controller/server.go
   internal/web/runtime/local.go
   internal/sub/service.go
   internal/sub/json_service.go
   internal/sub/clash_service.go
   frontend/src/schemas/primitives/protocol.ts
   frontend/src/schemas/protocols/inbound/index.ts
+  frontend/src/schemas/protocols/security/tls.ts
   frontend/src/lib/xray/inbound-defaults.ts
   frontend/src/lib/xray/protocol-capabilities.ts
   frontend/src/pages/inbounds/form/protocols/index.ts
   frontend/src/pages/inbounds/form/InboundFormModal.tsx
+  frontend/src/pages/inbounds/form/security/tls.tsx
   frontend/src/pages/inbounds/list/helpers.ts
   frontend/src/pages/inbounds/list/RowActions.tsx
   frontend/src/pages/clients/ClientFormModal.tsx
@@ -35,8 +38,9 @@ rm -f \
   "$SRC/internal/database/model/singbox_protocols.go" \
   "$SRC/internal/sub/singbox_links.go" \
   "$SRC/internal/sub/singbox_clash.go" \
+  "$SRC/internal/web/controller/singbox_cert.go" \
   "$SRC/frontend/src/schemas/protocols/inbound/singbox.ts" \
   "$SRC/frontend/src/pages/inbounds/form/protocols/singbox.tsx"
 
-echo "3Xpatcher V3 source overlay reverted from: $BACKUP"
+echo "3Xpatcher V4 source overlay reverted from: $BACKUP"
 echo "Database rows/tables and generated certificate files are intentionally not dropped."
