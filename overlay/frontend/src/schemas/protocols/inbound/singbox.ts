@@ -25,12 +25,6 @@ const listenTuning = {
   udpTimeout: z.string().default(''),
 };
 
-const tlsMode = {
-  tlsMode: z.enum(['native', 'self_signed_sni']).default('native'),
-  camouflageSNI: z.string().default(''),
-  selfSignedValidityDays: z.number().int().min(1).max(3650).default(3650),
-};
-
 const quicTuning = {
   idleTimeout: z.string().default(''),
   keepAlivePeriod: z.string().default(''),
@@ -50,7 +44,6 @@ export const TuicInboundSettingsSchema = z
     heartbeat: z.string().default('10s'),
     ...listenTuning,
     ...quicTuning,
-    ...tlsMode,
   })
   .loose();
 
@@ -59,7 +52,6 @@ export const AnyTlsInboundSettingsSchema = z
     clients: z.array(IntegratedClientSchema).default([]),
     paddingScheme: z.array(z.string()).default([]),
     ...listenTuning,
-    ...tlsMode,
   })
   .loose();
 
@@ -90,7 +82,6 @@ export const NaiveInboundSettingsSchema = z
     network: z.enum(['tcp', 'udp', '']).default(''),
     quicCongestionControl: z.enum(['bbr', 'cubic', 'reno', '']).default('bbr'),
     ...listenTuning,
-    ...tlsMode,
   })
   .loose();
 
