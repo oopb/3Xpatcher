@@ -2,7 +2,7 @@
 
 3Xpatcher 在保留 **3x-ui 原生 Inbounds / Clients / Subscription** 体验的前提下，为官方 3x-ui 增加独立 sing-box supplemental core。
 
-当前版本：`0.6.0-integrated-alpha`
+当前版本：`0.7.0-integrated-alpha`
 
 ## 协议
 
@@ -37,35 +37,67 @@ Xray 协议仍由原 3x-ui/Xray 管理；supplemental 协议由独立 `x-ui-sing
 
 ## TLS certificate modes
 
-TUIC / AnyTLS / Naive 支持两种证书方式：
+TUIC / AnyTLS / Naive 的证书来源统一放在原生 **Security → TLS**，不再在协议表单重复维护 SNI/证书字段。
 
-### Native 3x-ui TLS certificate
+### Native / imported certificate
 
-继续复用 3x-ui 原生 TLS 编辑器：证书文件、内联证书、SNI、ALPN、TLS 版本、cipher suites、curve preferences。
+继续复用 3x-ui 原生 TLS 编辑器：
 
-### Generated self-signed SNI certificate
+- SNI (`serverName`)
+- certificate file / inline certificate
+- panel default certificate
+- ALPN
+- TLS min/max version
+- cipher suites
+- curve preferences
 
-协议表单选择：
+### Generate self-signed certificate from SNI
+
+在 **Security → TLS**：
 
 ```text
-Certificate Mode -> Generated self-signed SNI certificate
-Camouflage SNI   -> www.microsoft.com
+SNI              -> www.microsoft.com
+Certificate Mode -> Generate self-signed certificate from SNI
+Validity          -> 3650
+[ Generate / Regenerate ]
 ```
 
-3Xpatcher 使用 Go `crypto/x509` 自动生成 ECDSA P-256 自签证书，SAN/CN 为填写的 SNI，并保存到：
+点击按钮会立即强制重新生成 ECDSA P-256 自签证书；保存节点时如果证书不存在或临近过期，也会自动生成/复用。
+
+TLS 页面会显示：
+
+- SAN / SNI
+- expiration time
+- certificate path
+- key path
+- 当前 SNI 是否和已生成证书一致
+
+生成文件：
 
 ```text
 /usr/local/x-ui-singbox/certs/<sni-hash>/cert.pem
 /usr/local/x-ui-singbox/certs/<sni-hash>/key.pem
 ```
 
-这不是 REALITY，也不会获得第三方域名的公有 CA 信任。raw subscription 会自动加入 `insecure=1`，Mihomo 会自动加入 `skip-cert-verify: true`，从而使生成的节点与自签证书配置保持一致。
+自签模式下原生证书导入/路径区域会隐藏，避免同时出现两套证书来源。
+
+这不是 REALITY，也不会获得第三方域名的公有 CA 信任。raw subscription 会自动加入 `insecure=1`，Mihomo 会自动加入 `skip-cert-verify: true`。
 
 如果需要公有 CA 信任证书，必须使用自己可控制的域名和 ACME/CA；不能为不受控制的第三方域名合法获取受信任证书。
 
-## sing-box 1.14 option coverage
+### 0.6 compatibility
 
-V3 对照 sing-box v1.14.0 和 S-UI 补充：
+旧版存放在协议 settings 中的：
+
+```text
+tlsMode
+camouflageSNI
+selfSignedValidityDays
+```
+
+仍可被后端读取；打开旧节点编辑时，前端会把它们迁移到 `streamSettings.tlsSettings` 的新位置，并复用 TLS 原生 `serverName`。
+
+## sing-box 1.14 option coverage
 
 ### Common Listen options
 
@@ -78,7 +110,7 @@ V3 对照 sing-box v1.14.0 和 S-UI 补充：
 - disable_tcp_keep_alive
 - tcp_keep_alive
 - tcp_keep_alive_interval
-- udp_fragment
+- udp_fragment（Protocol default / Enabled / Disabled）
 - udp_timeout
 
 ### TUIC
@@ -102,7 +134,7 @@ V3 对照 sing-box v1.14.0 和 S-UI 补充：
 
 - users
 - handshake server/port
-- handshake_for_server_name (JSON; values may include sing-box Dial Fields)
+- handshake_for_server_name (JSON)
 - strict_mode
 - wildcard_sni: off / authed / all
 - automatically managed hidden Shadowsocks carrier inbound
@@ -115,9 +147,7 @@ V3 对照 sing-box v1.14.0 和 S-UI 补充：
 - TLS
 - common Listen options
 
-`bbr2` is intentionally not exposed for Naive **inbound**: sing-box v1.14.0 source only includes `bbr2` in Naive outbound, while inbound enum is `bbr,cubic,reno`.
-
-Not exposed as ordinary per-inbound toggles: arbitrary `detour` (ShadowTLS detour is internally managed), mTLS client-auth, ECH server keys, kernel TLS, and top-level certificate providers. These require additional lifecycle/trust semantics and are not necessary for the current integrated client/subscription model.
+`bbr2` 不暴露给 Naive inbound：sing-box v1.14.0 inbound enum 是 `bbr,cubic,reno`，`bbr2` 只存在于 outbound。
 
 ## Subscription
 
@@ -128,6 +158,8 @@ Not exposed as ordinary per-inbound toggles: arbitrary `detour` (ShadowTLS detou
 - ShadowTLS v3 raw link
 - Naive `naive+https` raw link
 - Mihomo: TUIC / AnyTLS / ShadowTLS
+
+自签 SNI 模式会自动输出对应的跳过证书验证参数。
 
 3x-ui 的 Xray JSON subscription (`/json`) 无法表达 sing-box-only 协议，因此会跳过这些协议，而不是生成无效 Xray 配置。
 
