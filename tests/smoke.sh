@@ -47,7 +47,8 @@ grep -q 'MITA_CONFIG_JSON_FILE' scripts/install-mieru.sh
 
 echo '[5/8] Mieru runtime isolation guards'
 grep -q 'x-ui-mieru@%d.service' internal/mieru/runtime.go
-grep -q 'x-ui-mieru@%i.service' scripts/install-mieru.sh
+grep -q 'x-ui-mieru@.service' scripts/install-mieru.sh
+grep -q 'MITA_UDS_PATH=/run/x-ui-mieru/%i.sock' scripts/install-mieru.sh
 grep -q 'DefaultConfigDir.*x-ui-mieru/config' internal/mieru/runtime.go
 grep -q 'ConfiguredIDs' overlay/internal/mieru/integrated.go
 grep -q 'mcore.Reconcile' scripts/v6-patch.py
