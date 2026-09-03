@@ -5,6 +5,7 @@ XUI_DIR="${XUI_DIR:-/usr/local/x-ui}"
 XUI_SERVICE="${XUI_SERVICE:-x-ui.service}"
 STATE_FILE="${STATE_FILE:-/etc/3xpatcher/install.env}"
 PURGE_SINGBOX="${PURGE_SINGBOX:-0}"
+PURGE_MIERU="${PURGE_MIERU:-0}"
 
 red='\033[0;31m'; green='\033[0;32m'; yellow='\033[0;33m'; plain='\033[0m'
 die() { echo -e "${red}[3Xpatcher] ERROR:${plain} $*" >&2; exit 1; }
@@ -20,6 +21,17 @@ current=$($XUI_DIR/x-ui -v 2>/dev/null | tail -n1 | tr -d '\r' | xargs || true)
 echo "Current panel:  ${current:-unknown}"
 echo "Restore panel:  ${PANEL_VERSION_BEFORE:-unknown}"
 echo "Backup:         $BACKUP_DIR"
+
+# Mieru has one service instance per patched inbound. Stop/disable them before
+# restoring an upstream panel that no longer knows how to reconcile those rows.
+if [[ -x /usr/local/share/3xpatcher/current/scripts/uninstall-mieru.sh ]]; then
+  PURGE="$PURGE_MIERU" bash /usr/local/share/3xpatcher/current/scripts/uninstall-mieru.sh >/dev/null || true
+else
+  while read -r unit; do [[ -n "$unit" ]] && systemctl disable --now "$unit" >/dev/null 2>&1 || true; done < <(systemctl list-units --all --plain --no-legend 'x-ui-mieru@*.service' 2>/dev/null | awk '{print $1}')
+  rm -f /etc/systemd/system/x-ui-mieru@.service
+  systemctl daemon-reload
+  [[ "$PURGE_MIERU" == "1" ]] && rm -rf /usr/local/x-ui-mieru
+fi
 
 systemctl stop "$XUI_SERVICE"
 install -m 0755 "$BACKUP_DIR/x-ui" "$XUI_DIR/x-ui"
@@ -41,8 +53,13 @@ if [[ "$PURGE_SINGBOX" == "1" ]]; then
     rm -rf /usr/local/x-ui-singbox
   fi
 fi
+if [[ "$PURGE_MIERU" == "1" ]]; then
+  echo -e "${yellow}[3Xpatcher] PURGE_MIERU=1: Mieru runtime/config removed.${plain}"
+else
+  echo "Mieru services disabled; per-inbound configs preserved under /usr/local/x-ui-mieru/config."
+fi
 
 mkdir -p /etc/3xpatcher
 mv "$STATE_FILE" "/etc/3xpatcher/install.env.rolled-back.$(date -u +%Y%m%d-%H%M%S)"
 echo -e "${green}[3Xpatcher] Rollback complete.${plain}"
-echo "Note: the supplemental singbox_inbounds DB table is intentionally left in place unless the database itself is restored manually."
+echo "Note: supplemental protocol rows remain in the native inbounds table; generated runtime state is not used by the restored upstream panel."
