@@ -60,14 +60,21 @@ func (s *SubService) buildSingboxEndpointLink(inbound *model.Inbound, client mod
 
 func applySingboxTLSLinkParams(settings, stream, ep map[string]any, params map[string]string) {
 	tls, _ := stream["tlsSettings"].(map[string]any)
+	selfSigned := false
 	if tls != nil {
 		if sni, _ := tls["serverName"].(string); sni != "" { params["sni"] = sni }
 		if alpn := anyStringSlice(tls["alpn"]); len(alpn) > 0 { params["alpn"] = strings.Join(alpn, ",") }
+		if mode, _ := tls["certificateMode"].(string); mode == "self_signed_sni" { selfSigned = true }
 	}
-	if mode, _ := settings["tlsMode"].(string); mode == "self_signed_sni" {
-		if sni, _ := settings["camouflageSNI"].(string); strings.TrimSpace(sni) != "" { params["sni"] = strings.TrimSpace(sni) }
-		params["insecure"] = "1"
+	if !selfSigned {
+		if mode, _ := settings["tlsMode"].(string); mode == "self_signed_sni" { // 0.6 compatibility
+			selfSigned = true
+			if _, exists := params["sni"]; !exists {
+				if sni, _ := settings["camouflageSNI"].(string); strings.TrimSpace(sni) != "" { params["sni"] = strings.TrimSpace(sni) }
+			}
+		}
 	}
+	if selfSigned { params["insecure"] = "1" }
 	if ep != nil {
 		if sni, ok := externalProxySNI(ep); ok { params["sni"] = sni }
 		if insecure, _ := ep["allowInsecure"].(bool); insecure { params["insecure"] = "1" }
