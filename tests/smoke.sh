@@ -49,6 +49,11 @@ echo '[5/8] Mieru runtime isolation guards'
 grep -q 'x-ui-mieru@%d.service' internal/mieru/runtime.go
 grep -q 'x-ui-mieru@.service' scripts/install-mieru.sh
 grep -q 'MITA_UDS_PATH=/run/x-ui-mieru/%i.sock' scripts/install-mieru.sh
+grep -q '^User=mita$' scripts/install-mieru.sh
+grep -q '^Group=mita$' scripts/install-mieru.sh
+grep -q '^AmbientCapabilities=CAP_NET_BIND_SERVICE$' scripts/install-mieru.sh
+grep -q 'install -d -m 2750 -o root -g mita' scripts/install-mieru.sh
+grep -q 'tmp.Chmod(0o640)' internal/mieru/runtime.go
 grep -q 'DefaultConfigDir.*x-ui-mieru/config' internal/mieru/runtime.go
 grep -q 'ConfiguredIDs' overlay/internal/mieru/integrated.go
 grep -q 'mcore.Reconcile' scripts/v6-patch.py
