@@ -44,7 +44,7 @@ func (r Runtime) CheckBytes(config []byte) error {
 
 func (r Runtime) Apply(id int, config []byte) error {
 	if id <= 0 { return errors.New("invalid Mieru inbound id") }
-	r = r.normalized(); if err := r.CheckBytes(config); err != nil { return err }; if err := os.MkdirAll(r.ConfigDir, 0o700); err != nil { return err }
+	r = r.normalized(); if err := r.CheckBytes(config); err != nil { return err }; if err := os.MkdirAll(r.ConfigDir, 0o750); err != nil { return err }
 	path := r.configPath(id); var old []byte; oldExists := false
 	if b, err := os.ReadFile(path); err == nil { old, oldExists = b, true } else if !errors.Is(err, os.ErrNotExist) { return err }
 	if oldExists && bytes.Equal(bytes.TrimSpace(old), bytes.TrimSpace(config)) {
@@ -53,9 +53,9 @@ func (r Runtime) Apply(id int, config []byte) error {
 		return r.restartAndVerify(id)
 	}
 	tmp, err := os.CreateTemp(r.ConfigDir, fmt.Sprintf(".%d-*.json", id)); if err != nil { return err }; tmpName := tmp.Name(); defer os.Remove(tmpName)
-	if err := tmp.Chmod(0o600); err != nil { tmp.Close(); return err }; if _, err := tmp.Write(config); err != nil { tmp.Close(); return err }; if err := tmp.Sync(); err != nil { tmp.Close(); return err }; if err := tmp.Close(); err != nil { return err }; if err := os.Rename(tmpName, path); err != nil { return err }
+	if err := tmp.Chmod(0o640); err != nil { tmp.Close(); return err }; if _, err := tmp.Write(config); err != nil { tmp.Close(); return err }; if err := tmp.Sync(); err != nil { tmp.Close(); return err }; if err := tmp.Close(); err != nil { return err }; if err := os.Rename(tmpName, path); err != nil { return err }
 	if err := r.restartAndVerify(id); err != nil {
-		if oldExists { _ = os.WriteFile(path, old, 0o600); _ = r.restartAndVerify(id) } else { _ = os.Remove(path); _ = r.Disable(id) }
+		if oldExists { _ = os.WriteFile(path, old, 0o640); _ = r.restartAndVerify(id) } else { _ = os.Remove(path); _ = r.Disable(id) }
 		return fmt.Errorf("new Mieru config failed official mita startup validation; previous config restored: %w", err)
 	}
 	return nil
