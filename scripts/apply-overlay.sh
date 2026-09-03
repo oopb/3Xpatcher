@@ -16,16 +16,19 @@ modified=(
   internal/web/service/client_inbound_apply.go
   internal/web/service/inbound_clients.go
   internal/web/service/xray.go
+  internal/web/controller/server.go
   internal/web/runtime/local.go
   internal/sub/service.go
   internal/sub/json_service.go
   internal/sub/clash_service.go
   frontend/src/schemas/primitives/protocol.ts
   frontend/src/schemas/protocols/inbound/index.ts
+  frontend/src/schemas/protocols/security/tls.ts
   frontend/src/lib/xray/inbound-defaults.ts
   frontend/src/lib/xray/protocol-capabilities.ts
   frontend/src/pages/inbounds/form/protocols/index.ts
   frontend/src/pages/inbounds/form/InboundFormModal.tsx
+  frontend/src/pages/inbounds/form/security/tls.tsx
   frontend/src/pages/inbounds/list/helpers.ts
   frontend/src/pages/inbounds/list/RowActions.tsx
   frontend/src/pages/clients/ClientFormModal.tsx
@@ -41,7 +44,7 @@ for f in "${modified[@]}"; do
   cp "$SRC/$f" "$backup/$f"
 done
 
-mkdir -p "$SRC/internal/singbox" "$SRC/internal/database/model" "$SRC/internal/sub" "$SRC/frontend/src/schemas/protocols/inbound" "$SRC/frontend/src/pages/inbounds/form/protocols"
+mkdir -p "$SRC/internal/singbox" "$SRC/internal/database/model" "$SRC/internal/sub" "$SRC/internal/web/controller" "$SRC/frontend/src/schemas/protocols/inbound" "$SRC/frontend/src/pages/inbounds/form/protocols"
 cp "$ROOT/internal/singbox/config.go" "$SRC/internal/singbox/config.go"
 cp "$ROOT/internal/singbox/runtime.go" "$SRC/internal/singbox/runtime.go"
 cp "$ROOT/overlay/internal/singbox/integrated.go" "$SRC/internal/singbox/integrated.go"
@@ -50,16 +53,17 @@ cp "$ROOT/overlay/internal/singbox/selfsigned_util.go" "$SRC/internal/singbox/se
 cp "$ROOT/overlay/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/singbox_protocols.go"
 cp "$ROOT/overlay/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links.go"
 cp "$ROOT/overlay/internal/sub/singbox_clash.go" "$SRC/internal/sub/singbox_clash.go"
+cp "$ROOT/overlay/internal/web/controller/singbox_cert.go" "$SRC/internal/web/controller/singbox_cert.go"
 cp "$ROOT/overlay/frontend/src/schemas/protocols/inbound/singbox.ts" "$SRC/frontend/src/schemas/protocols/inbound/singbox.ts"
 cp "$ROOT/overlay/frontend/src/pages/inbounds/form/protocols/singbox.tsx" "$SRC/frontend/src/pages/inbounds/form/protocols/singbox.tsx"
 
 python3 "$ROOT/scripts/apply-v2.py" "$SRC"
 python3 "$ROOT/scripts/v3-patch.py" "$SRC"
 
-gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/model.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_clash.go"
+gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/model.go" "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_clash.go"
 
-echo "3Xpatcher V3 integrated overlay applied."
+echo "3Xpatcher V4 integrated overlay applied."
 echo "Backup: $backup"
 echo "UI: native /panel/inbounds + native client attach/detach"
-echo "TLS: native certificate or generated self-signed camouflage SNI"
+echo "TLS: generated SNI certificate controls live in native Security -> TLS"
 echo "Runtime: Xray and sing-box remain isolated"
