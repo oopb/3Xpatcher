@@ -2,7 +2,7 @@
 
 3Xpatcher 在保留 **3x-ui 原生 Inbounds / Clients / Subscription** 体验的前提下，为官方 3x-ui 增加独立 sing-box supplemental core。
 
-当前版本：`0.7.0-integrated-alpha`
+当前版本：`0.8.0-integrated-alpha`
 
 ## 协议
 
@@ -35,11 +35,11 @@ Xray 协议仍由原 3x-ui/Xray 管理；supplemental 协议由独立 `x-ui-sing
 
 同一个 Client 可以同时附加到 VLESS、TUIC、AnyTLS 等入站，并继续使用同一个 `subId`。
 
-## TLS certificate modes
+## Security / TLS / Reality
 
-TUIC / AnyTLS / Naive 的证书来源统一放在原生 **Security → TLS**，不再在协议表单重复维护 SNI/证书字段。
+### Native TLS
 
-### Native / imported certificate
+TUIC / AnyTLS / Naive 的证书来源统一放在原生 **Security → TLS**，不在协议表单重复维护 SNI/证书字段。
 
 继续复用 3x-ui 原生 TLS 编辑器：
 
@@ -64,13 +64,7 @@ Validity          -> 3650
 
 点击按钮会立即强制重新生成 ECDSA P-256 自签证书；保存节点时如果证书不存在或临近过期，也会自动生成/复用。
 
-TLS 页面会显示：
-
-- SAN / SNI
-- expiration time
-- certificate path
-- key path
-- 当前 SNI 是否和已生成证书一致
+TLS 页面会显示 SAN/SNI、expiration time、certificate path、key path，以及当前 SNI 是否和已生成证书一致。
 
 生成文件：
 
@@ -83,7 +77,38 @@ TLS 页面会显示：
 
 这不是 REALITY，也不会获得第三方域名的公有 CA 信任。raw subscription 会自动加入 `insecure=1`，Mihomo 会自动加入 `skip-cert-verify: true`。
 
-如果需要公有 CA 信任证书，必须使用自己可控制的域名和 ACME/CA；不能为不受控制的第三方域名合法获取受信任证书。
+### Native 3x-ui Reality reuse
+
+AnyTLS 直接复用 3x-ui 已有的 **Security → Reality** UI 和操作：
+
+- Target / target scanner
+- SNI / serverNames
+- X25519 keypair generation
+- public/private key
+- short IDs
+- max time diff
+- existing Reality target probing flow
+
+3Xpatcher 在保存后把 3x-ui 原生 `streamSettings.realitySettings` 映射为 sing-box 1.14 `tls.reality`：
+
+```text
+3x-ui target              -> reality.handshake.server/server_port
+3x-ui serverNames[0]      -> tls.server_name
+3x-ui privateKey          -> reality.private_key
+3x-ui shortIds            -> reality.short_id
+3x-ui maxTimediff (ms)    -> reality.max_time_difference
+```
+
+当前 supplemental 协议的 Reality 支持边界：
+
+| Protocol | Reality | 原因 |
+| --- | --- | --- |
+| AnyTLS | Yes | TCP + sing-box inbound/outbound TLS Reality 均可用 |
+| TUIC | No | QUIC custom TLS 仅支持 ECH，不支持 Reality |
+| ShadowTLS v3 | No | 协议自身不是 `InboundTLSOptions` Reality 模型 |
+| Naive | No | inbound 虽复用 TLS 容器，但 sing-box 1.14 Naive outbound 明确拒绝 Reality |
+
+因此不会为了“界面上能选”而生成实际上无法端到端连接的 TUIC/Naive Reality 节点。
 
 ### 0.6 compatibility
 
@@ -128,6 +153,7 @@ selfSignedValidityDays
 - users
 - padding_scheme
 - TLS
+- Reality
 - common Listen options
 
 ### ShadowTLS v3
@@ -157,7 +183,19 @@ selfSignedValidityDays
 - AnyTLS raw link
 - ShadowTLS v3 raw link
 - Naive `naive+https` raw link
-- Mihomo: TUIC / AnyTLS / ShadowTLS
+- Mihomo: TUIC / AnyTLS(TLS) / ShadowTLS
+
+AnyTLS + Reality raw link 会输出 Reality 常用查询参数：
+
+```text
+security=reality
+sni=...
+pbk=...
+sid=...
+fp=...
+```
+
+Mihomo 当前明确不支持 **AnyTLS + Reality**，因此 Clash/Mihomo subscription 会跳过这一组合，而不是输出一个必定连接失败的 proxy。使用 AnyTLS + Reality 时客户端需支持 sing-box AnyTLS Reality。
 
 自签 SNI 模式会自动输出对应的跳过证书验证参数。
 
