@@ -1,4 +1,4 @@
-import { Alert, Button, Divider, Input, InputNumber, Select, Space, Switch } from 'antd';
+import { Button, Divider, Input, InputNumber, Select, Space, Switch } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import { FormField } from '@/components/form/rhf';
@@ -32,42 +32,6 @@ function ListenTuningFields() {
   );
 }
 
-function TlsModeFields() {
-  const { control } = useFormContext();
-  const mode = (useWatch({ control, name: 'settings.tlsMode' }) as string | undefined) || 'native';
-  return (
-    <>
-      <Divider orientation="left" plain>TLS Certificate Mode</Divider>
-      <FormField label="Certificate Mode" name={['settings', 'tlsMode']}>
-        <Select
-          placeholder="Native 3x-ui certificate"
-          options={[
-            { value: 'native', label: 'Native 3x-ui TLS certificate' },
-            { value: 'self_signed_sni', label: 'Generated self-signed SNI certificate' },
-          ]}
-        />
-      </FormField>
-      {mode === 'self_signed_sni' && (
-        <>
-          <Alert
-            type="warning"
-            showIcon
-            title="Camouflage SNI is self-signed, not REALITY"
-            description="3Xpatcher generates a certificate whose SAN matches this SNI. It is not trusted by public CAs, so exported subscriptions automatically enable insecure / skip-cert-verify."
-            style={{ marginBottom: 12 }}
-          />
-          <FormField label="Camouflage SNI" name={['settings', 'camouflageSNI']}>
-            <Input placeholder="www.microsoft.com" />
-          </FormField>
-          <FormField label="Certificate Validity (days)" name={['settings', 'selfSignedValidityDays']}>
-            <InputNumber min={1} max={3650} style={{ width: '100%' }} placeholder="3650" />
-          </FormField>
-        </>
-      )}
-    </>
-  );
-}
-
 function QuicTuningFields() {
   return (
     <>
@@ -92,7 +56,6 @@ export function TuicFields() {
       <FormField label="Auth Timeout" name={['settings', 'authTimeout']}><Input placeholder="3s" /></FormField>
       <FormField label="Heartbeat" name={['settings', 'heartbeat']}><Input placeholder="10s" /></FormField>
       <FormField label="0-RTT Handshake" name={['settings', 'zeroRTTHandshake']} valueProp="checked"><Switch /></FormField>
-      <TlsModeFields />
       <QuicTuningFields />
       <ListenTuningFields />
     </>
@@ -105,7 +68,6 @@ export function AnyTlsFields() {
       <FormField label="Padding Scheme" name={['settings', 'paddingScheme']}>
         <Select mode="tags" tokenSeparators={[',']} placeholder="Leave empty for sing-box defaults" style={{ width: '100%' }} />
       </FormField>
-      <TlsModeFields />
       <ListenTuningFields />
     </>
   );
@@ -157,7 +119,6 @@ export function NaiveFields() {
       <FormField label="QUIC Congestion Control" name={['settings', 'quicCongestionControl']}>
         <Select options={['bbr', 'cubic', 'reno'].map((value) => ({ value, label: value }))} />
       </FormField>
-      <TlsModeFields />
       <ListenTuningFields />
     </>
   );
