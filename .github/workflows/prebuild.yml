@@ -104,7 +104,17 @@ jobs:
         working-directory: source
         env:
           MIERU_OFFICIAL_BINARY: ${{ steps.mieru.outputs.binary }}
-        run: go test ./internal/singbox ./internal/mieru
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./internal/singbox
+          sudo env \
+            "PATH=$PATH" \
+            "GOTOOLCHAIN=local" \
+            "MIERU_OFFICIAL_BINARY=$MIERU_OFFICIAL_BINARY" \
+            "GOMODCACHE=/tmp/3xpatcher-go-mod-root" \
+            "GOCACHE=/tmp/3xpatcher-go-cache-root" \
+            "$(command -v go)" test ./internal/mieru
       - name: Remove overlay-only unit tests from production source
         run: rm -f source/internal/singbox/config_test.go source/internal/singbox/integrated_test.go source/internal/mieru/config_test.go
       - name: Setup Node.js
