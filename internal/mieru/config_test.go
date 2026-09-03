@@ -15,9 +15,10 @@ func TestBuildMieruTCPConfig(t *testing.T) {
 	})
 	if err != nil { t.Fatal(err) }
 	s := string(b)
-	for _, needle := range []string{`"port": 5000`, `"protocol": "TCP"`, `"name": "alice@example.com"`, `"allowPrivateIP": true`, `"userHintIsMandatory": true`} {
+	for _, needle := range []string{`"port": 5000`, `"protocol": "TCP"`, `"name": "alice@example.com"`, `"hashedPassword"`, `"allowPrivateIP": true`, `"userHintIsMandatory": true`} {
 		if !strings.Contains(s, needle) { t.Fatalf("missing %s:\n%s", needle, s) }
 	}
+	if strings.Contains(s, `"password": "secret"`) { t.Fatalf("plaintext password leaked into runtime config: %s", s) }
 }
 
 func TestBuildMieruPortRangeAndTrafficPattern(t *testing.T) {
