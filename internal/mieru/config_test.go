@@ -77,7 +77,9 @@ func TestOfficialMitaAcceptsRenderedConfig(t *testing.T) {
 	})
 	if err != nil { t.Fatal(err) }
 
-	dir := t.TempDir()
+	dir, err := os.MkdirTemp("", "3xpatcher-mieru-test-*")
+	if err != nil { t.Fatal(err) }
+	defer os.RemoveAll(dir)
 	cfgPath := filepath.Join(dir, "server.json")
 	uds := filepath.Join(dir, "mita.sock")
 	if err := os.WriteFile(cfgPath, cfg, 0o640); err != nil { t.Fatal(err) }
