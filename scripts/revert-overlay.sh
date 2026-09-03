@@ -21,6 +21,8 @@ modified=(
   frontend/src/lib/xray/protocol-capabilities.ts
   frontend/src/pages/inbounds/form/protocols/index.ts
   frontend/src/pages/inbounds/form/InboundFormModal.tsx
+  frontend/src/pages/inbounds/list/helpers.ts
+  frontend/src/pages/inbounds/list/RowActions.tsx
   frontend/src/pages/clients/ClientFormModal.tsx
   frontend/src/pages/clients/ClientBulkAddModal.tsx
 )
@@ -36,5 +38,5 @@ rm -f \
   "$SRC/frontend/src/schemas/protocols/inbound/singbox.ts" \
   "$SRC/frontend/src/pages/inbounds/form/protocols/singbox.tsx"
 
-echo "3Xpatcher V2 source overlay reverted from: $BACKUP"
-echo "Database rows/tables are intentionally not dropped."
+echo "3Xpatcher V3 source overlay reverted from: $BACKUP"
+echo "Database rows/tables and generated certificate files are intentionally not dropped."
