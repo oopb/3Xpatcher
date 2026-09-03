@@ -52,6 +52,7 @@ grep -q 'MITA_UDS_PATH=/run/x-ui-mieru/%i.sock' scripts/install-mieru.sh
 grep -q '^User=mita$' scripts/install-mieru.sh
 grep -q '^Group=mita$' scripts/install-mieru.sh
 grep -q '^AmbientCapabilities=CAP_NET_BIND_SERVICE$' scripts/install-mieru.sh
+grep -q '^InaccessiblePaths=-/var/lib/mita$' scripts/install-mieru.sh
 grep -q 'install -d -m 2750 -o root -g mita' scripts/install-mieru.sh
 grep -q 'tmp.Chmod(0o640)' internal/mieru/runtime.go
 grep -q 'DefaultConfigDir.*x-ui-mieru/config' internal/mieru/runtime.go
