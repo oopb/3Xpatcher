@@ -60,7 +60,10 @@ jobs:
           ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
           cp internal/singbox/config_test.go source/internal/singbox/config_test.go
           cp overlay/internal/singbox/integrated_test.go source/internal/singbox/integrated_test.go
+          cp overlay/internal/singbox/stats_test.go source/internal/singbox/stats_test.go
           cp internal/mieru/config_test.go source/internal/mieru/config_test.go
+          cp overlay/internal/mieru/stats_test.go source/internal/mieru/stats_test.go
+          cp overlay/internal/web/service/shadowsocks_2022_key_test.go source/internal/web/service/shadowsocks_2022_key_test.go
       - name: Download verified official Mieru validator
         id: mieru
         shell: bash
@@ -151,7 +154,7 @@ jobs:
           sudo env "MIERU_OFFICIAL_BINARY=$MIERU_OFFICIAL_BINARY" /tmp/3xpatcher-mieru.test
           go test ./internal/web/service -run 'Shadowsocks|SS2022' -count=1
       - name: Remove overlay-only unit tests from production source
-        run: rm -f source/internal/singbox/config_test.go source/internal/singbox/integrated_test.go source/internal/mieru/config_test.go
+        run: rm -f source/internal/singbox/config_test.go source/internal/singbox/integrated_test.go source/internal/singbox/stats_test.go source/internal/mieru/config_test.go source/internal/mieru/stats_test.go source/internal/web/service/shadowsocks_2022_key_test.go
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
