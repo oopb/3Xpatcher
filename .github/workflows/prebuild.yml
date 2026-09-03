@@ -3,7 +3,7 @@ name: Prebuild patched 3x-ui
 on:
   workflow_dispatch:
   push:
-    branches: [main, v5-reality-integration]
+    branches: [main]
     paths:
       - VERSION
       - UPSTREAM_COMPAT
