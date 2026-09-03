@@ -3,19 +3,18 @@ name: Prebuild patched 3x-ui
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, v6-mieru-integration]
     paths:
       - VERSION
       - UPSTREAM_COMPAT
+      - MIERU_VERSION
       - internal/**
       - frontend/**
-      - scripts/apply-overlay.sh
-      - scripts/apply-v2*.py
-      - scripts/v2_patchlib.py
-      - scripts/v3-patch.py
-      - scripts/v5-patch.py
+      - scripts/**
       - overlay/**
       - tests/**
+      - install.sh
+      - rollback.sh
       - .github/workflows/prebuild.yml
 
 permissions:
@@ -50,13 +49,44 @@ jobs:
           mkdir source
           curl -fL --retry 5 --retry-all-errors "https://codeload.github.com/MHSanaei/3x-ui/tar.gz/${{ steps.target.outputs.upstream }}" -o /tmp/3x-ui.tar.gz
           tar -xzf /tmp/3x-ui.tar.gz -C source --strip-components=1
-      - name: Apply dual-core overlay
+      - name: Apply three-core overlay
         shell: bash
         run: |
           set -euo pipefail
           ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
           cp internal/singbox/config_test.go source/internal/singbox/config_test.go
           cp overlay/internal/singbox/integrated_test.go source/internal/singbox/integrated_test.go
+          cp internal/mieru/config_test.go source/internal/mieru/config_test.go
+      - name: Download verified official Mieru validator
+        id: mieru
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(tr -d '\r\n' < MIERU_VERSION)
+          plain=${version#v}
+          asset="mita_${plain}_amd64.deb"
+          curl -fsSL --retry 5 --retry-all-errors "https://api.github.com/repos/enfein/mieru/releases/tags/${version}" -o /tmp/mieru-release.json
+          mapfile -t meta < <(python3 - /tmp/mieru-release.json "$asset" <<'PY'
+          import json,sys
+          p,name=sys.argv[1:]
+          r=json.load(open(p,encoding='utf-8'))
+          a=next((x for x in r.get('assets',[]) if x.get('name')==name),None)
+          if not a: raise SystemExit(1)
+          print(a.get('browser_download_url',''))
+          print(a.get('digest','') or '')
+          PY
+          )
+          [[ ${#meta[@]} -eq 2 && "${meta[1]}" =~ ^sha256:([0-9a-fA-F]{64})$ ]]
+          expected="${BASH_REMATCH[1]}"
+          curl -fL --retry 5 --retry-all-errors "${meta[0]}" -o /tmp/mita.deb
+          actual=$(sha256sum /tmp/mita.deb | awk '{print $1}')
+          [[ "${actual,,}" == "${expected,,}" ]]
+          mkdir -p /tmp/mita-root
+          dpkg-deb -x /tmp/mita.deb /tmp/mita-root
+          bin=$(find /tmp/mita-root -type f -path '*/bin/mita' -perm -u+x | head -n1)
+          [[ -n "$bin" ]]
+          "$bin" version
+          echo "binary=$bin" >> "$GITHUB_OUTPUT"
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
@@ -64,11 +94,13 @@ jobs:
           check-latest: true
           cache: true
           cache-dependency-path: source/go.sum
-      - name: Test supplemental renderer
+      - name: Test supplemental renderers with official mita
         working-directory: source
-        run: go test ./internal/singbox
+        env:
+          MIERU_OFFICIAL_BINARY: ${{ steps.mieru.outputs.binary }}
+        run: go test ./internal/singbox ./internal/mieru
       - name: Remove overlay-only unit tests from production source
-        run: rm -f source/internal/singbox/config_test.go source/internal/singbox/integrated_test.go
+        run: rm -f source/internal/singbox/config_test.go source/internal/singbox/integrated_test.go source/internal/mieru/config_test.go
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
