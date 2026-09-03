@@ -11,6 +11,36 @@ const IntegratedClientSchema = z
   })
   .loose();
 
+const listenTuning = {
+  bindInterface: z.string().default(''),
+  routingMark: z.number().int().min(0).default(0),
+  reuseAddr: z.boolean().default(false),
+  netns: z.string().default(''),
+  tcpFastOpen: z.boolean().default(false),
+  tcpMultiPath: z.boolean().default(false),
+  disableTCPKeepAlive: z.boolean().default(false),
+  tcpKeepAlive: z.string().default(''),
+  tcpKeepAliveInterval: z.string().default(''),
+  udpFragment: z.boolean().default(false),
+  udpTimeout: z.string().default(''),
+};
+
+const tlsMode = {
+  tlsMode: z.enum(['native', 'self_signed_sni']).default('native'),
+  camouflageSNI: z.string().default(''),
+  selfSignedValidityDays: z.number().int().min(1).max(3650).default(3650),
+};
+
+const quicTuning = {
+  idleTimeout: z.string().default(''),
+  keepAlivePeriod: z.string().default(''),
+  streamReceiveWindow: z.union([z.number().positive(), z.string()]).optional(),
+  connectionReceiveWindow: z.union([z.number().positive(), z.string()]).optional(),
+  maxConcurrentStreams: z.number().int().min(0).default(0),
+  initialPacketSize: z.number().int().min(0).default(0),
+  disablePathMTUDiscovery: z.boolean().default(false),
+};
+
 export const TuicInboundSettingsSchema = z
   .object({
     clients: z.array(IntegratedClientSchema).default([]),
@@ -18,6 +48,9 @@ export const TuicInboundSettingsSchema = z
     authTimeout: z.string().default('3s'),
     zeroRTTHandshake: z.boolean().default(false),
     heartbeat: z.string().default('10s'),
+    ...listenTuning,
+    ...quicTuning,
+    ...tlsMode,
   })
   .loose();
 
@@ -25,6 +58,8 @@ export const AnyTlsInboundSettingsSchema = z
   .object({
     clients: z.array(IntegratedClientSchema).default([]),
     paddingScheme: z.array(z.string()).default([]),
+    ...listenTuning,
+    ...tlsMode,
   })
   .loose();
 
@@ -34,6 +69,7 @@ export const ShadowTlsInboundSettingsSchema = z
     version: z.literal(3).default(3),
     handshakeServer: z.string().default('www.cloudflare.com'),
     handshakePort: z.number().int().min(1).max(65535).default(443),
+    handshakeForServerNameJson: z.string().default(''),
     strictMode: z.boolean().default(false),
     wildcardSNI: z.enum(['off', 'authed', 'all']).default('off'),
     innerMethod: z
@@ -44,6 +80,7 @@ export const ShadowTlsInboundSettingsSchema = z
       ])
       .default('2022-blake3-aes-128-gcm'),
     innerPassword: z.string().default(''),
+    ...listenTuning,
   })
   .loose();
 
@@ -52,6 +89,8 @@ export const NaiveInboundSettingsSchema = z
     clients: z.array(IntegratedClientSchema).default([]),
     network: z.enum(['tcp', 'udp', '']).default(''),
     quicCongestionControl: z.enum(['bbr', 'cubic', 'reno', '']).default('bbr'),
+    ...listenTuning,
+    ...tlsMode,
   })
   .loose();
 
