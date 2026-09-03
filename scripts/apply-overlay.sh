@@ -48,6 +48,7 @@ mkdir -p "$SRC/internal/singbox" "$SRC/internal/database/model" "$SRC/internal/s
 cp "$ROOT/internal/singbox/config.go" "$SRC/internal/singbox/config.go"
 cp "$ROOT/internal/singbox/runtime.go" "$SRC/internal/singbox/runtime.go"
 cp "$ROOT/overlay/internal/singbox/integrated.go" "$SRC/internal/singbox/integrated.go"
+cp "$ROOT/overlay/internal/singbox/reality.go" "$SRC/internal/singbox/reality.go"
 cp "$ROOT/overlay/internal/singbox/selfsigned.go" "$SRC/internal/singbox/selfsigned.go"
 cp "$ROOT/overlay/internal/singbox/selfsigned_util.go" "$SRC/internal/singbox/selfsigned_util.go"
 cp "$ROOT/overlay/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/singbox_protocols.go"
@@ -59,11 +60,12 @@ cp "$ROOT/overlay/frontend/src/pages/inbounds/form/protocols/singbox.tsx" "$SRC/
 
 python3 "$ROOT/scripts/apply-v2.py" "$SRC"
 python3 "$ROOT/scripts/v3-patch.py" "$SRC"
+python3 "$ROOT/scripts/v5-patch.py" "$SRC"
 
 gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/model.go" "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_clash.go"
 
-echo "3Xpatcher V4 integrated overlay applied."
+echo "3Xpatcher V5 integrated overlay applied."
 echo "Backup: $backup"
 echo "UI: native /panel/inbounds + native client attach/detach"
-echo "TLS: generated SNI certificate controls live in native Security -> TLS"
+echo "Security: native 3x-ui TLS and Reality UI reused by supported sing-box protocols"
 echo "Runtime: Xray and sing-box remain isolated"
