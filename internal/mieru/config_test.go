@@ -1,9 +1,14 @@
 package mieru
 
 import (
+	"bytes"
+	"net"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func pint(v int) *int { return &v }
@@ -52,20 +57,42 @@ func TestMieruDefaultsPreserveOfficialImplicitTrafficPattern(t *testing.T) {
 func TestOfficialMitaAcceptsRenderedConfig(t *testing.T) {
 	bin := os.Getenv("MIERU_OFFICIAL_BINARY")
 	if bin == "" { t.Skip("MIERU_OFFICIAL_BINARY is not set") }
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil { t.Fatal(err) }
+	port := ln.Addr().(*net.TCPAddr).Port
+	_ = ln.Close()
 	cfg, err := BuildServerConfig(Record{
-		ID: 9, Port: 32000,
+		ID: 9, Port: port,
 		Users: []User{{Name: "ci@example.com", Password: "ci-password"}},
-		Settings: Settings{Transport: "TCP", PortRangeEnd: 32002, MTU: 1400, TrafficPatternEnabled: true, TrafficSeed: 7, PaddingMaxMiddleLen: pint(32), PaddingMaxEndLen: pint(64)},
+		Settings: Settings{Transport: "TCP", MTU: 1400, TrafficPatternEnabled: true, TrafficSeed: 7, PaddingMaxMiddleLen: pint(32), PaddingMaxEndLen: pint(64)},
 	})
 	if err != nil { t.Fatal(err) }
-	if err := (Runtime{BinaryPath: bin}).CheckBytes(cfg); err != nil { t.Fatal(err) }
+	dir := t.TempDir(); cfgPath := filepath.Join(dir, "server.json"); uds := filepath.Join(dir, "mita.sock")
+	if err := os.WriteFile(cfgPath, cfg, 0o600); err != nil { t.Fatal(err) }
+	env := append(os.Environ(), "MITA_CONFIG_JSON_FILE="+cfgPath, "MITA_UDS_PATH="+uds, "MITA_LOG_NO_TIMESTAMP=true")
+	cmd := exec.Command(bin, "run"); cmd.Env = env
+	var log bytes.Buffer; cmd.Stdout = &log; cmd.Stderr = &log
+	if err := cmd.Start(); err != nil { t.Fatal(err) }
+	done := make(chan error, 1); go func() { done <- cmd.Wait() }()
+	defer func() { if cmd.Process != nil { _ = cmd.Process.Kill() }; select { case <-done: case <-time.After(time.Second): } }()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case err := <-done:
+			t.Fatalf("official mita exited before RUNNING: %v\n%s", err, log.String())
+		default:
+		}
+		status := exec.Command(bin, "status"); status.Env = env; out, _ := status.CombinedOutput()
+		if strings.Contains(string(out), `mita server status is "RUNNING"`) { return }
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("official mita did not accept rendered config:\n%s", log.String())
 }
 
 func TestRejectInvalidMieruRange(t *testing.T) {
 	_, err := BuildServerConfig(Record{ID: 4, Port: 5000, Users: []User{{Name: "u", Password: "p"}}, Settings: Settings{PortRangeEnd: 4999}})
 	if err == nil { t.Fatal("expected range error") }
 }
-
 func TestRejectIncompleteQuota(t *testing.T) {
 	_, err := BuildServerConfig(Record{ID: 5, Port: 5000, Users: []User{{Name: "u", Password: "p"}}, Settings: Settings{QuotaDays: 1}})
 	if err == nil { t.Fatal("expected quota error") }
