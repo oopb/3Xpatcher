@@ -17,7 +17,16 @@ function ListenTuningFields() {
       <FormField label="Disable TCP Keep Alive" name={['settings', 'disableTCPKeepAlive']} valueProp="checked"><Switch /></FormField>
       <FormField label="TCP Keep Alive" name={['settings', 'tcpKeepAlive']}><Input placeholder="5m" /></FormField>
       <FormField label="TCP Keep Alive Interval" name={['settings', 'tcpKeepAliveInterval']}><Input placeholder="75s" /></FormField>
-      <FormField label="UDP Fragment" name={['settings', 'udpFragment']} valueProp="checked"><Switch /></FormField>
+      <FormField label="UDP Fragment" name={['settings', 'udpFragment']}>
+        <Select
+          allowClear
+          placeholder="Protocol default"
+          options={[
+            { value: true, label: 'Enabled' },
+            { value: false, label: 'Disabled' },
+          ]}
+        />
+      </FormField>
       <FormField label="UDP Timeout" name={['settings', 'udpTimeout']}><Input placeholder="5m" /></FormField>
     </>
   );
