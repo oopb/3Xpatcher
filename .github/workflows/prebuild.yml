@@ -3,7 +3,7 @@ name: Prebuild patched 3x-ui
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, v3-sni-options-work]
     paths:
       - VERSION
       - UPSTREAM_COMPAT
@@ -12,6 +12,7 @@ on:
       - scripts/apply-overlay.sh
       - scripts/apply-v2*.py
       - scripts/v2_patchlib.py
+      - scripts/v3-patch.py
       - overlay/**
       - .github/workflows/prebuild.yml
 
@@ -28,7 +29,6 @@ jobs:
     steps:
       - name: Checkout 3Xpatcher
         uses: actions/checkout@v7
-
       - name: Read build target
         id: target
         shell: bash
@@ -39,17 +39,13 @@ jobs:
           [[ "$target" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           echo "upstream=$target" >> "$GITHUB_OUTPUT"
           echo "patch_version=$patch_version" >> "$GITHUB_OUTPUT"
-
       - name: Download matching 3x-ui source
         shell: bash
         run: |
           set -euo pipefail
           mkdir source
-          curl -fL --retry 5 --retry-all-errors \
-            "https://codeload.github.com/MHSanaei/3x-ui/tar.gz/${{ steps.target.outputs.upstream }}" \
-            -o /tmp/3x-ui.tar.gz
+          curl -fL --retry 5 --retry-all-errors "https://codeload.github.com/MHSanaei/3x-ui/tar.gz/${{ steps.target.outputs.upstream }}" -o /tmp/3x-ui.tar.gz
           tar -xzf /tmp/3x-ui.tar.gz -C source --strip-components=1
-
       - name: Apply dual-core overlay
         shell: bash
         run: |
@@ -57,7 +53,6 @@ jobs:
           ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
           cp internal/singbox/config_test.go source/internal/singbox/config_test.go
           cp overlay/internal/singbox/integrated_test.go source/internal/singbox/integrated_test.go
-
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
@@ -65,74 +60,49 @@ jobs:
           check-latest: true
           cache: true
           cache-dependency-path: source/go.sum
-
       - name: Test supplemental renderer
         working-directory: source
         run: go test ./internal/singbox
-
       - name: Remove overlay-only unit tests from production source
         run: rm -f source/internal/singbox/config_test.go source/internal/singbox/integrated_test.go
-
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version-file: source/.nvmrc
           cache: npm
           cache-dependency-path: source/frontend/package-lock.json
-
       - name: Build frontend once
         working-directory: source/frontend
         run: |
           npm ci --no-audit --no-fund
           npm run build
-
       - name: Build static Linux panel binaries
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist /tmp/bootlin
-
           build_one() {
             local arch="$1" bootlin_arch="$2" goarch="$3"
             local tarbase="https://toolchains.bootlin.com/downloads/releases/toolchains/${bootlin_arch}/tarballs/"
             local tarname
-            tarname=$(curl -fsSL --retry 5 --retry-all-errors "$tarbase" \
-              | grep -oE "${bootlin_arch}--musl--stable-[^\"]+\\.tar\\.xz" \
-              | sort -r | head -n1)
+            tarname=$(curl -fsSL --retry 5 --retry-all-errors "$tarbase" | grep -oE "${bootlin_arch}--musl--stable-[^\"]+\.tar\.xz" | sort -r | head -n1)
             [[ -n "$tarname" ]]
             curl -fL --retry 5 --retry-all-errors "$tarbase/$tarname" -o "/tmp/bootlin/$tarname"
             tar -xf "/tmp/bootlin/$tarname" -C /tmp/bootlin
-            local toolchain
+            local toolchain cc
             toolchain=$(find /tmp/bootlin -maxdepth 1 -type d -name "${bootlin_arch}--musl--stable-*" | sort | tail -n1)
-            local cc
             cc=$(find "$toolchain/bin" -name '*-gcc.br_real' -type f -executable | head -n1)
             [[ -n "$cc" ]]
-
-            echo "Building linux/$arch with $cc"
-            (
-              cd source
-              export CGO_ENABLED=1 GOOS=linux GOARCH="$goarch" CC="$cc"
-              go build -buildvcs=false -trimpath \
-                -ldflags="-w -s -linkmode external -extldflags '-static'" \
-                -o "$GITHUB_WORKSPACE/dist/x-ui-$arch" .
-            )
-
+            (cd source; export CGO_ENABLED=1 GOOS=linux GOARCH="$goarch" CC="$cc"; go build -buildvcs=false -trimpath -ldflags="-w -s -linkmode external -extldflags '-static'" -o "$GITHUB_WORKSPACE/dist/x-ui-$arch" .)
             local pkg="/tmp/pkg-$arch"
-            rm -rf "$pkg"
-            mkdir -p "$pkg"
-            install -m 0755 "dist/x-ui-$arch" "$pkg/x-ui"
-            printf 'PATCH_VERSION=%s\nPATCH_COMMIT=%s\nUPSTREAM_REF=%s\nARCH=%s\n' \
-              '${{ steps.target.outputs.patch_version }}' "$GITHUB_SHA" \
-              '${{ steps.target.outputs.upstream }}' "$arch" > "$pkg/build.env"
+            rm -rf "$pkg"; mkdir -p "$pkg"; install -m 0755 "dist/x-ui-$arch" "$pkg/x-ui"
+            printf 'PATCH_VERSION=%s\nPATCH_COMMIT=%s\nUPSTREAM_REF=%s\nARCH=%s\n' '${{ steps.target.outputs.patch_version }}' "$GITHUB_SHA" '${{ steps.target.outputs.upstream }}' "$arch" > "$pkg/build.env"
             tar -C "$pkg" -czf "dist/x-ui-patched-${{ steps.target.outputs.upstream }}-linux-${arch}.tar.gz" x-ui build.env
-            rm -f "dist/x-ui-$arch" "/tmp/bootlin/$tarname"
-            rm -rf "$toolchain" "$pkg"
+            rm -f "dist/x-ui-$arch" "/tmp/bootlin/$tarname"; rm -rf "$toolchain" "$pkg"
           }
-
           build_one amd64 x86-64 amd64
           build_one arm64 aarch64 arm64
           sha256sum dist/*.tar.gz | tee dist/SHA256SUMS
-
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
@@ -141,7 +111,6 @@ jobs:
             dist/*.tar.gz
             dist/SHA256SUMS
           if-no-files-found: error
-
   publish:
     if: github.ref == 'refs/heads/main'
     needs: build
@@ -149,13 +118,11 @@ jobs:
     steps:
       - name: Checkout 3Xpatcher
         uses: actions/checkout@v7
-
       - name: Download built binaries
         uses: actions/download-artifact@v7
         with:
           name: patched-linux
           path: dist
-
       - name: Publish rolling compatibility release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -166,9 +133,4 @@ jobs:
           patch_version=$(tr -d '\r\n' < VERSION)
           tag="prebuilt-${target}"
           gh release delete "$tag" --yes --cleanup-tag >/dev/null 2>&1 || true
-          gh release create "$tag" \
-            --target "$GITHUB_SHA" \
-            --title "3Xpatcher prebuilt for ${target}" \
-            --notes "Prebuilt static patched 3x-ui binaries for 3Xpatcher ${patch_version}. Generated by GitHub Actions; use install.sh rather than installing these assets manually." \
-            --prerelease \
-            dist/*
+          gh release create "$tag" --target "$GITHUB_SHA" --title "3Xpatcher prebuilt for ${target}" --notes "Prebuilt static patched 3x-ui binaries for 3Xpatcher ${patch_version}. Generated by GitHub Actions; use install.sh rather than installing these assets manually." --prerelease dist/*
