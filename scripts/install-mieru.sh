@@ -9,11 +9,10 @@ REPO="${MIERU_REPO:-enfein/mieru}"
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || { echo "install-mieru.sh must run as root" >&2; exit 1; }
 [[ -r "$VERSION_FILE" ]] || { echo "Missing $VERSION_FILE" >&2; exit 1; }
-for cmd in curl python3 sha256sum dpkg-deb systemctl getent groupadd useradd; do command -v "$cmd" >/dev/null || { echo "Missing required command: $cmd" >&2; exit 1; }; done
+for cmd in curl python3 sha256sum dpkg-deb systemctl getent groupadd useradd chown chmod find; do command -v "$cmd" >/dev/null || { echo "Missing required command: $cmd" >&2; exit 1; }; done
 
-# The official mita runtime always resolves the OS account named "mita" when
-# preparing its management UDS, even when MITA_UDS_PATH is overridden. Keep the
-# account creation idempotent and do not install the upstream Debian package.
+# Match the official Mieru package service model: a dedicated unprivileged mita
+# account runs the daemon and only receives CAP_NET_BIND_SERVICE.
 if ! getent group mita >/dev/null 2>&1; then
   groupadd --system mita
 fi
@@ -55,7 +54,10 @@ dpkg-deb -x "$work/$asset" "$work/root"
 bin=$(find "$work/root" -type f -path '*/bin/mita' -perm -u+x | head -n1)
 [[ -n "$bin" ]] || { echo "mita binary not found in $asset" >&2; exit 1; }
 install -d -m 0755 "$INSTALL_ROOT/bin"
-install -d -m 0700 "$INSTALL_ROOT/config"
+install -d -m 2750 -o root -g mita "$INSTALL_ROOT/config"
+# Upgrade configs created by early Mieru integration builds to the permissions
+# needed by the unprivileged service. Plaintext client passwords are never here.
+find "$INSTALL_ROOT/config" -maxdepth 1 -type f -name '*.json' -exec chown root:mita {} + -exec chmod 0640 {} + 2>/dev/null || true
 install -m 0755 "$bin" "$INSTALL_ROOT/bin/mita"
 
 cat > "$SERVICE_FILE" <<'EOF'
@@ -66,10 +68,16 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+User=mita
+Group=mita
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 Environment="MITA_CONFIG_JSON_FILE=/usr/local/x-ui-mieru/config/%i.json"
 Environment="MITA_UDS_PATH=/run/x-ui-mieru/%i.sock"
 Environment="MITA_LOG_NO_TIMESTAMP=true"
 ExecStartPre=+/usr/bin/mkdir -p /run/x-ui-mieru
+ExecStartPre=+/usr/bin/chown mita:mita /run/x-ui-mieru
+ExecStartPre=+/usr/bin/chmod 0750 /run/x-ui-mieru
 ExecStart=/usr/local/x-ui-mieru/bin/mita run
 Restart=on-failure
 RestartSec=3
@@ -90,4 +98,4 @@ installed=$($INSTALL_ROOT/bin/mita version 2>&1 | head -n1 | tr -d '\r' || true)
 echo "Mieru runtime installed: $installed"
 echo "Binary: $INSTALL_ROOT/bin/mita"
 echo "Config: $INSTALL_ROOT/config/<inbound-id>.json"
-echo "Service: x-ui-mieru@<inbound-id>.service"
+echo "Service: x-ui-mieru@<inbound-id>.service (User=mita)"
