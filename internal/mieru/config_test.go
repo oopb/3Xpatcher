@@ -27,6 +27,12 @@ func TestBuildMieruTCPConfig(t *testing.T) {
 	if strings.Contains(s, `"password": "secret"`) { t.Fatalf("plaintext password leaked into runtime config: %s", s) }
 }
 
+func TestBuildMieruPrivilegedPort(t *testing.T) {
+	b, err := BuildServerConfig(Record{ID: 7, Port: 443, Users: []User{{Name: "u", Password: "p"}}})
+	if err != nil { t.Fatal(err) }
+	if !strings.Contains(string(b), `"port": 443`) { t.Fatalf("privileged port missing: %s", b) }
+}
+
 func TestBuildMieruPortRangeAndTrafficPattern(t *testing.T) {
 	b, err := BuildServerConfig(Record{
 		ID: 2, Port: 20000,
