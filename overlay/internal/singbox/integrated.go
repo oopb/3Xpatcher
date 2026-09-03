@@ -109,7 +109,7 @@ func integratedRecord(db *gorm.DB, inbound *model.Inbound) (InboundRecord, bool,
 			users = append(users, PasswordUser{Name: c.Email, Password: c.Password})
 		}
 		settings["users"] = users
-		if err := installTLSFromStream(settings, inbound.StreamSettings); err != nil {
+		if err := installTLSOrRealityFromStream(settings, inbound.StreamSettings); err != nil {
 			return InboundRecord{}, false, err
 		}
 	case model.ShadowTLS:
