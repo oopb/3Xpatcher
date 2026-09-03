@@ -9,7 +9,17 @@ REPO="${MIERU_REPO:-enfein/mieru}"
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || { echo "install-mieru.sh must run as root" >&2; exit 1; }
 [[ -r "$VERSION_FILE" ]] || { echo "Missing $VERSION_FILE" >&2; exit 1; }
-for cmd in curl python3 sha256sum dpkg-deb systemctl; do command -v "$cmd" >/dev/null || { echo "Missing required command: $cmd" >&2; exit 1; }; done
+for cmd in curl python3 sha256sum dpkg-deb systemctl getent groupadd useradd; do command -v "$cmd" >/dev/null || { echo "Missing required command: $cmd" >&2; exit 1; }; done
+
+# The official mita runtime always resolves the OS account named "mita" when
+# preparing its management UDS, even when MITA_UDS_PATH is overridden. Keep the
+# account creation idempotent and do not install the upstream Debian package.
+if ! getent group mita >/dev/null 2>&1; then
+  groupadd --system mita
+fi
+if ! id -u mita >/dev/null 2>&1; then
+  useradd --system --gid mita --home-dir /nonexistent --shell /usr/sbin/nologin mita
+fi
 
 version=$(tr -d '\r\n' < "$VERSION_FILE")
 [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid MIERU_VERSION: $version" >&2; exit 1; }
