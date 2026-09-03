@@ -61,7 +61,7 @@ type ListenSettings struct {
 	DisableTCPKeepAlive bool `json:"disableTCPKeepAlive,omitempty"`
 	TCPKeepAlive string `json:"tcpKeepAlive,omitempty"`
 	TCPKeepAliveInterval string `json:"tcpKeepAliveInterval,omitempty"`
-	UDPFragment bool `json:"udpFragment,omitempty"`
+	UDPFragment *bool `json:"udpFragment,omitempty"`
 	UDPTimeout string `json:"udpTimeout,omitempty"`
 }
 
@@ -181,7 +181,7 @@ func renderInbound(r InboundRecord) ([]any, []string, error) {
 
 func baseInbound(kind string,r InboundRecord) map[string]any { return map[string]any{"type":kind,"tag":r.Tag,"listen":r.Listen,"listen_port":r.Port} }
 func applyListen(m map[string]any,s ListenSettings) {
-	if s.BindInterface!="" { m["bind_interface"]=s.BindInterface }; if s.RoutingMark!=0 { m["routing_mark"]=s.RoutingMark }; if s.ReuseAddr { m["reuse_addr"]=true }; if s.NetNS!="" { m["netns"]=s.NetNS }; if s.TCPFastOpen { m["tcp_fast_open"]=true }; if s.TCPMultiPath { m["tcp_multi_path"]=true }; if s.DisableTCPKeepAlive { m["disable_tcp_keep_alive"]=true }; if s.TCPKeepAlive!="" { m["tcp_keep_alive"]=s.TCPKeepAlive }; if s.TCPKeepAliveInterval!="" { m["tcp_keep_alive_interval"]=s.TCPKeepAliveInterval }; if s.UDPFragment { m["udp_fragment"]=true }; if s.UDPTimeout!="" { m["udp_timeout"]=s.UDPTimeout }
+	if s.BindInterface!="" { m["bind_interface"]=s.BindInterface }; if s.RoutingMark!=0 { m["routing_mark"]=s.RoutingMark }; if s.ReuseAddr { m["reuse_addr"]=true }; if s.NetNS!="" { m["netns"]=s.NetNS }; if s.TCPFastOpen { m["tcp_fast_open"]=true }; if s.TCPMultiPath { m["tcp_multi_path"]=true }; if s.DisableTCPKeepAlive { m["disable_tcp_keep_alive"]=true }; if s.TCPKeepAlive!="" { m["tcp_keep_alive"]=s.TCPKeepAlive }; if s.TCPKeepAliveInterval!="" { m["tcp_keep_alive_interval"]=s.TCPKeepAliveInterval }; if s.UDPFragment!=nil { m["udp_fragment"]=*s.UDPFragment }; if s.UDPTimeout!="" { m["udp_timeout"]=s.UDPTimeout }
 }
 func applyQUIC(m map[string]any,s QUICSettings) {
 	if s.IdleTimeout!="" { m["idle_timeout"]=s.IdleTimeout }; if s.KeepAlivePeriod!="" { m["keep_alive_period"]=s.KeepAlivePeriod }; if s.StreamReceiveWindow!=nil { m["stream_receive_window"]=s.StreamReceiveWindow }; if s.ConnectionReceiveWindow!=nil { m["connection_receive_window"]=s.ConnectionReceiveWindow }; if s.MaxConcurrentStreams>0 { m["max_concurrent_streams"]=s.MaxConcurrentStreams }; if s.InitialPacketSize>0 { m["initial_packet_size"]=s.InitialPacketSize }; if s.DisablePathMTUDiscovery { m["disable_path_mtu_discovery"]=true }
