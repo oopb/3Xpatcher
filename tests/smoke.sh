@@ -8,7 +8,7 @@ go test ./internal/singbox ./internal/mieru
 
 echo '[2/8] script syntax'
 bash -n install.sh rollback.sh scripts/*.sh tests/*.sh
-python3 -m py_compile scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py scripts/v3-patch.py scripts/v5-patch.py scripts/v6-patch.py scripts/v7-patch.py
+python3 -m py_compile scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py scripts/v3-patch.py scripts/v5-patch.py scripts/v6-patch.py scripts/v7-patch.py scripts/v8-patch.py
 
 echo '[3/8] integrated protocol surface'
 python3 - <<'PY'
@@ -82,6 +82,9 @@ grep -q 'normalizeShadowsocksServerKey' scripts/v7-patch.py
 grep -q 'normalizeShadowsocks2022Keys' scripts/v7-patch.py
 grep -q 'autoComplete="new-password"' scripts/v7-patch.py
 grep -q 'shouldValidate: true' scripts/v7-patch.py
+grep -q 'failed to persist healed Shadowsocks settings' scripts/v8-patch.py
+grep -q 'validSS2022Key' scripts/v8-patch.py
+grep -q 'scripts/v8-patch.py' scripts/apply-overlay.sh
 ! grep -q "values.protocol === 'tuic'" scripts/v5-patch.py
 ! grep -q "values.protocol === 'naive'" scripts/v5-patch.py
 ! grep -q "values.protocol === 'shadowtls'" scripts/v5-patch.py
@@ -98,9 +101,12 @@ for f in \
   overlay/internal/singbox/integrated.go \
   overlay/internal/singbox/reality.go \
   overlay/internal/singbox/stats.go \
+  overlay/internal/singbox/stats_test.go \
   overlay/internal/mieru/integrated.go \
   overlay/internal/mieru/stats.go \
+  overlay/internal/mieru/stats_test.go \
   overlay/internal/web/job/supplemental_traffic_job.go \
+  overlay/internal/web/service/shadowsocks_2022_key_test.go \
   overlay/internal/database/model/singbox_protocols.go \
   overlay/internal/sub/singbox_links.go \
   overlay/internal/sub/singbox_clash.go \
