@@ -87,6 +87,12 @@ jobs:
           [[ -n "$bin" ]]
           "$bin" version
           echo "binary=$bin" >> "$GITHUB_OUTPUT"
+      - name: Provision official mita runtime account
+        shell: bash
+        run: |
+          set -euo pipefail
+          getent group mita >/dev/null 2>&1 || sudo groupadd --system mita
+          id -u mita >/dev/null 2>&1 || sudo useradd --system --gid mita --home-dir /nonexistent --shell /usr/sbin/nologin mita
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
