@@ -26,6 +26,8 @@ modified=(
   frontend/src/lib/xray/protocol-capabilities.ts
   frontend/src/pages/inbounds/form/protocols/index.ts
   frontend/src/pages/inbounds/form/InboundFormModal.tsx
+  frontend/src/pages/inbounds/list/helpers.ts
+  frontend/src/pages/inbounds/list/RowActions.tsx
   frontend/src/pages/clients/ClientFormModal.tsx
   frontend/src/pages/clients/ClientBulkAddModal.tsx
 )
@@ -39,9 +41,6 @@ for f in "${modified[@]}"; do
   cp "$SRC/$f" "$backup/$f"
 done
 
-# Copy only the supplemental renderer/runtime plus small integration helpers.
-# The old standalone singbox model/controller/page are intentionally not copied:
-# V2 uses the native inbounds/clients/subscription surfaces.
 mkdir -p \
   "$SRC/internal/singbox" \
   "$SRC/internal/database/model" \
@@ -51,6 +50,7 @@ mkdir -p \
 cp "$ROOT/internal/singbox/config.go" "$SRC/internal/singbox/config.go"
 cp "$ROOT/internal/singbox/runtime.go" "$SRC/internal/singbox/runtime.go"
 cp "$ROOT/overlay/internal/singbox/integrated.go" "$SRC/internal/singbox/integrated.go"
+cp "$ROOT/overlay/internal/singbox/selfsigned.go" "$SRC/internal/singbox/selfsigned.go"
 cp "$ROOT/overlay/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/singbox_protocols.go"
 cp "$ROOT/overlay/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links.go"
 cp "$ROOT/overlay/internal/sub/singbox_clash.go" "$SRC/internal/sub/singbox_clash.go"
@@ -60,6 +60,7 @@ cp "$ROOT/overlay/frontend/src/pages/inbounds/form/protocols/singbox.tsx" \
   "$SRC/frontend/src/pages/inbounds/form/protocols/singbox.tsx"
 
 python3 "$ROOT/scripts/apply-v2.py" "$SRC"
+python3 "$ROOT/scripts/v3-patch.py" "$SRC"
 
 gofmt -w \
   "$SRC/internal/singbox"/*.go \
@@ -77,8 +78,8 @@ gofmt -w \
   "$SRC/internal/sub/singbox_links.go" \
   "$SRC/internal/sub/singbox_clash.go"
 
-echo "3Xpatcher V2 integrated overlay applied."
+echo "3Xpatcher V3 integrated overlay applied."
 echo "Backup: $backup"
-echo "UI: native /panel/inbounds (TUIC / AnyTLS / ShadowTLS / Naive)"
-echo "Identity: native clients + client_inbounds + subId"
+echo "UI: native /panel/inbounds + native client attach/detach"
+echo "TLS: native certificate or generated self-signed camouflage SNI"
 echo "Runtime: Xray and sing-box remain isolated"
