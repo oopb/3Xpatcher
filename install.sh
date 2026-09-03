@@ -12,6 +12,7 @@ XUI_SERVICE="${XUI_SERVICE:-x-ui.service}"
 STATE_DIR="${STATE_DIR:-/var/lib/3xpatcher}"
 WORK_PARENT="${WORK_PARENT:-/var/tmp}"
 SKIP_SINGBOX="${SKIP_SINGBOX:-0}"
+SKIP_MIERU="${SKIP_MIERU:-0}"
 KEEP_WORK="${KEEP_WORK:-0}"
 
 red='\033[0;31m'; green='\033[0;32m'; yellow='\033[0;33m'; blue='\033[0;34m'; plain='\033[0m'
@@ -48,14 +49,14 @@ esac
 
 ensure_runtime_deps() {
   local missing=0 cmd
-  for cmd in curl tar gzip python3 sha256sum; do
+  for cmd in curl tar gzip python3 sha256sum dpkg-deb; do
     command -v "$cmd" >/dev/null 2>&1 || missing=1
   done
   (( missing == 0 )) && return 0
   info "Installing small runtime prerequisites..."
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get install -y -q --no-install-recommends ca-certificates curl tar gzip python3 coreutils >/dev/null
+  apt-get install -y -q --no-install-recommends ca-certificates curl tar gzip python3 coreutils dpkg >/dev/null
 }
 
 installed_version() {
@@ -76,6 +77,7 @@ PATCH_ROOT="$WORK/patch"
 SUCCESS=0
 BINARY_SWAPPED=0
 SINGBOX_WAS_PRESENT=0
+MIERU_WAS_PRESENT=0
 PANEL_VERSION=""
 UPSTREAM_REF=""
 TARGET_VERSION=""
@@ -89,10 +91,16 @@ cleanup() {
     install -m 0755 "$BACKUP_DIR/x-ui" "$XUI_DIR/x-ui"
     systemctl start "$XUI_SERVICE" >/dev/null 2>&1 || true
   fi
-  if [[ "$SUCCESS" != 1 && "$SINGBOX_WAS_PRESENT" == 0 && -x "$PATCH_ROOT/scripts/uninstall-singbox.sh" ]]; then
+  if [[ "$SUCCESS" != 1 && "$SINGBOX_WAS_PRESENT" == 0 && -f "$PATCH_ROOT/scripts/uninstall-singbox.sh" ]]; then
     if systemctl cat x-ui-singbox.service >/dev/null 2>&1 || [[ -d /usr/local/x-ui-singbox ]]; then
       warn "Removing sing-box runtime introduced by the failed installation."
       PURGE=1 bash "$PATCH_ROOT/scripts/uninstall-singbox.sh" >/dev/null 2>&1 || true
+    fi
+  fi
+  if [[ "$SUCCESS" != 1 && "$MIERU_WAS_PRESENT" == 0 && -f "$PATCH_ROOT/scripts/uninstall-mieru.sh" ]]; then
+    if [[ -d /usr/local/x-ui-mieru || -f /etc/systemd/system/x-ui-mieru@.service ]]; then
+      warn "Removing Mieru runtime introduced by the failed installation."
+      PURGE=1 bash "$PATCH_ROOT/scripts/uninstall-mieru.sh" >/dev/null 2>&1 || true
     fi
   fi
   if [[ "$KEEP_WORK" != 1 ]]; then rm -rf "$WORK"; else warn "Keeping workspace: $WORK"; fi
@@ -112,7 +120,7 @@ fetch_patch_tree() {
     -o "$WORK/patch.tar.gz"
   tar -xzf "$WORK/patch.tar.gz" -C "$PATCH_ROOT" --strip-components=1
   rm -f "$WORK/patch.tar.gz"
-  [[ -f "$PATCH_ROOT/VERSION" && -x "$PATCH_ROOT/scripts/install-singbox.sh" ]] \
+  [[ -f "$PATCH_ROOT/VERSION" && -f "$PATCH_ROOT/scripts/install-singbox.sh" && -f "$PATCH_ROOT/scripts/install-mieru.sh" && -f "$PATCH_ROOT/MIERU_VERSION" ]] \
     || die "Downloaded patch tree is incomplete."
 }
 
@@ -192,17 +200,21 @@ backup_current_install() {
 
 install_singbox_core() {
   [[ "$SKIP_SINGBOX" == 1 ]] && { warn "SKIP_SINGBOX=1: leaving sing-box runtime unchanged."; return 0; }
-  if systemctl cat x-ui-singbox.service >/dev/null 2>&1 || [[ -e /usr/local/x-ui-singbox ]]; then
-    SINGBOX_WAS_PRESENT=1
-  fi
+  if systemctl cat x-ui-singbox.service >/dev/null 2>&1 || [[ -e /usr/local/x-ui-singbox ]]; then SINGBOX_WAS_PRESENT=1; fi
   info "Installing/updating stable sing-box runtime..."
   bash "$PATCH_ROOT/scripts/install-singbox.sh"
 }
 
+install_mieru_core() {
+  [[ "$SKIP_MIERU" == 1 ]] && { warn "SKIP_MIERU=1: leaving Mieru runtime unchanged."; return 0; }
+  if [[ -e /usr/local/x-ui-mieru || -f /etc/systemd/system/x-ui-mieru@.service ]]; then MIERU_WAS_PRESENT=1; fi
+  info "Installing/updating official Mieru mita runtime..."
+  bash "$PATCH_ROOT/scripts/install-mieru.sh"
+}
+
 verify_xray_untouched() {
   [[ -f "$BACKUP_DIR/xray.sha256" ]] || return 0
-  sha256sum -c "$BACKUP_DIR/xray.sha256" >/dev/null 2>&1 \
-    || die "Xray binary hash changed unexpectedly; panel will be rolled back."
+  sha256sum -c "$BACKUP_DIR/xray.sha256" >/dev/null 2>&1 || die "Xray binary hash changed unexpectedly; panel will be rolled back."
   ok "Xray binaries are byte-for-byte unchanged."
 }
 
@@ -214,10 +226,7 @@ activate_panel() {
   systemctl start "$XUI_SERVICE"
   local i
   for i in {1..20}; do
-    if systemctl is-active --quiet "$XUI_SERVICE"; then
-      sleep 1
-      systemctl is-active --quiet "$XUI_SERVICE" && break
-    fi
+    if systemctl is-active --quiet "$XUI_SERVICE"; then sleep 1; systemctl is-active --quiet "$XUI_SERVICE" && break; fi
     sleep 1
   done
   if ! systemctl is-active --quiet "$XUI_SERVICE"; then
@@ -236,12 +245,14 @@ persist_state() {
   rm -rf /usr/local/share/3xpatcher/current
   mkdir -p /usr/local/share/3xpatcher/current
   tar -C "$PATCH_ROOT" --exclude=.git -cf - . | tar -C /usr/local/share/3xpatcher/current -xf -
-  local patch_version
+  local patch_version mieru_version
   patch_version=$(tr -d '\r\n' < "$PATCH_ROOT/VERSION")
+  mieru_version=$(tr -d '\r\n' < "$PATCH_ROOT/MIERU_VERSION")
   {
     printf 'PATCH_REF=%q\n' "$PATCH_REF"
     printf 'PATCH_VERSION=%q\n' "$patch_version"
     printf 'UPSTREAM_REF=%q\n' "$UPSTREAM_REF"
+    printf 'MIERU_VERSION=%q\n' "$mieru_version"
     printf 'PANEL_VERSION_BEFORE=%q\n' "$PANEL_VERSION"
     printf 'PANEL_VERSION_AFTER=%q\n' "$TARGET_VERSION"
     printf 'BACKUP_DIR=%q\n' "$BACKUP_DIR"
@@ -263,6 +274,7 @@ main() {
   download_prebuilt_panel
   backup_current_install
   install_singbox_core
+  install_mieru_core
   activate_panel
   persist_state
   SUCCESS=1
@@ -275,7 +287,7 @@ main() {
   echo "Install mode: prebuilt"
   echo "Backup:       $BACKUP_DIR"
   echo "State:        /etc/3xpatcher/install.env"
-  echo "Protocols:    TUIC / AnyTLS / ShadowTLS v3 / Naive"
+  echo "Protocols:    TUIC / AnyTLS / ShadowTLS v3 / Naive / Mieru"
   echo "Rollback:     bash <(curl -fsSL https://raw.githubusercontent.com/${PATCH_REPO}/${PATCH_REF}/rollback.sh)"
 }
 
