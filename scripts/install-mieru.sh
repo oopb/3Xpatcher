@@ -86,6 +86,10 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=full
+# mita v3.36.0 hard-codes /var/lib/mita/metrics.pb. Per-inbound daemons must
+# never share that state file, so persistent metrics dump is intentionally
+# disabled for these isolated instances. In-memory metrics/logging still work.
+InaccessiblePaths=-/var/lib/mita
 
 [Install]
 WantedBy=multi-user.target
