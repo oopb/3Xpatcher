@@ -19,6 +19,6 @@ func (a *ServerController) generateSingboxSniCert(c *gin.Context) {
 			return
 		}
 	}
-	info, err := singbox.GenerateSelfSignedCertificate(sni, days)
+	info, err := singbox.RegenerateSelfSignedCertificate(sni, days)
 	jsonObj(c, info, err)
 }
