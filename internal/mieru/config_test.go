@@ -5,8 +5,11 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -73,13 +76,36 @@ func TestOfficialMitaAcceptsRenderedConfig(t *testing.T) {
 		Settings: Settings{Transport: "TCP", MTU: 1400, TrafficPatternEnabled: true, TrafficSeed: 7, PaddingMaxMiddleLen: pint(32), PaddingMaxEndLen: pint(64)},
 	})
 	if err != nil { t.Fatal(err) }
-	dir := t.TempDir(); cfgPath := filepath.Join(dir, "server.json"); uds := filepath.Join(dir, "mita.sock")
-	if err := os.WriteFile(cfgPath, cfg, 0o600); err != nil { t.Fatal(err) }
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "server.json")
+	uds := filepath.Join(dir, "mita.sock")
+	if err := os.WriteFile(cfgPath, cfg, 0o640); err != nil { t.Fatal(err) }
+
+	var credential *syscall.Credential
+	if os.Geteuid() == 0 {
+		if u, lookupErr := user.Lookup("mita"); lookupErr == nil {
+			uid, uidErr := strconv.Atoi(u.Uid)
+			gid, gidErr := strconv.Atoi(u.Gid)
+			if uidErr != nil || gidErr != nil { t.Fatalf("invalid mita uid/gid: %v %v", uidErr, gidErr) }
+			if err := os.Chown(dir, uid, gid); err != nil { t.Fatal(err) }
+			if err := os.Chmod(dir, 0o750); err != nil { t.Fatal(err) }
+			if err := os.Chown(cfgPath, 0, gid); err != nil { t.Fatal(err) }
+			if err := os.Chmod(cfgPath, 0o640); err != nil { t.Fatal(err) }
+			credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
+		}
+	}
+
 	env := append(os.Environ(), "MITA_CONFIG_JSON_FILE="+cfgPath, "MITA_UDS_PATH="+uds, "MITA_LOG_NO_TIMESTAMP=true")
-	cmd := exec.Command(bin, "run"); cmd.Env = env
-	var log bytes.Buffer; cmd.Stdout = &log; cmd.Stderr = &log
+	cmd := exec.Command(bin, "run")
+	cmd.Env = env
+	if credential != nil { cmd.SysProcAttr = &syscall.SysProcAttr{Credential: credential} }
+	var log bytes.Buffer
+	cmd.Stdout = &log
+	cmd.Stderr = &log
 	if err := cmd.Start(); err != nil { t.Fatal(err) }
-	done := make(chan error, 1); go func() { done <- cmd.Wait() }()
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
 	defer func() { if cmd.Process != nil { _ = cmd.Process.Kill() }; select { case <-done: case <-time.After(time.Second): } }()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
@@ -88,7 +114,9 @@ func TestOfficialMitaAcceptsRenderedConfig(t *testing.T) {
 			t.Fatalf("official mita exited before RUNNING: %v\n%s", err, log.String())
 		default:
 		}
-		status := exec.Command(bin, "status"); status.Env = env; out, _ := status.CombinedOutput()
+		status := exec.Command(bin, "status")
+		status.Env = env
+		out, _ := status.CombinedOutput()
 		if strings.Contains(string(out), `mita server status is "RUNNING"`) { return }
 		time.Sleep(100 * time.Millisecond)
 	}
