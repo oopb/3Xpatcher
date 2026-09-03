@@ -1,131 +1,166 @@
 # 3Xpatcher — 3x-ui Integrated Dual-Core Patch
 
-3Xpatcher 在 **保留 3x-ui 原生 Inbounds / Clients / Subscription 体验** 的前提下，为官方 3x-ui 增加独立 sing-box supplemental core。
+3Xpatcher 在保留 **3x-ui 原生 Inbounds / Clients / Subscription** 体验的前提下，为官方 3x-ui 增加独立 sing-box supplemental core。
 
-当前版本：`0.5.0-integrated-alpha`
+当前版本：`0.6.0-integrated-alpha`
 
-## 当前协议
+## 协议
 
-新增到原生 **Inbounds → Add Inbound → Protocol**：
+直接加入 **Inbounds → Add Inbound → Protocol**：
 
 - TUIC
 - AnyTLS
 - ShadowTLS v3
 - Naive
 
-VLESS / VMess / Trojan / Shadowsocks / Hysteria / WireGuard 等仍由原 3x-ui / Xray 管理，不重复实现。
+Xray 协议仍由原 3x-ui/Xray 管理；supplemental 协议由独立 `x-ui-singbox.service` 管理。
 
-## V2：原生管理界面，双 Core 运行时
+## 原生 Client 复用
 
-```text
-3x-ui native UI / DB / Client / Subscription
-                    │
-                    ├── Xray protocols
-                    │       └── Xray
-                    │
-                    └── TUIC / AnyTLS / ShadowTLS / Naive
-                            └── x-ui-singbox.service
-```
+四种 supplemental inbound 被标记为 3x-ui 原生 multi-user inbound，因此每个 Inbound 行可以直接：
 
-V2 不再增加独立 `Sing-box` 侧边栏页面，也不再使用单独的 `singbox_inbounds` 作为运行数据源。
+- Attach existing clients
+- Detach clients
+- Attach clients from another inbound
+- Add clients to groups
 
-### 直接复用 3x-ui
+不维护第二套用户。身份映射：
 
-- 原生 `inbounds` 表和 Inbounds 列表
-- 原生 Add / Edit / Delete / Enable / Disable
-- 原生 `clients` + `client_inbounds` 关联
-- Client email / subId / UUID / Password / Enable / Expiry / Total 等身份与策略字段
-- 原生 Client Attach / Detach、多入站关联
-- 原生订阅排序与分享地址解析
-- 原生 `/sub/:subId` 订阅链路
-- 原生 TLS 表单、证书内容/证书路径、默认面板证书选择
-- 原生 Hosts/share endpoint 机制（订阅端）
-
-### Core 严格隔离
-
-数据库和 UI 是统一的，但运行时最后一跳分流：
-
-```text
-vmess/vless/trojan/... -> Xray runtime
-
-tuic/anytls/shadowtls/naive -> sing-box runtime
-```
-
-补丁会在 Xray 全量配置生成时显式过滤 supplemental protocols，避免 TUIC/AnyTLS 等进入 Xray config。
-
-修改 supplemental inbound/client 时，sing-box 从原生 `inbounds + clients + client_inbounds` 重新渲染，先执行 `sing-box check`，再原子替换配置并只重启 `x-ui-singbox.service`。配置内容没有变化时不会重启 sing-box。
-
-新建 supplemental inbound 时可以先不绑定 Client；0 active-client inbound 会保留在 3x-ui 中，但不会实际绑定监听端口，直到至少绑定一个有效 Client。
-
-## Client credential 映射
-
-V2 不维护第二套用户：
-
-| Protocol | sing-box credential | 3x-ui Client source |
+| Protocol | sing-box credential | 3x-ui Client |
 | --- | --- | --- |
 | TUIC | name / uuid / password | email / UUID / Password |
 | AnyTLS | name / password | email / Password |
 | ShadowTLS v3 | name / password | email / Password |
 | Naive | username / password | email / Password |
 
-因此同一 Client 可以同时 attach 到 VLESS、TUIC、AnyTLS 等多个 inbound，并继续使用同一个 `subId`。
+同一个 Client 可以同时附加到 VLESS、TUIC、AnyTLS 等入站，并继续使用同一个 `subId`。
+
+## TLS certificate modes
+
+TUIC / AnyTLS / Naive 支持两种证书方式：
+
+### Native 3x-ui TLS certificate
+
+继续复用 3x-ui 原生 TLS 编辑器：证书文件、内联证书、SNI、ALPN、TLS 版本、cipher suites、curve preferences。
+
+### Generated self-signed SNI certificate
+
+协议表单选择：
+
+```text
+Certificate Mode -> Generated self-signed SNI certificate
+Camouflage SNI   -> www.microsoft.com
+```
+
+3Xpatcher 使用 Go `crypto/x509` 自动生成 ECDSA P-256 自签证书，SAN/CN 为填写的 SNI，并保存到：
+
+```text
+/usr/local/x-ui-singbox/certs/<sni-hash>/cert.pem
+/usr/local/x-ui-singbox/certs/<sni-hash>/key.pem
+```
+
+这不是 REALITY，也不会获得第三方域名的公有 CA 信任。raw subscription 会自动加入 `insecure=1`，Mihomo 会自动加入 `skip-cert-verify: true`，从而使生成的节点与自签证书配置保持一致。
+
+如果需要公有 CA 信任证书，必须使用自己可控制的域名和 ACME/CA；不能为不受控制的第三方域名合法获取受信任证书。
+
+## sing-box 1.14 option coverage
+
+V3 对照 sing-box v1.14.0 和 S-UI 补充：
+
+### Common Listen options
+
+- bind_interface
+- routing_mark
+- reuse_addr
+- netns
+- tcp_fast_open
+- tcp_multi_path
+- disable_tcp_keep_alive
+- tcp_keep_alive
+- tcp_keep_alive_interval
+- udp_fragment
+- udp_timeout
+
+### TUIC
+
+- users / UUID / password
+- congestion_control
+- auth_timeout
+- zero_rtt_handshake
+- heartbeat
+- TLS
+- QUIC: idle_timeout / keep_alive_period / stream_receive_window / connection_receive_window / max_concurrent_streams / initial_packet_size / disable_path_mtu_discovery
+
+### AnyTLS
+
+- users
+- padding_scheme
+- TLS
+- common Listen options
+
+### ShadowTLS v3
+
+- users
+- handshake server/port
+- handshake_for_server_name (JSON; values may include sing-box Dial Fields)
+- strict_mode
+- wildcard_sni: off / authed / all
+- automatically managed hidden Shadowsocks carrier inbound
+
+### Naive
+
+- network
+- users
+- quic_congestion_control: bbr / cubic / reno
+- TLS
+- common Listen options
+
+`bbr2` is intentionally not exposed for Naive **inbound**: sing-box v1.14.0 source only includes `bbr2` in Naive outbound, while inbound enum is `bbr,cubic,reno`.
+
+Not exposed as ordinary per-inbound toggles: arbitrary `detour` (ShadowTLS detour is internally managed), mTLS client-auth, ECH server keys, kernel TLS, and top-level certificate providers. These require additional lifecycle/trust semantics and are not necessary for the current integrated client/subscription model.
 
 ## Subscription
 
-原生 raw subscription `/sub/:subId` 已扩展为同时检索 Xray 与 supplemental inbounds。
+原生 `/sub/:subId` 会同时包含 Xray 与 supplemental inbounds：
 
-- TUIC：输出 TUIC share link
-- AnyTLS：输出 AnyTLS share link
-- ShadowTLS v3：输出 3Xpatcher 扩展 share link，并在 Mihomo Clash 输出中映射为 Shadowsocks + `shadow-tls` plugin
-- Naive：输出 `naive+https` raw link
+- TUIC raw link
+- AnyTLS raw link
+- ShadowTLS v3 raw link
+- Naive `naive+https` raw link
+- Mihomo: TUIC / AnyTLS / ShadowTLS
 
-Mihomo/Clash 输出目前支持 TUIC、AnyTLS、ShadowTLS；Naive 暂不写入 Mihomo YAML，因为当前没有可安全依赖的原生 Naive proxy 类型。
+3x-ui 的 Xray JSON subscription (`/json`) 无法表达 sing-box-only 协议，因此会跳过这些协议，而不是生成无效 Xray 配置。
 
-3x-ui 的 Xray JSON subscription (`/json`) 无法表达这四种 sing-box-only 协议，因此会显式跳过它们，而不是生成无效的空代理配置；需要 supplemental 节点时使用 raw subscription 或 Mihomo/Clash。
+## Core isolation
 
-> 当前 alpha 尚未把 sing-box 的实时字节统计合并回 3x-ui/Xray traffic counters。Client enable/expiry/attachment/订阅身份已统一，但 supplemental traffic accounting 是后续工作。
+```text
+3x-ui UI / DB / Client / Subscription
+              │
+      ┌───────┴────────┐
+      ▼                ▼
+ Xray protocols    supplemental protocols
+      │                │
+     Xray          x-ui-singbox.service
+```
 
-## 安装
+Xray 全量配置会过滤 TUIC/AnyTLS/ShadowTLS/Naive。修改 supplemental inbound/client 只 reconcile sing-box；配置无变化时不重启 sing-box。
 
-要求：
-
-- 已安装官方 3x-ui
-- Debian / Ubuntu / Armbian
-- systemd
-- amd64 / arm64
+## 安装 / 升级
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/install.sh)
 ```
 
-安装器读取当前 `/usr/local/x-ui/x-ui -v`，下载与当前官方版本匹配的 GitHub Actions 预编译 patched panel，校验 release SHA256、版本和架构后才替换 `/usr/local/x-ui/x-ui`。
+安装器下载与当前官方 3x-ui 版本匹配的 GitHub Actions 预编译 panel，验证 SHA256、patch version、upstream version 和架构。目标 VPS 不需要 Go/Node/npm 编译环境。
 
-目标 VPS 不需要 Go / Node.js / npm / CGO 编译环境。
+安装 patched panel 时 `x-ui.service` 会重启一次；`/usr/local/x-ui/bin/xray-*` 安装前后进行 SHA256 校验且不会被替换。
 
-当前兼容上游版本见：
-
-```text
-UPSTREAM_COMPAT
-```
-
-## Xray 安全边界
-
-安装前会备份当前 panel binary、`/etc/x-ui`（若存在）并记录 `/usr/local/x-ui/bin/xray-*` SHA256。
-
-安装过程中：
-
-- 不替换 Xray binary
-- 不修改 Xray updater
-- patched `x-ui` 激活后再次验证所有 Xray binary SHA256
-- 激活失败自动恢复原 panel binary
-
-安装 patched panel 会重启一次 `x-ui.service`，因此其 Xray 子进程会短暂重连一次；之后 supplemental core 与 Xray 独立运行。
-
-## sing-box runtime
+## Runtime
 
 ```text
 /usr/local/x-ui-singbox/bin/sing-box
 /usr/local/x-ui-singbox/config/config.json
+/usr/local/x-ui-singbox/certs/
 /etc/systemd/system/x-ui-singbox.service
 ```
 
@@ -137,8 +172,6 @@ UPSTREAM_COMPAT
 
 ## 回滚
 
-只恢复原 3x-ui panel binary，默认保留 sing-box runtime：
-
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/rollback.sh)
 ```
@@ -149,27 +182,4 @@ bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/rollback
 PURGE_SINGBOX=1 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/rollback.sh)
 ```
 
-历史 V1 的 `singbox_inbounds` 表不会自动 DROP，作为回滚/数据恢复遗留保留；V2 runtime 不再读取它。
-
-## 开发 / CI
-
-GitHub Actions：
-
-1. 下载 `UPSTREAM_COMPAT` 指定的官方 3x-ui 源码；
-2. `scripts/apply-overlay.sh` 将 V2 integration overlay 应用到原生 Inbounds / Clients / Subscription / runtime；
-3. 运行 supplemental renderer tests；
-4. `npm ci && npm run build`；
-5. 静态构建 amd64 / arm64 patched `x-ui`；
-6. 发布 rolling `prebuilt-vX.Y.Z` release。
-
-本地静态 smoke：
-
-```bash
-./tests/smoke.sh
-```
-
-## 3x-ui 升级
-
-官方 Panel 升级仍会用官方 `x-ui` 覆盖 patched binary。升级官方 3x-ui 后，需要等待/生成对应版本的 `prebuilt-vX.Y.Z` 兼容包，然后重新运行一键安装器。
-
-Xray core 单独更新和 sing-box core 单独更新不需要重新 patch panel。
+历史 `singbox_inbounds` 表和生成的证书不会自动 DROP/删除，以避免破坏回滚与数据恢复。
