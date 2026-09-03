@@ -8,6 +8,7 @@ import (
 
 func tls() TLSSettings { return TLSSettings{Enabled: true, CertificatePath: "/cert.pem", KeyPath: "/key.pem"} }
 func raw(v any) json.RawMessage { b, _ := json.Marshal(v); return b }
+func boolPtr(v bool) *bool { return &v }
 
 func TestSupportedProtocolsExcludeSnellAndXrayProtocols(t *testing.T) {
 	for _, p := range []Protocol{"snell", "vless", "vmess", "trojan", "shadowsocks", "hysteria2"} {
@@ -34,7 +35,7 @@ func TestAdvancedTUICAndListenFields(t *testing.T) {
 	s := TUICSettings{
 		Users: []TUICUser{{UUID: "550e8400-e29b-41d4-a716-446655440000", Password: "p"}},
 		TLS: TLSSettings{Enabled: true, CertificatePath: "/cert.pem", KeyPath: "/key.pem", MinVersion: "1.2", MaxVersion: "1.3", CurvePreferences: []string{"X25519"}},
-		ListenSettings: ListenSettings{BindInterface: "eth0", TCPFastOpen: true, UDPFragment: true, UDPTimeout: "5m"},
+		ListenSettings: ListenSettings{BindInterface: "eth0", TCPFastOpen: true, UDPFragment: boolPtr(true), UDPTimeout: "5m"},
 		QUICSettings: QUICSettings{IdleTimeout: "30s", KeepAlivePeriod: "10s", InitialPacketSize: 1350, DisablePathMTUDiscovery: true},
 	}
 	b, err := BuildConfig([]InboundRecord{{Enable: true, Listen: "::", Port: 443, Tag: "t", Protocol: ProtocolTUIC, Settings: raw(s)}}); if err != nil { t.Fatal(err) }
@@ -42,6 +43,12 @@ func TestAdvancedTUICAndListenFields(t *testing.T) {
 	for _, needle := range []string{`"bind_interface": "eth0"`, `"tcp_fast_open": true`, `"udp_fragment": true`, `"idle_timeout": "30s"`, `"initial_packet_size": 1350`, `"disable_path_mtu_discovery": true`, `"min_version": "1.2"`, `"curve_preferences"`} {
 		if !strings.Contains(text, needle) { t.Fatalf("missing advanced field %s:\n%s", needle, text) }
 	}
+}
+
+func TestExplicitDisableUDPFragment(t *testing.T) {
+	s := TUICSettings{Users: []TUICUser{{UUID: "550e8400-e29b-41d4-a716-446655440000", Password: "p"}}, TLS: tls(), ListenSettings: ListenSettings{UDPFragment: boolPtr(false)}}
+	b, err := BuildConfig([]InboundRecord{{Enable: true, Listen: "::", Port: 443, Tag: "t", Protocol: ProtocolTUIC, Settings: raw(s)}}); if err != nil { t.Fatal(err) }
+	if !strings.Contains(string(b), `"udp_fragment": false`) { t.Fatalf("explicit false was lost: %s", b) }
 }
 
 func TestShadowTLSHandshakeForSNI(t *testing.T) {
