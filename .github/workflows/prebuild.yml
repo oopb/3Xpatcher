@@ -3,7 +3,7 @@ name: Prebuild patched 3x-ui
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, v5-reality-integration]
     paths:
       - VERSION
       - UPSTREAM_COMPAT
@@ -13,7 +13,9 @@ on:
       - scripts/apply-v2*.py
       - scripts/v2_patchlib.py
       - scripts/v3-patch.py
+      - scripts/v5-patch.py
       - overlay/**
+      - tests/**
       - .github/workflows/prebuild.yml
 
 permissions:
@@ -29,6 +31,8 @@ jobs:
     steps:
       - name: Checkout 3Xpatcher
         uses: actions/checkout@v7
+      - name: Static patch smoke
+        run: ./tests/smoke.sh
       - name: Read build target
         id: target
         shell: bash
