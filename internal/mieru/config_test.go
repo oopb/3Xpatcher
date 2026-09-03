@@ -1,6 +1,7 @@
 package mieru
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -46,6 +47,18 @@ func TestMieruDefaultsPreserveOfficialImplicitTrafficPattern(t *testing.T) {
 	s := string(b)
 	if strings.Contains(s, `"trafficPattern"`) { t.Fatalf("trafficPattern must be omitted unless enabled: %s", s) }
 	if !strings.Contains(s, `"protocol": "TCP"`) || !strings.Contains(s, `"mtu": 1400`) { t.Fatalf("defaults missing: %s", s) }
+}
+
+func TestOfficialMitaAcceptsRenderedConfig(t *testing.T) {
+	bin := os.Getenv("MIERU_OFFICIAL_BINARY")
+	if bin == "" { t.Skip("MIERU_OFFICIAL_BINARY is not set") }
+	cfg, err := BuildServerConfig(Record{
+		ID: 9, Port: 32000,
+		Users: []User{{Name: "ci@example.com", Password: "ci-password"}},
+		Settings: Settings{Transport: "TCP", PortRangeEnd: 32002, MTU: 1400, TrafficPatternEnabled: true, TrafficSeed: 7, PaddingMaxMiddleLen: pint(32), PaddingMaxEndLen: pint(64)},
+	})
+	if err != nil { t.Fatal(err) }
+	if err := (Runtime{BinaryPath: bin}).CheckBytes(cfg); err != nil { t.Fatal(err) }
 }
 
 func TestRejectInvalidMieruRange(t *testing.T) {
