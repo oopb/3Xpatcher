@@ -11,14 +11,8 @@ REPO="${MIERU_REPO:-enfein/mieru}"
 [[ -r "$VERSION_FILE" ]] || { echo "Missing $VERSION_FILE" >&2; exit 1; }
 for cmd in curl python3 sha256sum dpkg-deb systemctl getent groupadd useradd chown chmod find; do command -v "$cmd" >/dev/null || { echo "Missing required command: $cmd" >&2; exit 1; }; done
 
-# Match the official Mieru package service model: a dedicated unprivileged mita
-# account runs the daemon and only receives CAP_NET_BIND_SERVICE.
-if ! getent group mita >/dev/null 2>&1; then
-  groupadd --system mita
-fi
-if ! id -u mita >/dev/null 2>&1; then
-  useradd --system --gid mita --home-dir /nonexistent --shell /usr/sbin/nologin mita
-fi
+if ! getent group mita >/dev/null 2>&1; then groupadd --system mita; fi
+if ! id -u mita >/dev/null 2>&1; then useradd --system --gid mita --home-dir /nonexistent --shell /usr/sbin/nologin mita; fi
 
 version=$(tr -d '\r\n' < "$VERSION_FILE")
 [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid MIERU_VERSION: $version" >&2; exit 1; }
@@ -55,8 +49,7 @@ bin=$(find "$work/root" -type f -path '*/bin/mita' -perm -u+x | head -n1)
 [[ -n "$bin" ]] || { echo "mita binary not found in $asset" >&2; exit 1; }
 install -d -m 0755 "$INSTALL_ROOT/bin"
 install -d -m 2750 -o root -g mita "$INSTALL_ROOT/config"
-# Upgrade configs created by early Mieru integration builds to the permissions
-# needed by the unprivileged service. Plaintext client passwords are never here.
+install -d -m 0755 /var/lib/mita /var/lib/x-ui-mieru
 find "$INSTALL_ROOT/config" -maxdepth 1 -type f -name '*.json' -exec chown root:mita {} + -exec chmod 0640 {} + 2>/dev/null || true
 install -m 0755 "$bin" "$INSTALL_ROOT/bin/mita"
 
@@ -75,9 +68,14 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 Environment="MITA_CONFIG_JSON_FILE=/usr/local/x-ui-mieru/config/%i.json"
 Environment="MITA_UDS_PATH=/run/x-ui-mieru/%i.sock"
 Environment="MITA_LOG_NO_TIMESTAMP=true"
-ExecStartPre=+/usr/bin/mkdir -p /run/x-ui-mieru
-ExecStartPre=+/usr/bin/chown mita:mita /run/x-ui-mieru
-ExecStartPre=+/usr/bin/chmod 0750 /run/x-ui-mieru
+RuntimeDirectory=x-ui-mieru
+RuntimeDirectoryMode=0750
+StateDirectory=x-ui-mieru/%i
+StateDirectoryMode=0750
+# Mieru v3.36 writes persistent counters to the fixed path
+# /var/lib/mita/metrics.pb. Give every template instance a private view of that
+# directory so independent 3x-ui inbounds never share or overwrite counters.
+BindPaths=/var/lib/x-ui-mieru/%i:/var/lib/mita
 ExecStart=/usr/local/x-ui-mieru/bin/mita run
 Restart=on-failure
 RestartSec=3
@@ -86,10 +84,6 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=full
-# mita v3.36.0 hard-codes /var/lib/mita/metrics.pb. Per-inbound daemons must
-# never share that state file, so persistent metrics dump is intentionally
-# disabled for these isolated instances. In-memory metrics/logging still work.
-InaccessiblePaths=-/var/lib/mita
 
 [Install]
 WantedBy=multi-user.target
@@ -102,4 +96,5 @@ installed=$($INSTALL_ROOT/bin/mita version 2>&1 | head -n1 | tr -d '\r' || true)
 echo "Mieru runtime installed: $installed"
 echo "Binary: $INSTALL_ROOT/bin/mita"
 echo "Config: $INSTALL_ROOT/config/<inbound-id>.json"
+echo "Metrics: /var/lib/x-ui-mieru/<inbound-id>/metrics.pb"
 echo "Service: x-ui-mieru@<inbound-id>.service (User=mita)"
