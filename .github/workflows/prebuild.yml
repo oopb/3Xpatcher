@@ -3,7 +3,7 @@ name: Prebuild patched 3x-ui
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, v4-tls-security-work]
     paths:
       - VERSION
       - UPSTREAM_COMPAT
