@@ -54,7 +54,7 @@ type Record struct {
 
 func BuildServerConfig(r Record) ([]byte, error) {
 	if r.ID <= 0 { return nil, errors.New("inbound id is required") }
-	if r.Port < 1025 || r.Port > 65535 { return nil, fmt.Errorf("Mieru port %d is outside 1025..65535", r.Port) }
+	if r.Port < 1 || r.Port > 65535 { return nil, fmt.Errorf("Mieru port %d is outside 1..65535", r.Port) }
 	if len(r.Users) == 0 { return nil, errors.New("at least one Mieru user is required") }
 	for _, u := range r.Users {
 		if strings.TrimSpace(u.Name) == "" || strings.TrimSpace(u.Password) == "" { return nil, errors.New("Mieru user name and password are required") }
