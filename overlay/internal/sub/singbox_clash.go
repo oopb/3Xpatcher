@@ -12,14 +12,21 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 	proxy := map[string]any{"name": name, "server": inbound.Listen, "port": inbound.Port, "udp": true}
 	tls, _ := stream["tlsSettings"].(map[string]any)
 	applyTLS := func() {
+		selfSigned := false
 		if tls != nil {
 			if sni, _ := tls["serverName"].(string); sni != "" { proxy["sni"] = sni }
 			if alpn := anyStringSlice(tls["alpn"]); len(alpn) > 0 { proxy["alpn"] = alpn }
+			if mode, _ := tls["certificateMode"].(string); mode == "self_signed_sni" { selfSigned = true }
 		}
-		if mode, _ := settings["tlsMode"].(string); mode == "self_signed_sni" {
-			if sni, _ := settings["camouflageSNI"].(string); strings.TrimSpace(sni) != "" { proxy["sni"] = strings.TrimSpace(sni) }
-			proxy["skip-cert-verify"] = true
+		if !selfSigned {
+			if mode, _ := settings["tlsMode"].(string); mode == "self_signed_sni" { // 0.6 compatibility
+				selfSigned = true
+				if _, exists := proxy["sni"]; !exists {
+					if sni, _ := settings["camouflageSNI"].(string); strings.TrimSpace(sni) != "" { proxy["sni"] = strings.TrimSpace(sni) }
+				}
+			}
 		}
+		if selfSigned { proxy["skip-cert-verify"] = true }
 		if ep != nil {
 			if sni, ok := externalProxySNI(ep); ok { proxy["sni"] = sni }
 			if insecure, _ := ep["allowInsecure"].(bool); insecure { proxy["skip-cert-verify"] = true }
