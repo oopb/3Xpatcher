@@ -34,6 +34,8 @@ modified=(
   frontend/src/pages/inbounds/form/security/tls.tsx
   frontend/src/pages/inbounds/list/helpers.ts
   frontend/src/pages/inbounds/list/RowActions.tsx
+  frontend/src/pages/inbounds/list/useInboundColumns.tsx
+  frontend/src/pages/inbounds/useInbounds.ts
   frontend/src/pages/clients/ClientFormModal.tsx
   frontend/src/pages/clients/ClientBulkAddModal.tsx
 )
@@ -78,12 +80,13 @@ python3 "$ROOT/scripts/v7-patch.py" "$SRC"
 python3 "$ROOT/scripts/v8-patch.py" "$SRC"
 python3 "$ROOT/scripts/v9-patch.py" "$SRC"
 python3 "$ROOT/scripts/v10-patch.py" "$SRC"
+python3 "$ROOT/scripts/v11-patch.py" "$SRC"
 
 gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/model.go" "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
 
-echo "3Xpatcher V10 integrated overlay applied."
+echo "3Xpatcher V11 integrated overlay applied."
 echo "Backup: $backup"
-echo "UI: native /panel/inbounds + native client attach/detach"
+echo "UI: native /panel/inbounds + full native client action parity for supplemental protocols"
 echo "Security: native 3x-ui TLS and Reality UI reused by supported sing-box protocols"
 echo "Stats: Xray / sing-box / Mieru fold into native 3x-ui traffic + merged online state"
 echo "SS2022: server/client keys auto-generate, heal legacy invalid rows, and Clash export is guarded"
