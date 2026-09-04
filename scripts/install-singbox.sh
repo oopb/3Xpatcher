@@ -104,7 +104,10 @@ Restart=on-failure
 RestartSec=3
 LimitNOFILE=1048576
 NoNewPrivileges=true
-ProtectHome=true
+# Native 3x-ui certificates are frequently stored below /root. Hide-home breaks
+# TUIC/AnyTLS/Naive only at service runtime even though panel-side `sing-box check`
+# succeeds. Keep home trees readable but immutable to the supplemental runtime.
+ProtectHome=read-only
 PrivateTmp=true
 
 [Install]
