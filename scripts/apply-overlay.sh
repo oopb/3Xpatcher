@@ -30,13 +30,16 @@ modified=(
   frontend/src/lib/xray/inbound-defaults.ts
   frontend/src/lib/xray/protocol-capabilities.ts
   frontend/src/lib/xray/inbound-link.ts
+  frontend/src/pages/inbounds/InboundsPage.tsx
   frontend/src/pages/inbounds/form/protocols/index.ts
   frontend/src/pages/inbounds/form/InboundFormModal.tsx
   frontend/src/pages/inbounds/form/security/tls.tsx
+  frontend/src/pages/inbounds/info/InboundInfoModal.tsx
   frontend/src/pages/inbounds/list/helpers.ts
   frontend/src/pages/inbounds/list/RowActions.tsx
   frontend/src/pages/inbounds/list/types.ts
   frontend/src/pages/inbounds/list/useInboundColumns.tsx
+  frontend/src/pages/inbounds/qr/QrCodeModal.tsx
   frontend/src/pages/inbounds/useInbounds.ts
   frontend/src/pages/clients/ClientFormModal.tsx
   frontend/src/pages/clients/ClientBulkAddModal.tsx
@@ -90,7 +93,7 @@ gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/
 
 echo "3Xpatcher V11 integrated overlay applied."
 echo "Backup: $backup"
-echo "UI: native /panel/inbounds + full native client action, QR and export parity for supplemental protocols"
+echo "UI: native /panel/inbounds + full native client action, QR, raw and Clash subscription parity"
 echo "Security: native 3x-ui TLS and Reality UI reused by supported sing-box protocols"
 echo "Stats: Xray / sing-box / Mieru fold into native 3x-ui traffic + merged online state"
 echo "SS2022: server/client keys auto-generate, heal legacy invalid rows, and Clash export is guarded"
