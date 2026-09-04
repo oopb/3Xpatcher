@@ -51,12 +51,12 @@ jobs:
           cache: true
           cache-dependency-path: source/go.sum
 
-      - name: Compile affected Go packages
+      - name: Compile and test affected Go packages
         working-directory: source
         run: |
           go test ./internal/singbox
           go test ./internal/mieru
-          go test ./internal/sub -run '^$'
+          go test ./internal/sub -run 'TestBuildShadowTLSShareLinksCompatibility' -count=1
           go test ./internal/web/service -run '^$'
 
       - name: Setup Node.js
