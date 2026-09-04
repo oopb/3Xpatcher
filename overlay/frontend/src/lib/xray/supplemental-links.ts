@@ -63,6 +63,14 @@ function buildLink(base: string, params: URLSearchParams, remark = ''): string {
   return `${base}${query ? `?${query}` : ''}${fragment}`;
 }
 
+function isPersistedSelfSignedTls(settings: AnyRecord, tls: AnyRecord): boolean {
+  if (asString(tls.certificateMode) === 'self_signed_sni') return true;
+  const certificatePath = asString(tls.selfSignedCertificatePath).trim();
+  const keyPath = asString(tls.selfSignedKeyPath).trim();
+  if (certificatePath && keyPath) return true;
+  return asString(settings.tlsMode) === 'self_signed_sni';
+}
+
 function applyTlsParams(
   inbound: Inbound,
   externalProxy: ExternalProxyEntry | null | undefined,
@@ -91,13 +99,10 @@ function applyTlsParams(
     if (sni) params.set('sni', sni);
     if (alpn.length > 0) params.set('alpn', alpn.join(','));
 
-    let selfSigned = asString(tls.certificateMode) === 'self_signed_sni';
-    if (!selfSigned && asString(settings.tlsMode) === 'self_signed_sni') {
-      selfSigned = true;
-      if (!params.has('sni')) {
-        const legacySni = asString(settings.camouflageSNI).trim();
-        if (legacySni) params.set('sni', legacySni);
-      }
+    const selfSigned = isPersistedSelfSignedTls(settings, tls);
+    if (selfSigned && !params.has('sni')) {
+      const legacySni = asString(settings.camouflageSNI).trim();
+      if (legacySni) params.set('sni', legacySni);
     }
     if (selfSigned) params.set('insecure', '1');
   }
