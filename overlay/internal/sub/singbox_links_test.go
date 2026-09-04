@@ -14,8 +14,8 @@ func TestShadowrocketShadowTLSUsesDescriptorNotSIP003(t *testing.T) {
 	inbound := &model.Inbound{Protocol: model.ShadowTLS, Port: 443}
 	client := model.Client{Email: "stls@example.com", Password: "shadow-user-password"}
 	settings := map[string]any{
-		"innerMethod":    "2022-blake3-aes-128-gcm",
-		"innerPassword":  "MDEyMzQ1Njc4OWFiY2RlZg==",
+		"innerMethod":     "2022-blake3-aes-128-gcm",
+		"innerPassword":   "MDEyMzQ1Njc4OWFiY2RlZg==",
 		"handshakeServer": "captive.apple.com",
 	}
 	got := (&SubService{clientUserAgent: "Shadowrocket/2.2.86"}).buildSingboxEndpointLink(
@@ -44,8 +44,8 @@ func TestShadowrocketShadowTLSUsesDescriptorNotSIP003(t *testing.T) {
 
 func TestGenericShadowTLSKeepsSIP003Only(t *testing.T) {
 	settings := map[string]any{
-		"innerMethod":    "2022-blake3-aes-128-gcm",
-		"innerPassword":  "MDEyMzQ1Njc4OWFiY2RlZg==",
+		"innerMethod":     "2022-blake3-aes-128-gcm",
+		"innerPassword":   "MDEyMzQ1Njc4OWFiY2RlZg==",
 		"handshakeServer": "captive.apple.com",
 	}
 	got := buildShadowTLSSIP003Link(settings, "shadow-user-password", "203.0.113.10", 443, "stls-user")
@@ -127,7 +127,7 @@ func TestGenericNaiveUsesNetworkSpecificNativeScheme(t *testing.T) {
 	}
 }
 
-func TestTUICClashRestoresPreMieruShapeAndSuiH3(t *testing.T) {
+func TestTUICClashRestoresExactPreMieruShape(t *testing.T) {
 	inbound := &model.Inbound{
 		Protocol: model.TUIC,
 		Listen:   "203.0.113.30",
@@ -172,7 +172,34 @@ func TestTUICClashRestoresPreMieruShapeAndSuiH3(t *testing.T) {
 		}
 	}
 	alpn, ok := proxy["alpn"].([]string)
-	if !ok || len(alpn) != 1 || alpn[0] != "h3" {
-		t.Fatalf("TUIC Clash ALPN must match S-UI h3 output: %#v", proxy["alpn"])
+	if !ok || len(alpn) != 1 || alpn[0] != "custom-server-value" {
+		t.Fatalf("TUIC Clash must preserve the configured TLS ALPN exactly like pre-Mieru: %#v", proxy["alpn"])
+	}
+}
+
+func TestTUICClashDoesNotInventALPN(t *testing.T) {
+	inbound := &model.Inbound{
+		Protocol: model.TUIC,
+		Listen:   "203.0.113.31",
+		Port:     10443,
+		Settings: `{"congestionControl":"cubic"}`,
+	}
+	client := model.Client{
+		Email:    "tuic-no-alpn@example.com",
+		ID:       "00000000-0000-4000-8000-000000000002",
+		Password: "tuic-password",
+	}
+	stream := map[string]any{
+		"security": "tls",
+		"tlsSettings": map[string]any{
+			"serverName": "tuic.example.com",
+		},
+	}
+	proxy := (&SubClashService{}).buildSingboxProxy(&SubService{}, inbound, client, stream, nil)
+	if proxy == nil {
+		t.Fatal("TUIC proxy unexpectedly omitted")
+	}
+	if _, exists := proxy["alpn"]; exists {
+		t.Fatalf("pre-Mieru TUIC did not invent an ALPN when the inbound had none: %#v", proxy)
 	}
 }
