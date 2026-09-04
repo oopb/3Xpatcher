@@ -6,8 +6,6 @@ BACKUP=${2:-}
 [[ -n "$SRC" && -n "$BACKUP" ]] || { echo "Usage: $0 /path/to/3x-ui-source /path/to/.dualcore-backup-*" >&2; exit 2; }
 
 # Keep this list byte-for-byte aligned with apply-overlay.sh's modified list.
-# These are upstream files that are backed up before patching and therefore
-# must be restored rather than simply deleted.
 modified=(
   internal/database/model/model.go
   internal/web/service/inbound.go
@@ -34,6 +32,7 @@ modified=(
   frontend/src/pages/inbounds/form/security/tls.tsx
   frontend/src/pages/inbounds/list/helpers.ts
   frontend/src/pages/inbounds/list/RowActions.tsx
+  frontend/src/pages/inbounds/list/types.ts
   frontend/src/pages/inbounds/list/useInboundColumns.tsx
   frontend/src/pages/inbounds/useInbounds.ts
   frontend/src/pages/clients/ClientFormModal.tsx
@@ -44,7 +43,6 @@ for f in "${modified[@]}"; do
   cp "$BACKUP/$f" "$SRC/$f"
 done
 
-# These files are owned entirely by 3Xpatcher and did not exist in upstream.
 rm -rf "$SRC/internal/singbox" "$SRC/internal/mieru"
 rm -f \
   "$SRC/internal/database/model/singbox_protocols.go" \
