@@ -34,6 +34,7 @@ modified=(
   frontend/src/pages/inbounds/form/protocols/index.ts
   frontend/src/pages/inbounds/form/InboundFormModal.tsx
   frontend/src/pages/inbounds/form/security/tls.tsx
+  frontend/src/pages/inbounds/info/helpers.ts
   frontend/src/pages/inbounds/info/InboundInfoModal.tsx
   frontend/src/pages/inbounds/list/helpers.ts
   frontend/src/pages/inbounds/list/RowActions.tsx
@@ -88,6 +89,7 @@ python3 "$ROOT/scripts/v8-patch.py" "$SRC"
 python3 "$ROOT/scripts/v9-patch.py" "$SRC"
 python3 "$ROOT/scripts/v10-patch.py" "$SRC"
 python3 "$ROOT/scripts/v11-patch.py" "$SRC"
+python3 "$ROOT/scripts/v11-final-patch.py" "$SRC"
 
 gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/model.go" "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
 
