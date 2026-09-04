@@ -72,6 +72,13 @@ jobs:
           cache: true
           cache-dependency-path: source/go.sum
 
+      - name: Verify exact pre-Mieru TUIC Clash contract
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./internal/sub -run '^TestTUICClash(RestoresExactPreMieruShape|DoesNotInventALPN)$' -count=1 -v
+
       - name: Build shipped sing-box runtime shape
         id: singbox
         shell: bash
