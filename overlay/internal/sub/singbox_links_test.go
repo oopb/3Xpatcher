@@ -127,7 +127,7 @@ func TestGenericNaiveUsesNetworkSpecificNativeScheme(t *testing.T) {
 	}
 }
 
-func TestTUICClashMatchesKnownGoodMihomoShapeFromPersistedSelfSignedState(t *testing.T) {
+func TestTUICClashRestoresPreMieruShapeWithRequiredSkipCertVerify(t *testing.T) {
 	inbound := &model.Inbound{
 		Protocol: model.TUIC,
 		Listen:   "23.159.248.103",
@@ -137,16 +137,17 @@ func TestTUICClashMatchesKnownGoodMihomoShapeFromPersistedSelfSignedState(t *tes
 	client := model.Client{
 		Email:    "tuic@example.com",
 		ID:       "6c9e30c6-72c1-4ae7-f1f7-4bbc3dbe218b",
-		Password: "SrYXR3ELjc",
+		Password: "test-password",
 	}
+	// Deliberately omit certificateMode and all self-signed metadata. The real
+	// Clash Verge A/B isolated the failure to the missing skip-cert-verify
+	// field, so TUIC dedicated Clash exports must not depend on UI metadata to
+	// emit it.
 	stream := map[string]any{
 		"security": "tls",
 		"tlsSettings": map[string]any{
-			"serverName":                "www.mozilla.org",
-			"alpn":                      []any{"h3", "h2", "http/1.1"},
-			"selfSignedServerName":      "www.mozilla.org",
-			"selfSignedCertificatePath": "/usr/local/x-ui-singbox/certs/fixture/cert.pem",
-			"selfSignedKeyPath":         "/usr/local/x-ui-singbox/certs/fixture/key.pem",
+			"serverName": "www.mozilla.org",
+			"alpn":       []any{"h3", "h2", "http/1.1"},
 		},
 	}
 
@@ -163,15 +164,15 @@ func TestTUICClashMatchesKnownGoodMihomoShapeFromPersistedSelfSignedState(t *tes
 		"sni":                   "www.mozilla.org",
 		"skip-cert-verify":      true,
 		"congestion-controller": "bbr",
-		"udp-relay-mode":        "native",
+		"udp":                   true,
 	}
 	for key, want := range checks {
 		if got := proxy[key]; got != want {
 			t.Fatalf("TUIC field %s: got %#v want %#v; proxy=%#v", key, got, want, proxy)
 		}
 	}
-	if _, exists := proxy["udp"]; exists {
-		t.Fatalf("known-good Mihomo TUIC shape does not need the generic udp flag: %#v", proxy)
+	if _, exists := proxy["udp-relay-mode"]; exists {
+		t.Fatalf("TUIC must retain the pre-Mieru shape and not invent udp-relay-mode: %#v", proxy)
 	}
 	for _, forbidden := range []string{"heartbeat-interval", "max-open-streams", "disable-mtu-discovery", "disable-sni"} {
 		if _, exists := proxy[forbidden]; exists {
@@ -185,24 +186,12 @@ func TestTUICClashMatchesKnownGoodMihomoShapeFromPersistedSelfSignedState(t *tes
 	}
 	for i := range wantALPN {
 		if alpn[i] != wantALPN[i] {
-			t.Fatalf("TUIC Clash must preserve ordered ALPN list: got %#v want %#v", alpn, wantALPN)
+			t.Fatalf("TUIC Clash must preserve ordered server ALPN: got %#v want %#v", alpn, wantALPN)
 		}
-	}
-
-	raw := (&SubService{}).buildSingboxEndpointLink(inbound, client, map[string]any{"congestionControl": "bbr"}, stream, nil, "23.159.248.103", 443)
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		t.Fatalf("parse TUIC raw link: %v", err)
-	}
-	if got := parsed.Query().Get("insecure"); got != "1" {
-		t.Fatalf("persisted generated self-signed TUIC raw link must set insecure=1: %s", raw)
-	}
-	if got := parsed.Query().Get("alpn"); got != "h3,h2,http/1.1" {
-		t.Fatalf("TUIC raw link must preserve server ALPN order: got %q link=%s", got, raw)
 	}
 }
 
-func TestTUICClashDoesNotInventALPN(t *testing.T) {
+func TestTUICClashDoesNotInventALPNOrUDPRelayMode(t *testing.T) {
 	inbound := &model.Inbound{
 		Protocol: model.TUIC,
 		Listen:   "203.0.113.31",
@@ -227,10 +216,13 @@ func TestTUICClashDoesNotInventALPN(t *testing.T) {
 	if _, exists := proxy["alpn"]; exists {
 		t.Fatalf("TUIC must not invent an ALPN when the inbound had none: %#v", proxy)
 	}
-	if proxy["udp-relay-mode"] != "native" {
-		t.Fatalf("TUIC must explicitly retain Mihomo native UDP relay mode: %#v", proxy)
+	if _, exists := proxy["udp-relay-mode"]; exists {
+		t.Fatalf("TUIC must not add the post-Mieru udp-relay-mode experiment: %#v", proxy)
 	}
-	if _, exists := proxy["skip-cert-verify"]; exists {
-		t.Fatalf("public/native TLS without self-signed markers must not disable verification: %#v", proxy)
+	if proxy["udp"] != true {
+		t.Fatalf("TUIC must retain pre-Mieru udp:true: %#v", proxy)
+	}
+	if proxy["skip-cert-verify"] != true {
+		t.Fatalf("TUIC Clash exports must always include skip-cert-verify:true: %#v", proxy)
 	}
 }
