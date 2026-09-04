@@ -2,7 +2,7 @@
 
 3Xpatcher 在尽量保持 **3x-ui 原生 Inbounds / Clients / Subscription / Traffic / Online** 工作流不变的前提下，为官方 3x-ui 增加彼此隔离的 supplemental cores。
 
-当前版本：`0.11.0-integrated-alpha`
+当前版本：`0.11.1-integrated-alpha`
 
 兼容上游：`3x-ui v3.7.0`
 
@@ -70,7 +70,7 @@ V11 补齐了 V10 中遗漏的客户端计数与 UI capability 链路。TUIC / A
 
 > Remote Nodes 的“Deploy To”没有强行开放给 supplemental protocols。远端节点是否安装 sing-box / mita 属于独立部署能力；在没有远端 runtime provisioning 前伪装为可部署会得到不可运行的配置。本地 3x-ui 的原生操作不受此限制。
 
-## V11：TUIC / AnyTLS / TLS runtime 回归修复
+## V11.1：TUIC / AnyTLS / TLS runtime 安装修复
 
 V10 的 `x-ui-singbox.service` 使用了 `ProtectHome=true`。当 3x-ui TLS 证书位于常见的 `/root/...` 路径时：
 
@@ -78,13 +78,15 @@ V10 的 `x-ui-singbox.service` 使用了 `ProtectHome=true`。当 3x-ui TLS 证�
 - systemd 启动的 sing-box 却看不到 `/root`；
 - 因而 TUIC / AnyTLS / Naive 等 TLS inbound 会在真正启动时失败。
 
-V11 改为：
+V11 最初改成了 `ProtectHome=read-only`。这能让普通 systemd 主机读取 `/root`，但部分受限 LXC/NAT VPS 对 `ProtectHome` 所需的 mount namespace 本身不兼容。因此 V11.1 明确使用：
 
 ```ini
-ProtectHome=read-only
+ProtectHome=false
 ```
 
-这样 sing-box 不能写 home 目录，但仍能读取 3x-ui 已配置的证书。重新执行 3Xpatcher 安装器会重新写入并重启 `x-ui-singbox.service`，已有安装也会获得该修复。
+即不隐藏、也不重新挂载 `/root`。`x-ui-singbox` 仍保持独立 systemd unit 与 `NoNewPrivileges=true`，但不会因为 home namespace 阻断 3x-ui 已有 TLS 证书。
+
+V11.1 同时修复安装器事务边界：`Type=simple` 的 `systemctl restart` 可能先返回成功、随后 sing-box 在启动后立即退出。安装器现在要求服务通过连续启动稳定性检查；若失败，会自动打印 `systemctl status` 与最近 100 行 journal，并恢复之前的 sing-box binary 与 systemd unit，而不是静默留下一个 dead service。
 
 ## Native Traffic / Online
 
@@ -288,7 +290,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/install.
 - 安装或更新锁定的 official mita；
 - 备份原 x-ui binary 与 `/etc/x-ui`；
 - 校验 Xray binaries SHA256 不变；
-- 失败时恢复原 panel，并清理本次首次引入的 runtime。
+- sing-box 新 runtime 必须通过启动稳定性检查；
+- sing-box 启动失败时自动打印 status/journal 并恢复旧 runtime/unit；
+- panel 激活失败时恢复原 panel，并清理本次首次引入的 runtime。
 
 目标 VPS 不需要 Go / Node / npm。
 
