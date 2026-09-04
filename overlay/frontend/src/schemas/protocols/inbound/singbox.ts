@@ -85,11 +85,38 @@ export const NaiveInboundSettingsSchema = z
   })
   .loose();
 
+const MieruPortBindingSchema = z.object({
+  port: z.number().int().min(1).max(65535),
+  portRangeEnd: z.number().int().min(0).max(65535).default(0),
+  transport: z.enum(['TCP', 'UDP']).default('TCP'),
+});
+
+const MieruDNSHostSchema = z.object({
+  domain: z.string().default(''),
+  ip: z.string().default(''),
+});
+
+const MieruEgressProxySchema = z.object({
+  name: z.string().default(''),
+  host: z.string().default(''),
+  port: z.number().int().min(1).max(65535).default(1080),
+  username: z.string().default(''),
+  password: z.string().default(''),
+});
+
+const MieruEgressRuleSchema = z.object({
+  ipRanges: z.array(z.string()).default([]),
+  domainNames: z.array(z.string()).default([]),
+  action: z.enum(['DIRECT', 'PROXY', 'REJECT']).default('DIRECT'),
+  proxyNames: z.array(z.string()).default([]),
+});
+
 export const MieruInboundSettingsSchema = z
   .object({
     clients: z.array(IntegratedClientSchema).default([]),
     transport: z.enum(['TCP', 'UDP']).default('TCP'),
     portRangeEnd: z.number().int().min(0).max(65535).default(0),
+    additionalPortBindings: z.array(MieruPortBindingSchema).default([]),
     mtu: z.number().int().min(1280).max(65535).default(1400),
     loggingLevel: z.enum(['FATAL', 'ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE']).default('INFO'),
     allowPrivateIP: z.boolean().default(false),
@@ -98,6 +125,12 @@ export const MieruInboundSettingsSchema = z
     quotaMegabytes: z.number().int().min(0).default(0),
     metricsLoggingInterval: z.string().default(''),
     userHintIsMandatory: z.boolean().default(false),
+    dnsDualStack: z
+      .enum(['', 'USE_FIRST_IP', 'PREFER_IPv4', 'PREFER_IPv6', 'ONLY_IPv4', 'ONLY_IPv6'])
+      .default(''),
+    dnsHosts: z.array(MieruDNSHostSchema).default([]),
+    egressProxies: z.array(MieruEgressProxySchema).default([]),
+    egressRules: z.array(MieruEgressRuleSchema).default([]),
     trafficPatternEnabled: z.boolean().default(false),
     trafficSeed: z.number().int().min(0).default(0),
     trafficUnlockAll: z.boolean().default(false),
