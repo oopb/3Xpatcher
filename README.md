@@ -2,7 +2,7 @@
 
 3Xpatcher 在尽量保持 **3x-ui 原生 Inbounds / Clients / Subscription / Traffic / Online** 工作流不变的前提下，为官方 3x-ui 增加彼此隔离的 supplemental cores。
 
-当前版本：`0.11.4-integrated-alpha`
+当前版本：`0.11.5-integrated-alpha`
 
 兼容上游：`3x-ui v3.7.0`
 
@@ -71,9 +71,9 @@ sing-box V2Ray-compatible stats 地址持久化到：
 
 如默认端口冲突，会在 loopback `62000-62999` 范围选择空闲地址，panel renderer、collector 与 runtime 始终读取同一个地址。
 
-## V11.4：按 S-UI / sing-box 官方实现修正客户端兼容
+## V11.4 / V11.5：按 S-UI / sing-box 官方实现修正客户端兼容
 
-V11.3 对 Shadowrocket / Mihomo 的几项兼容判断是错误的。V11.4 删除这些猜测，并以 S-UI 当前源码、sing-box `v1.14.0` 源码和“加入 Mieru 前已实测可用”的 3Xpatcher TUIC 输出为基线。
+V11.3 对 Shadowrocket / Mihomo 的几项兼容判断是错误的。V11.4 删除这些猜测，并以 S-UI 当前源码、sing-box `v1.14.0` 源码和“加入 Mieru 前已实测可用”的 3Xpatcher TUIC 输出为基线。V11.5 进一步修正 TUIC：V11.4 曾错误地把 Clash TUIC 的 ALPN 强制覆写为 `h3`，而最后一个已知可用的 pre-Mieru 版本并没有这种覆写。
 
 ### ShadowTLS v3
 
@@ -143,7 +143,7 @@ Mihomo 当前没有 Naive proxy type，因此 `/clash` 不伪造 Naive 节点。
 
 ### TUIC / Clash Verge
 
-V11.4 将 dedicated Clash TUIC 恢复到 **加入 Mieru 前已实测可用的 3Xpatcher 结构**：
+V11.5 将 dedicated Clash TUIC 恢复到 **最后一个已知可用的 pre-Mieru 3Xpatcher 生成行为**：
 
 ```yaml
 - type: tuic
@@ -154,13 +154,17 @@ V11.4 将 dedicated Clash TUIC 恢复到 **加入 Mieru 前已实测可用的 3X
   congestion-controller: <cubic|bbr|new_reno>
   reduce-rtt: true   # 仅启用 0-RTT 时
   sni: <server-name>
-  alpn:
-    - h3
+  # alpn 仅当 TLS 配置中本来就有时输出，并原样保留
 ```
 
 并保留 `skip-cert-verify` 等已有 TLS 映射。
 
-明确不再把 sing-box 服务端参数投影成 Mihomo 客户端参数：
+V11.5 **不再强制生成 `alpn: [h3]`**：
+
+- TLS 原本配置了 ALPN → 原样输出；
+- TLS 原本没有 ALPN → Clash TUIC 也不凭空生成 ALPN。
+
+同时明确不把 sing-box 服务端参数投影成 Mihomo 客户端参数：
 
 - `heartbeat-interval`
 - `udp-relay-mode`
@@ -168,7 +172,7 @@ V11.4 将 dedicated Clash TUIC 恢复到 **加入 Mieru 前已实测可用的 3X
 - `disable-mtu-discovery`
 - `disable-sni`
 
-其中 `alpn: [h3]` 与 S-UI 当前 Clash TUIC 转换保持一致。
+CI 在真实 Mihomo E2E 前先验证上述 pre-Mieru contract，避免测试 fixture 本身把 `h3` 写死而掩盖订阅生成回归。
 
 ### AnyTLS
 
