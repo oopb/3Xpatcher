@@ -27,13 +27,40 @@ func realityTLS() TLSSettings {
 	}
 }
 
-func TestSupportedProtocolsIncludeSnellAndExcludeXrayProtocols(t *testing.T) {
-	if !IsSupportedProtocol(ProtocolSnell) {
-		t.Fatal("snell must be exposed by supplemental sing-box core")
-	}
+func TestSupportedProtocolsExcludeXrayProtocols(t *testing.T) {
 	for _, p := range []Protocol{"vless", "vmess", "trojan", "shadowsocks", "hysteria2"} {
 		if IsSupportedProtocol(p) {
 			t.Fatalf("%s must not be exposed by supplemental core", p)
+		}
+	}
+}
+
+func TestSnellRendererWhenSupported(t *testing.T) {
+	const snell = Protocol("snell")
+	if !IsSupportedProtocol(snell) {
+		t.Skip("Snell is enabled by the v13 overlay")
+	}
+
+	b, err := BuildConfig([]InboundRecord{{
+		Enable:   true,
+		Remark:   "snell",
+		Listen:   "::",
+		Port:     1080,
+		Tag:      "snell-1080",
+		Protocol: snell,
+		Settings: raw(map[string]any{
+			"version":  5,
+			"psk":      "test-snell-psk",
+			"obfsMode": "none",
+		}),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(b)
+	for _, needle := range []string{`"type": "snell"`, `"version": 5`, `"psk": "test-snell-psk"`} {
+		if !strings.Contains(text, needle) {
+			t.Fatalf("missing Snell field %s in config:\n%s", needle, text)
 		}
 	}
 }
@@ -56,7 +83,7 @@ func TestBuildFourProtocolConfig(t *testing.T) {
 		}
 	}
 	if strings.Contains(text, `"type": "snell"`) {
-		t.Fatal("Snell must not be generated unless an Snell record is present")
+		t.Fatal("Snell must not be generated unless a Snell record is present")
 	}
 }
 
