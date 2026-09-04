@@ -2,6 +2,7 @@ package sub
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -61,9 +62,6 @@ func (s *SubService) buildSingboxEndpointLink(inbound *model.Inbound, client mod
 		if v, _ := settings["zeroRTTHandshake"].(bool); v {
 			params["zero_rtt_handshake"] = "1"
 		}
-		if v, _ := settings["heartbeat"].(string); v != "" {
-			params["heartbeat"] = v
-		}
 		base := fmt.Sprintf("tuic://%s:%s@%s", encodeUserinfo(client.ID), encodeUserinfo(client.Password), joinHostPort(host, port))
 		return buildLinkWithParams(base, params, remark)
 	case model.AnyTLS:
@@ -75,36 +73,34 @@ func (s *SubService) buildSingboxEndpointLink(inbound *model.Inbound, client mod
 		if client.Password == "" {
 			return ""
 		}
-		return buildShadowTLSShareLinks(settings, client.Password, host, port, remark)
+		if isShadowrocketUserAgent(s.clientUserAgent) {
+			return buildShadowrocketShadowTLSLink(settings, client.Password, host, port, remark)
+		}
+		return buildShadowTLSSIP003Link(settings, client.Password, host, port, remark)
 	case model.Naive:
-		if client.Password == "" {
+		if client.Email == "" || client.Password == "" {
 			return ""
 		}
-		scheme := "naive+https"
-		// Shadowrocket implements NaiveProxy as its native HTTPS proxy type.
-		// Its raw subscription importer currently ignores the standards-oriented
-		// naive+https URI even though manual NaiveProxy/HTTPS entries work. Serve
-		// native HTTPS only to an actual Shadowrocket /sub request; every other
-		// context retains the portable naive+https form.
-		if strings.Contains(strings.ToLower(s.clientUserAgent), "shadowrocket") {
-			scheme = "https"
+		applySuiNaiveLinkParams(settings, params)
+		if isShadowrocketUserAgent(s.clientUserAgent) {
+			return buildShadowrocketNaiveHTTP2Link(client.Email, client.Password, host, port, params, remark)
 		}
-		return buildLinkWithParams(fmt.Sprintf("%s://%s:%s@%s", scheme, encodeUserinfo(client.Email), encodeUserinfo(client.Password), joinHostPort(host, port)), params, remark)
+		return buildSuiNaiveNativeLinks(settings, client.Email, client.Password, host, port, params, remark)
 	default:
 		return ""
 	}
 }
 
-// buildShadowTLSShareLinks exports the standalone ShadowTLS inbound as the
-// protocol stack it actually is on wire: an inner Shadowsocks connection
-// wrapped by ShadowTLS v3.
-//
-// A previous compatibility attempt emitted a second Shadowrocket-specific
-// `shadow-tls=<base64 json>` SS variant. Current Shadowrocket imports that
-// second URI as ordinary Shadowsocks with plugin=none, creating a duplicate
-// dead node. SIP002/SIP022 + SIP003 shadow-tls is understood correctly by
-// current Shadowrocket and Mihomo, so export exactly one working variant.
-func buildShadowTLSShareLinks(settings map[string]any, shadowPassword, host string, port int, remark string) string {
+func isShadowrocketUserAgent(userAgent string) bool {
+	return strings.Contains(strings.ToLower(userAgent), "shadowrocket")
+}
+
+// Shadowrocket's established SS+ShadowTLS representation stores the outer
+// ShadowTLS endpoint/settings in a `shadow-tls=<base64 JSON>` query parameter.
+// Sub-Store explicitly parses this form as Shadowrocket ShadowTLS. Do not feed
+// Shadowrocket the SIP003 form: real-device testing showed it is imported as
+// plain Shadowsocks (plugin=none) on the affected client version.
+func buildShadowrocketShadowTLSLink(settings map[string]any, shadowPassword, host string, port int, remark string) string {
 	method, _ := settings["innerMethod"].(string)
 	if method == "" {
 		method = "2022-blake3-aes-128-gcm"
@@ -114,7 +110,38 @@ func buildShadowTLSShareLinks(settings map[string]any, shadowPassword, host stri
 	if innerPassword == "" || handshake == "" || shadowPassword == "" || host == "" || port < 1 || port > 65535 {
 		return ""
 	}
+	endpoint := joinHostPort(host, port)
+	legacyAuthority := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s@%s", method, innerPassword, endpoint)))
+	descriptor, err := json.Marshal(map[string]any{
+		"version":  "3",
+		"password": shadowPassword,
+		"host":     handshake,
+		"address":  strings.Trim(host, "[]"),
+		"port":     fmt.Sprintf("%d", port),
+	})
+	if err != nil {
+		return ""
+	}
+	return buildLinkWithParams(
+		"ss://"+legacyAuthority,
+		map[string]string{"shadow-tls": base64.StdEncoding.EncodeToString(descriptor)},
+		remark,
+	)
+}
 
+// There is no universal standalone ShadowTLS share URI in sing-box/S-UI.
+// Keep SIP003 only as the generic non-Shadowrocket representation for clients
+// that explicitly implement the shadow-tls Shadowsocks plugin.
+func buildShadowTLSSIP003Link(settings map[string]any, shadowPassword, host string, port int, remark string) string {
+	method, _ := settings["innerMethod"].(string)
+	if method == "" {
+		method = "2022-blake3-aes-128-gcm"
+	}
+	innerPassword, _ := settings["innerPassword"].(string)
+	handshake, _ := settings["handshakeServer"].(string)
+	if innerPassword == "" || handshake == "" || shadowPassword == "" || host == "" || port < 1 || port > 65535 {
+		return ""
+	}
 	endpoint := joinHostPort(host, port)
 	userinfo := shadowsocksShareUserinfo(method, innerPassword)
 	plugin := "shadow-tls;host=" + escapeSIP003Option(handshake) +
@@ -127,8 +154,6 @@ func buildShadowTLSShareLinks(settings map[string]any, shadowPassword, host stri
 }
 
 func shadowsocksShareUserinfo(method, password string) string {
-	// SIP022 requires the 2022 userinfo to remain un-base64-encoded. This
-	// mirrors upstream 3x-ui's native Shadowsocks link generator.
 	if strings.HasPrefix(method, "2022") {
 		return url.QueryEscape(method) + ":" + url.QueryEscape(password)
 	}
@@ -142,6 +167,48 @@ func escapeSIP003Option(value string) string {
 		`;`, `\;`,
 		`=`, `\=`,
 	).Replace(value)
+}
+
+// S-UI's Naive link generator uses the same compatibility parameters for its
+// http2:// and naive+https/naive+quic forms. In particular, SNI is named
+// `peer`, padding is explicit, and tfo is always 0/1.
+func applySuiNaiveLinkParams(settings map[string]any, params map[string]string) {
+	if sni := params["sni"]; sni != "" {
+		params["peer"] = sni
+		delete(params, "sni")
+	}
+	params["padding"] = "1"
+	if tfo, _ := settings["tcpFastOpen"].(bool); tfo {
+		params["tfo"] = "1"
+	} else {
+		params["tfo"] = "0"
+	}
+}
+
+func buildShadowrocketNaiveHTTP2Link(username, password, host string, port int, params map[string]string, remark string) string {
+	if username == "" || password == "" || host == "" || port < 1 || port > 65535 {
+		return ""
+	}
+	authority := fmt.Sprintf("%s:%s@%s", username, password, joinHostPort(host, port))
+	encoded := base64.StdEncoding.EncodeToString([]byte(authority))
+	return buildLinkWithParams("http2://"+encoded, params, remark)
+}
+
+func buildSuiNaiveNativeLinks(settings map[string]any, username, password, host string, port int, params map[string]string, remark string) string {
+	network, _ := settings["network"].(string)
+	schemes := []string{"naive+https", "naive+quic"}
+	switch network {
+	case "tcp":
+		schemes = []string{"naive+https"}
+	case "udp":
+		schemes = []string{"naive+quic"}
+	}
+	links := make([]string, 0, len(schemes))
+	for _, scheme := range schemes {
+		base := fmt.Sprintf("%s://%s:%s@%s", scheme, encodeUserinfo(username), encodeUserinfo(password), joinHostPort(host, port))
+		links = append(links, buildLinkWithParams(base, params, remark))
+	}
+	return strings.Join(links, "\n")
 }
 
 func applySingboxTLSLinkParams(settings, stream, ep map[string]any, params map[string]string) {
@@ -162,7 +229,7 @@ func applySingboxTLSLinkParams(settings, stream, ep map[string]any, params map[s
 			}
 		}
 		if !selfSigned {
-			if mode, _ := settings["tlsMode"].(string); mode == "self_signed_sni" { // 0.6 compatibility
+			if mode, _ := settings["tlsMode"].(string); mode == "self_signed_sni" {
 				selfSigned = true
 				if _, exists := params["sni"]; !exists {
 					if sni, _ := settings["camouflageSNI"].(string); strings.TrimSpace(sni) != "" {
@@ -185,9 +252,6 @@ func applySingboxTLSLinkParams(settings, stream, ep map[string]any, params map[s
 	}
 }
 
-// AnyTLS URI has no single cross-client Reality standard. These query names
-// intentionally follow the widely used Reality URI convention so consumers
-// that understand AnyTLS+Reality can reconstruct sing-box tls.reality.
 func applyNativeRealityLinkParams(stream map[string]any, params map[string]string) {
 	reality, _ := stream["realitySettings"].(map[string]any)
 	if reality == nil {
