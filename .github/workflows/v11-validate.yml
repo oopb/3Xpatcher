@@ -1,0 +1,73 @@
+name: Validate V11 regression fixes
+
+on:
+  push:
+    branches: [v11-regression-native-parity]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v11-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 3Xpatcher
+        uses: actions/checkout@v7
+
+      - name: Static regression smoke
+        run: ./tests/smoke.sh
+
+      - name: Download matching 3x-ui source
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=$(tr -d '\r\n' < UPSTREAM_COMPAT)
+          mkdir source
+          curl -fL --retry 5 --retry-all-errors "https://codeload.github.com/MHSanaei/3x-ui/tar.gz/${target}" -o /tmp/3x-ui.tar.gz
+          tar -xzf /tmp/3x-ui.tar.gz -C source --strip-components=1
+
+      - name: Apply V11 overlay
+        run: ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
+
+      - name: Verify generated native client parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          for token in 'Protocols.TUIC' 'Protocols.ANYTLS' 'Protocols.SHADOWTLS' 'Protocols.NAIVE'; do
+            grep -q "$token" source/frontend/src/pages/inbounds/useInbounds.ts
+          done
+          grep -q 'hasClients={clientTotal(record) > 0}' source/frontend/src/pages/inbounds/list/useInboundColumns.tsx
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: source/go.mod
+          check-latest: true
+          cache: true
+          cache-dependency-path: source/go.sum
+
+      - name: Compile affected Go packages
+        working-directory: source
+        run: |
+          go test ./internal/singbox
+          go test ./internal/mieru
+          go test ./internal/sub -run '^$'
+          go test ./internal/web/service -run '^$'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: source/.nvmrc
+          cache: npm
+          cache-dependency-path: source/frontend/package-lock.json
+
+      - name: Frontend production build
+        working-directory: source/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
