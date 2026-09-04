@@ -25,6 +25,54 @@ rep(
     '''            hasClients={clientTotal(record) > 0}''',
 )
 
+# RowActions gained the same native client operations as InboundsPage, but the
+# list-level RowAction union was still the older narrow set. Keep the public
+# list contract aligned so strict TypeScript catches future drift.
+rep(
+    'frontend/src/pages/inbounds/list/types.ts',
+    '''  | 'delAllClients'\n  | 'clone';''',
+    '''  | 'delAllClients'\n  | 'attachClients'\n  | 'attachExisting'\n  | 'detachClients'\n  | 'addToGroup'\n  | 'clone';''',
+)
+
+# Zod defaults are part of the inferred settings type, so factory defaults must
+# explicitly provide every listen/QUIC field with a .default(). Vite's transpile
+# alone didn't catch this; strict tsc does.
+rep(
+    'frontend/src/lib/xray/inbound-defaults.ts',
+    '''  return { clients: [], congestionControl: 'cubic', authTimeout: '3s', zeroRTTHandshake: false, heartbeat: '10s' };''',
+    '''  return {\n    clients: [],\n    congestionControl: 'cubic',\n    authTimeout: '3s',\n    zeroRTTHandshake: false,\n    heartbeat: '10s',\n    bindInterface: '',\n    routingMark: 0,\n    reuseAddr: false,\n    netns: '',\n    tcpFastOpen: false,\n    tcpMultiPath: false,\n    disableTCPKeepAlive: false,\n    tcpKeepAlive: '',\n    tcpKeepAliveInterval: '',\n    udpTimeout: '',\n    idleTimeout: '',\n    keepAlivePeriod: '',\n    maxConcurrentStreams: 0,\n    initialPacketSize: 0,\n    disablePathMTUDiscovery: false,\n  };''',
+)
+rep(
+    'frontend/src/lib/xray/inbound-defaults.ts',
+    '''  return { clients: [], paddingScheme: [] };''',
+    '''  return {\n    clients: [],\n    paddingScheme: [],\n    bindInterface: '',\n    routingMark: 0,\n    reuseAddr: false,\n    netns: '',\n    tcpFastOpen: false,\n    tcpMultiPath: false,\n    disableTCPKeepAlive: false,\n    tcpKeepAlive: '',\n    tcpKeepAliveInterval: '',\n    udpTimeout: '',\n  };''',
+)
+rep(
+    'frontend/src/lib/xray/inbound-defaults.ts',
+    '''    innerPassword: RandomUtil.randomShadowsocksPassword('2022-blake3-aes-128-gcm'),\n  };''',
+    '''    innerPassword: RandomUtil.randomShadowsocksPassword('2022-blake3-aes-128-gcm'),\n    handshakeForServerNameJson: '',\n    bindInterface: '',\n    routingMark: 0,\n    reuseAddr: false,\n    netns: '',\n    tcpFastOpen: false,\n    tcpMultiPath: false,\n    disableTCPKeepAlive: false,\n    tcpKeepAlive: '',\n    tcpKeepAliveInterval: '',\n    udpTimeout: '',\n  };''',
+)
+rep(
+    'frontend/src/lib/xray/inbound-defaults.ts',
+    '''  return { clients: [], network: '', quicCongestionControl: 'bbr' };''',
+    '''  return {\n    clients: [],\n    network: '',\n    quicCongestionControl: 'bbr',\n    bindInterface: '',\n    routingMark: 0,\n    reuseAddr: false,\n    netns: '',\n    tcpFastOpen: false,\n    tcpMultiPath: false,\n    disableTCPKeepAlive: false,\n    tcpKeepAlive: '',\n    tcpKeepAliveInterval: '',\n    udpTimeout: '',\n  };''',
+)
+
+# Ant Design 6 renamed Divider's old left/right orientation values to start/end.
+# Fix both our copied protocol fields and the TLS fragment patched by V3.
+rep(
+    'frontend/src/pages/inbounds/form/protocols/singbox.tsx',
+    'orientation="left"',
+    'orientation="start"',
+    count=50,
+)
+rep(
+    'frontend/src/pages/inbounds/form/security/tls.tsx',
+    'orientation="left"',
+    'orientation="start"',
+    count=50,
+)
+
 # ---------------------------------------------------------------------------
 # Native QR / row-export / client-info parity.
 # The upstream browser-side share-link dispatcher is a separate implementation
