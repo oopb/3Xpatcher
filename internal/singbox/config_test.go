@@ -27,8 +27,11 @@ func realityTLS() TLSSettings {
 	}
 }
 
-func TestSupportedProtocolsExcludeSnellAndXrayProtocols(t *testing.T) {
-	for _, p := range []Protocol{"snell", "vless", "vmess", "trojan", "shadowsocks", "hysteria2"} {
+func TestSupportedProtocolsIncludeSnellAndExcludeXrayProtocols(t *testing.T) {
+	if !IsSupportedProtocol(ProtocolSnell) {
+		t.Fatal("snell must be exposed by supplemental sing-box core")
+	}
+	for _, p := range []Protocol{"vless", "vmess", "trojan", "shadowsocks", "hysteria2"} {
 		if IsSupportedProtocol(p) {
 			t.Fatalf("%s must not be exposed by supplemental core", p)
 		}
@@ -53,7 +56,7 @@ func TestBuildFourProtocolConfig(t *testing.T) {
 		}
 	}
 	if strings.Contains(text, `"type": "snell"`) {
-		t.Fatal("Snell must not be generated")
+		t.Fatal("Snell must not be generated unless an Snell record is present")
 	}
 }
 
