@@ -12,6 +12,8 @@ fi
 modified=(
   internal/database/model/model.go
   internal/web/service/inbound.go
+  internal/web/service/inbound_node.go
+  internal/web/service/server.go
   internal/web/service/client_crud.go
   internal/web/service/client_inbound_apply.go
   internal/web/service/inbound_clients.go
@@ -45,7 +47,7 @@ for f in "${modified[@]}"; do
   cp "$SRC/$f" "$backup/$f"
 done
 
-mkdir -p "$SRC/internal/singbox" "$SRC/internal/mieru" "$SRC/internal/database/model" "$SRC/internal/sub" "$SRC/internal/web/controller" "$SRC/internal/web/job" "$SRC/frontend/src/schemas/protocols/inbound" "$SRC/frontend/src/pages/inbounds/form/protocols"
+mkdir -p "$SRC/internal/singbox" "$SRC/internal/mieru" "$SRC/internal/database/model" "$SRC/internal/sub" "$SRC/internal/web/controller" "$SRC/internal/web/job" "$SRC/internal/web/service" "$SRC/frontend/src/schemas/protocols/inbound" "$SRC/frontend/src/pages/inbounds/form/protocols"
 cp "$ROOT/internal/singbox/config.go" "$SRC/internal/singbox/config.go"
 cp "$ROOT/internal/singbox/runtime.go" "$SRC/internal/singbox/runtime.go"
 cp "$ROOT/overlay/internal/singbox/integrated.go" "$SRC/internal/singbox/integrated.go"
@@ -64,6 +66,7 @@ cp "$ROOT/overlay/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_links.go
 cp "$ROOT/overlay/internal/sub/mieru_clash.go" "$SRC/internal/sub/mieru_clash.go"
 cp "$ROOT/overlay/internal/web/controller/singbox_cert.go" "$SRC/internal/web/controller/singbox_cert.go"
 cp "$ROOT/overlay/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/job/supplemental_traffic_job.go"
+cp "$ROOT/overlay/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/supplemental_online.go"
 cp "$ROOT/overlay/frontend/src/schemas/protocols/inbound/singbox.ts" "$SRC/frontend/src/schemas/protocols/inbound/singbox.ts"
 cp "$ROOT/overlay/frontend/src/pages/inbounds/form/protocols/singbox.tsx" "$SRC/frontend/src/pages/inbounds/form/protocols/singbox.tsx"
 
@@ -73,13 +76,14 @@ python3 "$ROOT/scripts/v5-patch.py" "$SRC"
 python3 "$ROOT/scripts/v6-patch.py" "$SRC"
 python3 "$ROOT/scripts/v7-patch.py" "$SRC"
 python3 "$ROOT/scripts/v8-patch.py" "$SRC"
+python3 "$ROOT/scripts/v9-patch.py" "$SRC"
 
-gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/model.go" "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
+gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/model.go" "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
 
-echo "3Xpatcher V8 integrated overlay applied."
+echo "3Xpatcher V9 integrated overlay applied."
 echo "Backup: $backup"
 echo "UI: native /panel/inbounds + native client attach/detach"
 echo "Security: native 3x-ui TLS and Reality UI reused by supported sing-box protocols"
-echo "Stats: Xray / sing-box / Mieru fold into native 3x-ui traffic + online state"
+echo "Stats: Xray / sing-box / Mieru fold into native 3x-ui traffic + merged online state"
 echo "SS2022: server/client keys auto-generate, heal legacy invalid rows, and Clash export is guarded"
 echo "Runtime: Xray / sing-box / official Mieru mita remain isolated"
