@@ -138,32 +138,19 @@ function buildShadowTlsLinks(input: GenSupplementalLinksInput): SupplementalLink
 
   const endpoint = `${host}:${input.port}`;
   const plugin = `shadow-tls;host=${escapeSip003Option(handshake)};password=${escapeSip003Option(shadowPassword)};version=3`;
-  const sip003Params = new URLSearchParams();
-  sip003Params.set('plugin', plugin);
+  const params = new URLSearchParams();
+  params.set('plugin', plugin);
   const sip003 = buildLink(
     `ss://${shadowsocksShareUserinfo(method, innerPassword)}@${endpoint}/`,
-    sip003Params,
+    params,
     input.remark,
   );
 
-  const descriptor = Base64.encode(
-    JSON.stringify({
-      version: '3',
-      password: shadowPassword,
-      host: handshake,
-      address: input.address.replace(/^\[|\]$/g, ''),
-      port: String(input.port),
-    }),
-  );
-  const shadowrocketParams = new URLSearchParams();
-  shadowrocketParams.set('shadow-tls', descriptor);
-  const legacyAuthority = Base64.encode(`${method}:${innerPassword}@${endpoint}`);
-  const shadowrocket = buildLink(`ss://${legacyAuthority}`, shadowrocketParams, input.remark);
-
-  return [
-    { link: sip003, label: 'ShadowTLS / SIP003' },
-    { link: shadowrocket, label: 'ShadowTLS / Shadowrocket' },
-  ];
+  // Current Shadowrocket and Mihomo both understand the SIP003 shadow-tls
+  // plugin form. Emitting the older shadow-tls=<base64-json> compatibility
+  // variant makes current Shadowrocket create a second plain-SS node with
+  // plugin=none, so browser QR/export must expose only the working variant too.
+  return [{ link: sip003, label: 'ShadowTLS' }];
 }
 
 function buildMieruLink(input: GenSupplementalLinksInput): SupplementalLinkVariant[] {
