@@ -2,6 +2,7 @@ package sub
 
 import (
 	"strings"
+	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
@@ -31,7 +32,6 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 					if sni, _ := settings["camouflageSNI"].(string); strings.TrimSpace(sni) != "" {
 						proxy["sni"] = strings.TrimSpace(sni)
 					}
-				}
 			}
 		}
 		if selfSigned {
@@ -61,7 +61,27 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		if v, _ := settings["zeroRTTHandshake"].(bool); v {
 			proxy["reduce-rtt"] = true
 		}
+		// Mihomo's TUIC client uses milliseconds for heartbeat-interval, while
+		// the sing-box inbound UI stores Go duration strings such as "10s".
+		if ms := mihomoDurationMilliseconds(settings["heartbeat"]); ms > 0 {
+			proxy["heartbeat-interval"] = ms
+		}
+		// Keep Mihomo on TUIC v5's native datagram relay path explicitly. This
+		// avoids client-version dependent defaults in Clash Verge.
+		proxy["udp-relay-mode"] = "native"
+		if streams := intNumber(settings["maxConcurrentStreams"], 0); streams > 0 {
+			proxy["max-open-streams"] = streams
+		}
+		if disabled, _ := settings["disablePathMTUDiscovery"].(bool); disabled {
+			proxy["disable-mtu-discovery"] = true
+		}
 		applyTLS()
+		// When the panel intentionally has no SNI, tell Mihomo not to derive an
+		// IP/domain SNI from `server`; sing-box TUIC accepts an empty SNI in this
+		// configuration and this matches Mihomo's documented TUIC knob.
+		if _, hasSNI := proxy["sni"]; !hasSNI {
+			proxy["disable-sni"] = true
+		}
 		return proxy
 	case model.AnyTLS:
 		if client.Password == "" {
@@ -106,4 +126,20 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 	default:
 		return nil
 	}
+}
+
+func mihomoDurationMilliseconds(value any) int {
+	s, _ := value.(string)
+	if strings.TrimSpace(s) == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(strings.TrimSpace(s))
+	if err != nil || d <= 0 {
+		return 0
+	}
+	ms := d / time.Millisecond
+	if ms <= 0 {
+		return 0
+	}
+	return int(ms)
 }
