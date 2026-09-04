@@ -63,6 +63,7 @@ cp "$ROOT/overlay/internal/mieru/integrated.go" "$SRC/internal/mieru/integrated.
 cp "$ROOT/overlay/internal/mieru/stats.go" "$SRC/internal/mieru/stats.go"
 cp "$ROOT/overlay/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/singbox_protocols.go"
 cp "$ROOT/overlay/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links.go"
+cp "$ROOT/overlay/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_links_test.go"
 cp "$ROOT/overlay/internal/sub/singbox_clash.go" "$SRC/internal/sub/singbox_clash.go"
 cp "$ROOT/overlay/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_links.go"
 cp "$ROOT/overlay/internal/sub/mieru_clash.go" "$SRC/internal/sub/mieru_clash.go"
@@ -82,7 +83,7 @@ python3 "$ROOT/scripts/v9-patch.py" "$SRC"
 python3 "$ROOT/scripts/v10-patch.py" "$SRC"
 python3 "$ROOT/scripts/v11-patch.py" "$SRC"
 
-gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/model.go" "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
+gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/model.go" "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
 
 echo "3Xpatcher V11 integrated overlay applied."
 echo "Backup: $backup"
