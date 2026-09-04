@@ -31,7 +31,6 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 					if sni, _ := settings["camouflageSNI"].(string); strings.TrimSpace(sni) != "" {
 						proxy["sni"] = strings.TrimSpace(sni)
 					}
-				}
 			}
 		}
 		if selfSigned {
@@ -84,10 +83,15 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		if client.Password == "" || innerMethod == "" || innerPassword == "" {
 			return nil
 		}
+		// Mihomo models standalone ShadowTLS as a Shadowsocks proxy with the
+		// built-in shadow-tls plugin. Its current documented example also uses
+		// a client uTLS fingerprint; keeping it explicit avoids client-version
+		// dependent defaults in Clash Verge / Mihomo.
 		proxy["type"] = "ss"
 		proxy["cipher"] = innerMethod
 		proxy["password"] = innerPassword
 		proxy["plugin"] = "shadow-tls"
+		proxy["client-fingerprint"] = "chrome"
 		pluginOpts := map[string]any{"version": 3, "password": client.Password}
 		if handshake != "" {
 			pluginOpts["host"] = handshake
@@ -95,6 +99,8 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		proxy["plugin-opts"] = pluginOpts
 		return proxy
 	case model.Naive:
+		// Mihomo has no Naive proxy type. Do not manufacture an HTTPS proxy:
+		// it would import successfully but speak a different protocol on wire.
 		return nil
 	default:
 		return nil
