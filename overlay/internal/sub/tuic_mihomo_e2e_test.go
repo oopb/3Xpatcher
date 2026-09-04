@@ -45,6 +45,10 @@ func TestTUICMihomoE2E(t *testing.T) {
 		uuid     = "11111111-1111-4111-8111-111111111111"
 		password = "3xpatcher-tuic-e2e-password"
 		name     = "TUIC-E2E"
+		// Deliberately not h3. V11.4 accidentally forced h3 in the Clash
+		// generator, so an h3-only fixture could never detect that regression.
+		// The real contract is that client ALPN follows the server TLS setting.
+		alpn = "3xpatcher-tuic-e2e"
 	)
 
 	settingsBytes, err := json.Marshal(singbox.TUICSettings{
@@ -53,7 +57,7 @@ func TestTUICMihomoE2E(t *testing.T) {
 		TLS: singbox.TLSSettings{
 			Enabled:         true,
 			ServerName:      "localhost",
-			ALPN:            []string{"h3"},
+			ALPN:            []string{alpn},
 			CertificatePath: certPath,
 			KeyPath:         keyPath,
 		},
@@ -97,7 +101,7 @@ func TestTUICMihomoE2E(t *testing.T) {
 		"security": "tls",
 		"tlsSettings": map[string]any{
 			"serverName":      "localhost",
-			"alpn":            []any{"h3"},
+			"alpn":            []any{alpn},
 			"certificateMode": "self_signed_sni",
 		},
 	}
@@ -108,6 +112,10 @@ func TestTUICMihomoE2E(t *testing.T) {
 	}
 	if proxy["type"] != "tuic" || proxy["uuid"] != uuid || proxy["password"] != password {
 		t.Fatalf("unexpected generated TUIC proxy: %#v", proxy)
+	}
+	generatedALPN, ok := proxy["alpn"].([]string)
+	if !ok || len(generatedALPN) != 1 || generatedALPN[0] != alpn {
+		t.Fatalf("generated TUIC proxy did not preserve server ALPN %q: %#v", alpn, proxy["alpn"])
 	}
 	for _, forbidden := range []string{"heartbeat-interval", "udp-relay-mode", "max-open-streams", "disable-mtu-discovery", "disable-sni"} {
 		if _, exists := proxy[forbidden]; exists {
@@ -152,19 +160,53 @@ func TestTUICMihomoE2E(t *testing.T) {
 	}
 	httpClient := &http.Client{
 		Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)},
-		Timeout:   12 * time.Second,
+		Timeout:   3 * time.Second,
 	}
-	resp, err := httpClient.Get(target.URL)
-	if err != nil {
-		t.Fatalf("HTTP request through generated TUIC proxy failed: %v\n--- generated Mihomo YAML ---\n%s\n--- sing-box ---\n%s\n--- mihomo ---\n%s", err, mihomoYAML, singboxLogs.String(), mihomoLogs.String())
+
+	// Mihomo can accept on mixed-port a few milliseconds before the first QUIC
+	// dial is ready. Retry only the startup window; once established, require
+	// consecutive requests to succeed so a permanently broken TUIC path cannot
+	// be hidden by the retry loop.
+	deadline := time.Now().Add(8 * time.Second)
+	var lastErr error
+	var lastStatus, lastBody string
+	established := false
+	for time.Now().Before(deadline) {
+		resp, reqErr := httpClient.Get(target.URL)
+		if reqErr != nil {
+			lastErr = reqErr
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+		body, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		lastStatus = resp.Status
+		lastBody = string(body)
+		if readErr == nil && resp.StatusCode == http.StatusOK && lastBody == "tuic-e2e-ok" {
+			established = true
+			break
+		}
+		if readErr != nil {
+			lastErr = readErr
+		} else {
+			lastErr = fmt.Errorf("status=%s body=%q", lastStatus, lastBody)
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
+	if !established {
+		t.Fatalf("TUIC never established before deadline: %v\n--- generated Mihomo YAML ---\n%s\n--- sing-box ---\n%s\n--- mihomo ---\n%s", lastErr, mihomoYAML, singboxLogs.String(), mihomoLogs.String())
 	}
-	if resp.StatusCode != http.StatusOK || string(body) != "tuic-e2e-ok" {
-		t.Fatalf("unexpected HTTP response through TUIC: status=%s body=%q\n--- sing-box ---\n%s\n--- mihomo ---\n%s", resp.Status, body, singboxLogs.String(), mihomoLogs.String())
+
+	for i := 0; i < 2; i++ {
+		resp, reqErr := httpClient.Get(target.URL)
+		if reqErr != nil {
+			t.Fatalf("established TUIC request %d failed: %v\n--- generated Mihomo YAML ---\n%s\n--- sing-box ---\n%s\n--- mihomo ---\n%s", i+1, reqErr, mihomoYAML, singboxLogs.String(), mihomoLogs.String())
+		}
+		body, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if readErr != nil || resp.StatusCode != http.StatusOK || string(body) != "tuic-e2e-ok" {
+			t.Fatalf("established TUIC request %d bad response: status=%s body=%q readErr=%v\n--- sing-box ---\n%s\n--- mihomo ---\n%s", i+1, resp.Status, body, readErr, singboxLogs.String(), mihomoLogs.String())
+		}
 	}
 }
 
