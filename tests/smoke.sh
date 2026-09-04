@@ -8,7 +8,7 @@ go test ./internal/singbox ./internal/mieru
 
 echo '[2/8] script syntax'
 bash -n install.sh rollback.sh scripts/*.sh tests/*.sh
-python3 -m py_compile scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py scripts/v3-patch.py scripts/v5-patch.py scripts/v6-patch.py scripts/v7-patch.py scripts/v8-patch.py scripts/v9-patch.py scripts/v10-patch.py
+python3 -m py_compile scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py scripts/v3-patch.py scripts/v5-patch.py scripts/v6-patch.py scripts/v7-patch.py scripts/v8-patch.py scripts/v9-patch.py scripts/v10-patch.py scripts/v11-patch.py
 
 echo '[3/8] integrated protocol surface'
 python3 - <<'PY'
@@ -61,6 +61,21 @@ grep -q 'v2ray_api' scripts/v7-patch.py
 grep -q 'with_v2ray_api' .github/workflows/prebuild.yml
 grep -q 'SINGBOX_VERSION' .github/workflows/prebuild.yml
 grep -q 'buildMieruProxies' scripts/v10-patch.py
+# V11: all supplemental inbounds must enter the upstream client rollup so the
+# native attach/detach/group/delete-all action set is visible.
+for token in 'Protocols.TUIC' 'Protocols.ANYTLS' 'Protocols.SHADOWTLS' 'Protocols.NAIVE'; do
+  grep -q "$token" scripts/v11-patch.py
+done
+grep -q 'hasClients={clientTotal(record) > 0}' scripts/v11-patch.py
+grep -q 'scripts/v11-patch.py' scripts/apply-overlay.sh
+# 3x-ui TLS files are often under /root; hide-home=true was a V10 regression
+# that made TUIC/AnyTLS fail only after systemd launched sing-box.
+grep -q '^ProtectHome=read-only$' scripts/install-singbox.sh
+! grep -q '^ProtectHome=true$' scripts/install-singbox.sh
+# Clash/Mihomo representation for standalone ShadowTLS remains the documented
+# Shadowsocks shadow-tls plugin. Naive intentionally has no Mihomo proxy type.
+grep -q 'proxy\["plugin"\] = "shadow-tls"' overlay/internal/sub/singbox_clash.go
+grep -q 'case model.Naive:' overlay/internal/sub/singbox_clash.go
 
 echo '[5/8] Mieru runtime isolation guards'
 grep -q 'x-ui-mieru@%d.service' internal/mieru/runtime.go
@@ -135,6 +150,7 @@ for f in \
   scripts/uninstall-mieru.sh \
   scripts/install-singbox.sh \
   scripts/v10-patch.py \
+  scripts/v11-patch.py \
   SINGBOX_VERSION; do
   test -s "$f"
 done
