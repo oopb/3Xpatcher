@@ -34,7 +34,7 @@ jobs:
       - name: Apply V11 overlay
         run: ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
 
-      - name: Verify generated native client parity
+      - name: Verify generated native client and link parity
         shell: bash
         run: |
           set -euo pipefail
@@ -42,6 +42,10 @@ jobs:
             grep -q "$token" source/frontend/src/pages/inbounds/useInbounds.ts
           done
           grep -q 'hasClients={clientTotal(record) > 0}' source/frontend/src/pages/inbounds/list/useInboundColumns.tsx
+          grep -q "from './supplemental-links'" source/frontend/src/lib/xray/inbound-link.ts
+          grep -q 'genSupplementalLinks' source/frontend/src/lib/xray/inbound-link.ts
+          grep -q 'getSupplementalClients' source/frontend/src/lib/xray/inbound-link.ts
+          cp overlay/frontend/src/test/supplemental-links.test.ts source/frontend/src/test/supplemental-links.test.ts
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -66,8 +70,10 @@ jobs:
           cache: npm
           cache-dependency-path: source/frontend/package-lock.json
 
-      - name: Frontend production build
+      - name: Frontend typecheck, supplemental tests and production build
         working-directory: source/frontend
         run: |
           npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run test -- src/test/supplemental-links.test.ts
           npm run build
