@@ -38,14 +38,15 @@ rep(
 
 # ---------------------------------------------------------------------------
 # ShadowTLS inner Shadowsocks-2022 key: mirror native 3x-ui's Shadowsocks logic.
-# The custom form used to rely on a manual Generate button only. Heal empty or
-# invalid keys automatically on load/method change, and keep Generate as an
-# explicit rotate action with form-state updates.
+# FormField only binds value/onChange to its DIRECT child. Wrapping Space.Compact
+# inside FormField therefore left Input.Password uncontrolled, which is why the
+# old Generate button appeared to do nothing. Native 3x-ui uses Form.Item outside
+# and a noStyle FormField directly around the input; keep that exact structure.
 # ---------------------------------------------------------------------------
 rep(
     'frontend/src/pages/inbounds/form/protocols/singbox.tsx',
     '''import { Alert, Button, Divider, Input, InputNumber, Select, Space, Switch } from 'antd';\nimport { useFormContext, useWatch } from 'react-hook-form';''',
-    '''import { useEffect } from 'react';\n\nimport { Alert, Button, Divider, Input, InputNumber, Select, Space, Switch } from 'antd';\nimport { useFormContext, useWatch } from 'react-hook-form';''',
+    '''import { useEffect } from 'react';\n\nimport { Alert, Button, Divider, Form, Input, InputNumber, Select, Space, Switch } from 'antd';\nimport { useFormContext, useWatch } from 'react-hook-form';''',
 )
 rep(
     'frontend/src/pages/inbounds/form/protocols/singbox.tsx',
@@ -54,6 +55,6 @@ rep(
 )
 rep(
     'frontend/src/pages/inbounds/form/protocols/singbox.tsx',
-    '''        <Space.Compact block><Input.Password /><Button onClick={regenerateInnerPassword}>Generate</Button></Space.Compact>''',
-    '''        <Space.Compact block>\n          <Input.Password autoComplete="new-password" data-lpignore="true" data-1p-ignore="true" />\n          <Button htmlType="button" onClick={regenerateInnerPassword}>Generate</Button>\n        </Space.Compact>''',
+    '''      <FormField label="Inner Shadowsocks Password" name={['settings', 'innerPassword']}>\n        <Space.Compact block><Input.Password /><Button onClick={regenerateInnerPassword}>Generate</Button></Space.Compact>\n      </FormField>''',
+    '''      <Form.Item label="Inner Shadowsocks Password">\n        <Space.Compact block>\n          <FormField name={['settings', 'innerPassword']} noStyle>\n            <Input.Password autoComplete="new-password" data-lpignore="true" data-1p-ignore="true" />\n          </FormField>\n          <Button htmlType="button" onClick={regenerateInnerPassword}>Generate</Button>\n        </Space.Compact>\n      </Form.Item>''',
 )
