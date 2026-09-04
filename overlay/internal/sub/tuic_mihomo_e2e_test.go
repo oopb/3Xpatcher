@@ -45,19 +45,18 @@ func TestTUICMihomoE2E(t *testing.T) {
 		uuid     = "11111111-1111-4111-8111-111111111111"
 		password = "3xpatcher-tuic-e2e-password"
 		name     = "TUIC-E2E"
-		// Deliberately not h3. V11.4 accidentally forced h3 in the Clash
-		// generator, so an h3-only fixture could never detect that regression.
-		// The real contract is that client ALPN follows the server TLS setting.
-		alpn = "3xpatcher-tuic-e2e"
 	)
+	// Mirror the user's known-good Clash Verge TUIC profile. The ordering is
+	// part of the TLS contract and must survive 3Xpatcher generation unchanged.
+	alpn := []string{"h3", "h2", "http/1.1"}
 
 	settingsBytes, err := json.Marshal(singbox.TUICSettings{
 		Users: []singbox.TUICUser{{Name: "e2e", UUID: uuid, Password: password}},
-		CongestionControl: "cubic",
+		CongestionControl: "bbr",
 		TLS: singbox.TLSSettings{
 			Enabled:         true,
 			ServerName:      "localhost",
-			ALPN:            []string{alpn},
+			ALPN:            alpn,
 			CertificatePath: certPath,
 			KeyPath:         keyPath,
 		},
@@ -94,14 +93,14 @@ func TestTUICMihomoE2E(t *testing.T) {
 		Listen:   "127.0.0.1",
 		Port:     tuicPort,
 		Protocol: model.TUIC,
-		Settings: `{"congestionControl":"cubic","zeroRTTHandshake":false}`,
+		Settings: `{"congestionControl":"bbr","zeroRTTHandshake":false}`,
 	}
 	client := model.Client{ID: uuid, Password: password, Email: "e2e", Enable: true}
 	stream := map[string]any{
 		"security": "tls",
 		"tlsSettings": map[string]any{
 			"serverName":      "localhost",
-			"alpn":            []any{alpn},
+			"alpn":            []any{"h3", "h2", "http/1.1"},
 			"certificateMode": "self_signed_sni",
 		},
 	}
@@ -113,13 +112,24 @@ func TestTUICMihomoE2E(t *testing.T) {
 	if proxy["type"] != "tuic" || proxy["uuid"] != uuid || proxy["password"] != password {
 		t.Fatalf("unexpected generated TUIC proxy: %#v", proxy)
 	}
-	generatedALPN, ok := proxy["alpn"].([]string)
-	if !ok || len(generatedALPN) != 1 || generatedALPN[0] != alpn {
-		t.Fatalf("generated TUIC proxy did not preserve server ALPN %q: %#v", alpn, proxy["alpn"])
+	if proxy["udp-relay-mode"] != "native" {
+		t.Fatalf("generated TUIC proxy must explicitly use native UDP relay: %#v", proxy)
 	}
-	for _, forbidden := range []string{"heartbeat-interval", "udp-relay-mode", "max-open-streams", "disable-mtu-discovery", "disable-sni"} {
+	if _, exists := proxy["udp"]; exists {
+		t.Fatalf("generated TUIC proxy should rely on Mihomo's TUIC UDP default, not generic udp: %#v", proxy)
+	}
+	generatedALPN, ok := proxy["alpn"].([]string)
+	if !ok || len(generatedALPN) != len(alpn) {
+		t.Fatalf("generated TUIC proxy did not preserve ALPN list: %#v", proxy["alpn"])
+	}
+	for i := range alpn {
+		if generatedALPN[i] != alpn[i] {
+			t.Fatalf("generated TUIC proxy changed ALPN order: got %#v want %#v", generatedALPN, alpn)
+		}
+	}
+	for _, forbidden := range []string{"heartbeat-interval", "max-open-streams", "disable-mtu-discovery", "disable-sni"} {
 		if _, exists := proxy[forbidden]; exists {
-			t.Fatalf("generated TUIC proxy regressed forbidden field %q: %#v", forbidden, proxy)
+			t.Fatalf("generated TUIC proxy regressed unrelated field %q: %#v", forbidden, proxy)
 		}
 	}
 
@@ -164,12 +174,10 @@ func TestTUICMihomoE2E(t *testing.T) {
 	}
 
 	// Mihomo can accept on mixed-port a few milliseconds before the first QUIC
-	// dial is ready. Retry only the startup window; once established, require
-	// consecutive requests to succeed so a permanently broken TUIC path cannot
-	// be hidden by the retry loop.
+	// dial is ready. Retry only this startup window; once established, require
+	// consecutive TCP-over-TUIC requests to succeed.
 	deadline := time.Now().Add(8 * time.Second)
 	var lastErr error
-	var lastStatus, lastBody string
 	established := false
 	for time.Now().Before(deadline) {
 		resp, reqErr := httpClient.Get(target.URL)
@@ -180,34 +188,198 @@ func TestTUICMihomoE2E(t *testing.T) {
 		}
 		body, readErr := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
-		lastStatus = resp.Status
-		lastBody = string(body)
-		if readErr == nil && resp.StatusCode == http.StatusOK && lastBody == "tuic-e2e-ok" {
+		if readErr == nil && resp.StatusCode == http.StatusOK && string(body) == "tuic-e2e-ok" {
 			established = true
 			break
 		}
 		if readErr != nil {
 			lastErr = readErr
 		} else {
-			lastErr = fmt.Errorf("status=%s body=%q", lastStatus, lastBody)
+			lastErr = fmt.Errorf("status=%s body=%q", resp.Status, body)
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
 	if !established {
-		t.Fatalf("TUIC never established before deadline: %v\n--- generated Mihomo YAML ---\n%s\n--- sing-box ---\n%s\n--- mihomo ---\n%s", lastErr, mihomoYAML, singboxLogs.String(), mihomoLogs.String())
+		t.Fatalf("TUIC TCP path never established: %v\n--- generated Mihomo YAML ---\n%s\n--- sing-box ---\n%s\n--- mihomo ---\n%s", lastErr, mihomoYAML, singboxLogs.String(), mihomoLogs.String())
 	}
 
 	for i := 0; i < 2; i++ {
 		resp, reqErr := httpClient.Get(target.URL)
 		if reqErr != nil {
-			t.Fatalf("established TUIC request %d failed: %v\n--- generated Mihomo YAML ---\n%s\n--- sing-box ---\n%s\n--- mihomo ---\n%s", i+1, reqErr, mihomoYAML, singboxLogs.String(), mihomoLogs.String())
+			t.Fatalf("established TUIC TCP request %d failed: %v\n--- generated Mihomo YAML ---\n%s\n--- sing-box ---\n%s\n--- mihomo ---\n%s", i+1, reqErr, mihomoYAML, singboxLogs.String(), mihomoLogs.String())
 		}
 		body, readErr := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		if readErr != nil || resp.StatusCode != http.StatusOK || string(body) != "tuic-e2e-ok" {
-			t.Fatalf("established TUIC request %d bad response: status=%s body=%q readErr=%v\n--- sing-box ---\n%s\n--- mihomo ---\n%s", i+1, resp.Status, body, readErr, singboxLogs.String(), mihomoLogs.String())
+			t.Fatalf("established TUIC TCP request %d bad response: status=%s body=%q readErr=%v\n--- sing-box ---\n%s\n--- mihomo ---\n%s", i+1, resp.Status, body, readErr, singboxLogs.String(), mihomoLogs.String())
 		}
 	}
+
+	// Exercise the field that motivated V11.6: SOCKS5 UDP ASSOCIATE enters
+	// Mihomo's mixed-port, is relayed using TUIC udp-relay-mode=native, exits
+	// sing-box, reaches a real UDP echo socket, and returns through the tunnel.
+	udpTarget := startUDPEchoServer(t)
+	for i := 0; i < 2; i++ {
+		payload := []byte(fmt.Sprintf("tuic-udp-e2e-%d", i+1))
+		if err := socks5UDPExchange(mixedPort, udpTarget, payload); err != nil {
+			t.Fatalf("TUIC native UDP relay %d failed: %v\n--- generated Mihomo YAML ---\n%s\n--- sing-box ---\n%s\n--- mihomo ---\n%s", i+1, err, mihomoYAML, singboxLogs.String(), mihomoLogs.String())
+		}
+	}
+}
+
+func startUDPEchoServer(t *testing.T) *net.UDPAddr {
+	t.Helper()
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	go func() {
+		buf := make([]byte, 64*1024)
+		for {
+			n, addr, readErr := conn.ReadFromUDP(buf)
+			if readErr != nil {
+				return
+			}
+			_, _ = conn.WriteToUDP(buf[:n], addr)
+		}
+	}()
+	return conn.LocalAddr().(*net.UDPAddr)
+}
+
+func socks5UDPExchange(mixedPort int, target *net.UDPAddr, payload []byte) error {
+	control, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", mixedPort), 2*time.Second)
+	if err != nil {
+		return fmt.Errorf("SOCKS5 control dial: %w", err)
+	}
+	defer control.Close()
+	_ = control.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := control.Write([]byte{0x05, 0x01, 0x00}); err != nil {
+		return fmt.Errorf("SOCKS5 greeting write: %w", err)
+	}
+	greeting := make([]byte, 2)
+	if _, err := io.ReadFull(control, greeting); err != nil {
+		return fmt.Errorf("SOCKS5 greeting read: %w", err)
+	}
+	if !bytes.Equal(greeting, []byte{0x05, 0x00}) {
+		return fmt.Errorf("SOCKS5 greeting response: %v", greeting)
+	}
+	// UDP ASSOCIATE with 0.0.0.0:0 means the client asks Mihomo to allocate a
+	// UDP relay endpoint while this TCP control connection remains open.
+	if _, err := control.Write([]byte{0x05, 0x03, 0x00, 0x01, 0, 0, 0, 0, 0, 0}); err != nil {
+		return fmt.Errorf("SOCKS5 UDP associate write: %w", err)
+	}
+	relay, err := readSocks5ReplyAddr(control)
+	if err != nil {
+		return err
+	}
+	if relay.IP == nil || relay.IP.IsUnspecified() {
+		relay.IP = net.ParseIP("127.0.0.1")
+	}
+	udpConn, err := net.DialUDP("udp", nil, relay)
+	if err != nil {
+		return fmt.Errorf("SOCKS5 UDP relay dial %s: %w", relay, err)
+	}
+	defer udpConn.Close()
+	_ = udpConn.SetDeadline(time.Now().Add(5 * time.Second))
+
+	targetIP := target.IP.To4()
+	if targetIP == nil {
+		return fmt.Errorf("test target is not IPv4: %s", target)
+	}
+	packet := make([]byte, 0, 10+len(payload))
+	packet = append(packet, 0x00, 0x00, 0x00, 0x01)
+	packet = append(packet, targetIP...)
+	packet = append(packet, byte(target.Port>>8), byte(target.Port))
+	packet = append(packet, payload...)
+	if _, err := udpConn.Write(packet); err != nil {
+		return fmt.Errorf("SOCKS5 UDP write: %w", err)
+	}
+	buf := make([]byte, 64*1024)
+	n, err := udpConn.Read(buf)
+	if err != nil {
+		return fmt.Errorf("SOCKS5 UDP read: %w", err)
+	}
+	got, err := socks5UDPPayload(buf[:n])
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(got, payload) {
+		return fmt.Errorf("UDP echo mismatch: got %q want %q", got, payload)
+	}
+	return nil
+}
+
+func readSocks5ReplyAddr(r io.Reader) (*net.UDPAddr, error) {
+	header := make([]byte, 4)
+	if _, err := io.ReadFull(r, header); err != nil {
+		return nil, fmt.Errorf("SOCKS5 UDP associate reply header: %w", err)
+	}
+	if header[0] != 0x05 || header[1] != 0x00 {
+		return nil, fmt.Errorf("SOCKS5 UDP associate rejected: %v", header)
+	}
+	var ip net.IP
+	switch header[3] {
+	case 0x01:
+		raw := make([]byte, 4)
+		if _, err := io.ReadFull(r, raw); err != nil {
+			return nil, err
+		}
+		ip = net.IP(raw)
+	case 0x04:
+		raw := make([]byte, 16)
+		if _, err := io.ReadFull(r, raw); err != nil {
+			return nil, err
+		}
+		ip = net.IP(raw)
+	case 0x03:
+		length := []byte{0}
+		if _, err := io.ReadFull(r, length); err != nil {
+			return nil, err
+		}
+		host := make([]byte, int(length[0]))
+		if _, err := io.ReadFull(r, host); err != nil {
+			return nil, err
+		}
+		resolved, err := net.ResolveIPAddr("ip", string(host))
+		if err != nil {
+			return nil, err
+		}
+		ip = resolved.IP
+	default:
+		return nil, fmt.Errorf("SOCKS5 unsupported address type: %d", header[3])
+	}
+	portBytes := make([]byte, 2)
+	if _, err := io.ReadFull(r, portBytes); err != nil {
+		return nil, err
+	}
+	port := int(portBytes[0])<<8 | int(portBytes[1])
+	return &net.UDPAddr{IP: ip, Port: port}, nil
+}
+
+func socks5UDPPayload(packet []byte) ([]byte, error) {
+	if len(packet) < 4 || packet[0] != 0 || packet[1] != 0 || packet[2] != 0 {
+		return nil, fmt.Errorf("invalid SOCKS5 UDP header: %v", packet)
+	}
+	offset := 4
+	switch packet[3] {
+	case 0x01:
+		offset += 4
+	case 0x04:
+		offset += 16
+	case 0x03:
+		if len(packet) <= offset {
+			return nil, fmt.Errorf("truncated SOCKS5 UDP domain header")
+		}
+		offset += 1 + int(packet[offset])
+	default:
+		return nil, fmt.Errorf("unsupported SOCKS5 UDP address type: %d", packet[3])
+	}
+	offset += 2
+	if len(packet) < offset {
+		return nil, fmt.Errorf("truncated SOCKS5 UDP packet")
+	}
+	return packet[offset:], nil
 }
 
 func writeTUICE2ECertificate(t *testing.T, dir string) (string, string) {
