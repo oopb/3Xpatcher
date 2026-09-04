@@ -72,12 +72,12 @@ jobs:
           cache: true
           cache-dependency-path: source/go.sum
 
-      - name: Verify exact pre-Mieru TUIC Clash contract
+      - name: Verify known-good Clash Verge TUIC contract
         working-directory: source
         shell: bash
         run: |
           set -euo pipefail
-          go test ./internal/sub -run '^TestTUICClash(RestoresExactPreMieruShape|DoesNotInventALPN)$' -count=1 -v
+          go test ./internal/sub -run '^TestTUICClash(MatchesKnownGoodMihomoShape|DoesNotInventALPN)$' -count=1 -v
 
       - name: Build shipped sing-box runtime shape
         id: singbox
@@ -134,7 +134,7 @@ jobs:
           /tmp/mihomo -v
           echo "binary=/tmp/mihomo" >> "$GITHUB_OUTPUT"
 
-      - name: Real TUIC handshake through generated Mihomo proxy
+      - name: Real TUIC TCP and native UDP through generated Mihomo proxy
         working-directory: source
         env:
           SINGBOX_E2E_BINARY: ${{ steps.singbox.outputs.binary }}
