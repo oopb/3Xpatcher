@@ -1,8 +1,10 @@
 package sub
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
-	"strconv"
+	"net/url"
 	"strings"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
@@ -74,18 +76,7 @@ func (s *SubService) buildSingboxEndpointLink(inbound *model.Inbound, client mod
 		if client.Password == "" {
 			return ""
 		}
-		params["version"] = "3"
-		if v, _ := settings["handshakeServer"].(string); v != "" {
-			params["sni"] = v
-			params["handshake"] = v + ":" + strconv.Itoa(intNumber(settings["handshakePort"], 443))
-		}
-		if v, _ := settings["innerMethod"].(string); v != "" {
-			params["inner_method"] = v
-		}
-		if v, _ := settings["innerPassword"].(string); v != "" {
-			params["inner_password"] = v
-		}
-		return buildLinkWithParams(fmt.Sprintf("shadowtls://%s@%s", encodeUserinfo(client.Password), joinHostPort(host, port)), params, remark)
+		return buildShadowTLSShareLinks(settings, client.Password, host, port, remark)
 	case model.Naive:
 		if client.Password == "" {
 			return ""
@@ -94,6 +85,82 @@ func (s *SubService) buildSingboxEndpointLink(inbound *model.Inbound, client mod
 	default:
 		return ""
 	}
+}
+
+// buildShadowTLSShareLinks exports the standalone ShadowTLS inbound as the
+// protocol stack it actually is on wire: an inner Shadowsocks connection
+// wrapped by ShadowTLS v3. The old custom shadowtls:// URI was not a standard
+// share format and was silently dropped by common subscription clients.
+//
+// We emit two interoperable representations in a raw subscription:
+//   1. SIP002/SIP022 Shadowsocks + SIP003 shadow-tls plugin, understood by
+//      Mihomo/Clash-family parsers that support the plugin.
+//   2. Shadowrocket's established `shadow-tls=<base64 json>` extension. It is
+//      still an ss:// node, so clients that do not know the extension may
+//      ignore that variant instead of misclassifying a made-up protocol.
+func buildShadowTLSShareLinks(settings map[string]any, shadowPassword, host string, port int, remark string) string {
+	method, _ := settings["innerMethod"].(string)
+	if method == "" {
+		method = "2022-blake3-aes-128-gcm"
+	}
+	innerPassword, _ := settings["innerPassword"].(string)
+	handshake, _ := settings["handshakeServer"].(string)
+	if innerPassword == "" || handshake == "" || shadowPassword == "" || host == "" || port < 1 || port > 65535 {
+		return ""
+	}
+
+	endpoint := joinHostPort(host, port)
+	userinfo := shadowsocksShareUserinfo(method, innerPassword)
+	plugin := "shadow-tls;host=" + escapeSIP003Option(handshake) +
+		";password=" + escapeSIP003Option(shadowPassword) + ";version=3"
+	sip002 := buildLinkWithParams(
+		fmt.Sprintf("ss://%s@%s/", userinfo, endpoint),
+		map[string]string{"plugin": plugin},
+		remark,
+	)
+
+	// Shadowrocket has long represented an SS+ShadowTLS chain with a base64
+	// legacy Shadowsocks authority plus a base64 JSON shadow-tls descriptor.
+	// Keep address/port explicit so the outer ShadowTLS endpoint is unambiguous.
+	legacyAuthority := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s@%s", method, innerPassword, endpoint)))
+	descriptor, err := json.Marshal(map[string]any{
+		"version":  "3",
+		"password": shadowPassword,
+		"host":     handshake,
+		"address":  host,
+		"port":     fmt.Sprintf("%d", port),
+	})
+	if err != nil {
+		return sip002
+	}
+	shadowrocket := buildLinkWithParams(
+		"ss://"+legacyAuthority,
+		map[string]string{"shadow-tls": base64.StdEncoding.EncodeToString(descriptor)},
+		remark,
+	)
+
+	if shadowrocket == sip002 {
+		return sip002
+	}
+	return sip002 + "\n" + shadowrocket
+}
+
+func shadowsocksShareUserinfo(method, password string) string {
+	// SIP022 requires the 2022 userinfo to remain un-base64-encoded. This
+	// mirrors upstream 3x-ui's native Shadowsocks link generator.
+	if strings.HasPrefix(method, "2022") {
+		return url.QueryEscape(method) + ":" + url.QueryEscape(password)
+	}
+	return base64.RawURLEncoding.EncodeToString([]byte(method + ":" + password))
+}
+
+func escapeSIP003Option(value string) string {
+	return strings.NewReplacer(
+		`\`, `\\`,
+		`:`, `\:`,
+		`;`, `\;`,
+		`=`, `\=`,
+	).Replace(value)
 }
 
 func applySingboxTLSLinkParams(settings, stream, ep map[string]any, params map[string]string) {
