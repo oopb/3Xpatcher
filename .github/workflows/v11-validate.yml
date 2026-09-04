@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for token in 'Protocols.TUIC' 'Protocols.ANYTLS' 'Protocols.SHADOWTLS' 'Protocols.NAIVE'; do
+          for token in 'Protocols.TUIC' 'Protocols.ANYTLS' 'Protocols.SHADOWTLS' 'Protocols.NAIVE' 'Protocols.MIERU'; do
             grep -q "$token" source/frontend/src/pages/inbounds/useInbounds.ts
           done
           grep -q 'hasClients={clientTotal(record) > 0}' source/frontend/src/pages/inbounds/list/useInboundColumns.tsx
