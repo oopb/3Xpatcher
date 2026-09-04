@@ -29,6 +29,7 @@ modified=(
   frontend/src/schemas/protocols/security/tls.ts
   frontend/src/lib/xray/inbound-defaults.ts
   frontend/src/lib/xray/protocol-capabilities.ts
+  frontend/src/lib/xray/inbound-link.ts
   frontend/src/pages/inbounds/form/protocols/index.ts
   frontend/src/pages/inbounds/form/InboundFormModal.tsx
   frontend/src/pages/inbounds/form/security/tls.tsx
@@ -49,7 +50,7 @@ for f in "${modified[@]}"; do
   cp "$SRC/$f" "$backup/$f"
 done
 
-mkdir -p "$SRC/internal/singbox" "$SRC/internal/mieru" "$SRC/internal/database/model" "$SRC/internal/sub" "$SRC/internal/web/controller" "$SRC/internal/web/job" "$SRC/internal/web/service" "$SRC/frontend/src/schemas/protocols/inbound" "$SRC/frontend/src/pages/inbounds/form/protocols"
+mkdir -p "$SRC/internal/singbox" "$SRC/internal/mieru" "$SRC/internal/database/model" "$SRC/internal/sub" "$SRC/internal/web/controller" "$SRC/internal/web/job" "$SRC/internal/web/service" "$SRC/frontend/src/schemas/protocols/inbound" "$SRC/frontend/src/pages/inbounds/form/protocols" "$SRC/frontend/src/lib/xray"
 cp "$ROOT/internal/singbox/config.go" "$SRC/internal/singbox/config.go"
 cp "$ROOT/internal/singbox/runtime.go" "$SRC/internal/singbox/runtime.go"
 cp "$ROOT/overlay/internal/singbox/integrated.go" "$SRC/internal/singbox/integrated.go"
@@ -72,6 +73,7 @@ cp "$ROOT/overlay/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/w
 cp "$ROOT/overlay/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/supplemental_online.go"
 cp "$ROOT/overlay/frontend/src/schemas/protocols/inbound/singbox.ts" "$SRC/frontend/src/schemas/protocols/inbound/singbox.ts"
 cp "$ROOT/overlay/frontend/src/pages/inbounds/form/protocols/singbox.tsx" "$SRC/frontend/src/pages/inbounds/form/protocols/singbox.tsx"
+cp "$ROOT/overlay/frontend/src/lib/xray/supplemental-links.ts" "$SRC/frontend/src/lib/xray/supplemental-links.ts"
 
 python3 "$ROOT/scripts/apply-v2.py" "$SRC"
 python3 "$ROOT/scripts/v3-patch.py" "$SRC"
@@ -87,7 +89,7 @@ gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/
 
 echo "3Xpatcher V11 integrated overlay applied."
 echo "Backup: $backup"
-echo "UI: native /panel/inbounds + full native client action parity for supplemental protocols"
+echo "UI: native /panel/inbounds + full native client action, QR and export parity for supplemental protocols"
 echo "Security: native 3x-ui TLS and Reality UI reused by supported sing-box protocols"
 echo "Stats: Xray / sing-box / Mieru fold into native 3x-ui traffic + merged online state"
 echo "SS2022: server/client keys auto-generate, heal legacy invalid rows, and Clash export is guarded"
