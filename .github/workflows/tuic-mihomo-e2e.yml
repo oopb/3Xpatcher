@@ -1,0 +1,138 @@
+name: TUIC Mihomo E2E
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - UPSTREAM_COMPAT
+      - SINGBOX_VERSION
+      - internal/**
+      - overlay/**
+      - scripts/**
+      - .github/workflows/tuic-mihomo-e2e.yml
+  push:
+    branches: [main]
+    paths:
+      - UPSTREAM_COMPAT
+      - SINGBOX_VERSION
+      - internal/**
+      - overlay/**
+      - scripts/**
+      - .github/workflows/tuic-mihomo-e2e.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tuic-mihomo-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tuic-mihomo-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 3Xpatcher
+        uses: actions/checkout@v7
+
+      - name: Read pinned targets
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream=$(tr -d '\r\n' < UPSTREAM_COMPAT)
+          singbox=$(tr -d '\r\n' < SINGBOX_VERSION)
+          [[ "$upstream" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$singbox" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          echo "singbox=$singbox" >> "$GITHUB_OUTPUT"
+
+      - name: Download matching 3x-ui source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir source
+          curl -fL --retry 5 --retry-all-errors \
+            "https://codeload.github.com/MHSanaei/3x-ui/tar.gz/${{ steps.target.outputs.upstream }}" \
+            -o /tmp/3x-ui.tar.gz
+          tar -xzf /tmp/3x-ui.tar.gz -C source --strip-components=1
+
+      - name: Apply production overlay and E2E test
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
+          cp overlay/internal/sub/tuic_mihomo_e2e_test.go source/internal/sub/tuic_mihomo_e2e_test.go
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: source/go.mod
+          check-latest: true
+          cache: true
+          cache-dependency-path: source/go.sum
+
+      - name: Build shipped sing-box runtime shape
+        id: singbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ steps.target.outputs.singbox }}'
+          plain=${version#v}
+          mkdir -p /tmp/singbox-src /tmp/singbox-e2e
+          curl -fL --retry 5 --retry-all-errors \
+            "https://codeload.github.com/SagerNet/sing-box/tar.gz/${version}" \
+            -o /tmp/sing-box.tar.gz
+          tar -xzf /tmp/sing-box.tar.gz -C /tmp/singbox-src --strip-components=1
+          tags=$(tr -d '\r\n' < /tmp/singbox-src/release/DEFAULT_BUILD_TAGS_OTHERS)
+          tags="${tags},with_v2ray_api"
+          ldflags="-X github.com/sagernet/sing-box/constant.Version=${plain} $(cat /tmp/singbox-src/release/LDFLAGS) -s -w -buildid="
+          (
+            cd /tmp/singbox-src
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+              go build -buildvcs=false -trimpath -tags "$tags" -ldflags "$ldflags" \
+              -o /tmp/singbox-e2e/sing-box ./cmd/sing-box
+          )
+          /tmp/singbox-e2e/sing-box version
+          echo "binary=/tmp/singbox-e2e/sing-box" >> "$GITHUB_OUTPUT"
+
+      - name: Download verified official Mihomo
+        id: mihomo
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=v1.19.30
+          asset="mihomo-linux-amd64-${version}.gz"
+          curl -fsSL --retry 5 --retry-all-errors \
+            "https://api.github.com/repos/MetaCubeX/mihomo/releases/tags/${version}" \
+            -o /tmp/mihomo-release.json
+          mapfile -t meta < <(python3 - /tmp/mihomo-release.json "$asset" <<'PY'
+          import json, sys
+          path, name = sys.argv[1:]
+          release = json.load(open(path, encoding="utf-8"))
+          asset = next((a for a in release.get("assets", []) if a.get("name") == name), None)
+          if not asset:
+              raise SystemExit(f"missing Mihomo asset: {name}")
+          print(asset.get("browser_download_url", ""))
+          print(asset.get("digest", "") or "")
+          PY
+          )
+          [[ ${#meta[@]} -eq 2 && "${meta[1]}" =~ ^sha256:([0-9a-fA-F]{64})$ ]]
+          expected="${BASH_REMATCH[1]}"
+          curl -fL --retry 5 --retry-all-errors "${meta[0]}" -o /tmp/mihomo.gz
+          actual=$(sha256sum /tmp/mihomo.gz | awk '{print $1}')
+          [[ "${actual,,}" == "${expected,,}" ]]
+          gzip -dc /tmp/mihomo.gz > /tmp/mihomo
+          chmod 0755 /tmp/mihomo
+          /tmp/mihomo -v
+          echo "binary=/tmp/mihomo" >> "$GITHUB_OUTPUT"
+
+      - name: Real TUIC handshake through generated Mihomo proxy
+        working-directory: source
+        env:
+          SINGBOX_E2E_BINARY: ${{ steps.singbox.outputs.binary }}
+          MIHOMO_E2E_BINARY: ${{ steps.mihomo.outputs.binary }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./internal/sub -run '^TestTUICMihomoE2E$' -count=1 -v
