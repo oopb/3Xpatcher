@@ -84,10 +84,17 @@ grep -q 'supplemental-links.ts' scripts/revert-overlay.sh
 grep -q 'frontend/src/lib/xray/inbound-link.ts' scripts/apply-overlay.sh
 grep -q 'frontend/src/lib/xray/inbound-link.ts' scripts/revert-overlay.sh
 grep -q 'scripts/v11-patch.py' scripts/apply-overlay.sh
-# 3x-ui TLS files are often under /root; hide-home=true was a V10 regression
-# that made TUIC/AnyTLS fail only after systemd launched sing-box.
-grep -q '^ProtectHome=read-only$' scripts/install-singbox.sh
+# Native 3x-ui TLS files are often under /root, and restricted LXC/NAT VPSes may
+# reject ProtectHome mount namespacing. Do not hide/remount home in this unit.
+grep -q '^ProtectHome=false$' scripts/install-singbox.sh
 ! grep -q '^ProtectHome=true$' scripts/install-singbox.sh
+! grep -q '^ProtectHome=read-only$' scripts/install-singbox.sh
+# A Type=simple restart can look successful before the process exits. The
+# installer must print diagnostics and restore the previous runtime/unit.
+grep -q 'rollback_runtime' scripts/install-singbox.sh
+grep -q 'journalctl -u x-ui-singbox.service -n 100' scripts/install-singbox.sh
+grep -q 'startup stabilization' scripts/install-singbox.sh
+grep -q 'x-ui-singbox.service.old' scripts/install-singbox.sh
 # Clash/Mihomo representation for standalone ShadowTLS remains the documented
 # Shadowsocks shadow-tls plugin. Naive intentionally has no Mihomo proxy type.
 grep -q 'proxy\["plugin"\] = "shadow-tls"' overlay/internal/sub/singbox_clash.go
