@@ -8,7 +8,7 @@ go test ./internal/singbox ./internal/mieru
 
 echo '[2/8] script syntax'
 bash -n install.sh rollback.sh scripts/*.sh tests/*.sh
-python3 -m py_compile scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py scripts/v3-patch.py scripts/v5-patch.py scripts/v6-patch.py scripts/v7-patch.py scripts/v8-patch.py scripts/v9-patch.py scripts/v10-patch.py scripts/v11-patch.py
+python3 -m py_compile scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py scripts/v3-patch.py scripts/v5-patch.py scripts/v6-patch.py scripts/v7-patch.py scripts/v8-patch.py scripts/v9-patch.py scripts/v10-patch.py scripts/v11-patch.py scripts/v11-final-patch.py scripts/v12-patch.py
 
 echo '[3/8] integrated protocol surface'
 python3 - <<'PY'
@@ -71,12 +71,11 @@ for token in 'Protocols.TUIC' 'Protocols.ANYTLS' 'Protocols.SHADOWTLS' 'Protocol
   grep -q "$token" scripts/v11-patch.py
 done
 grep -q 'hasClients={clientTotal(record) > 0}' scripts/v11-patch.py
-# The native browser QR/export/info pipeline must use the same supplemental
-# credentials and protocol share links instead of returning empty strings.
-grep -q 'getSupplementalClients' scripts/v11-patch.py
-grep -q 'genSupplementalLinks' scripts/v11-patch.py
-grep -q 'ShadowTLS / Shadowrocket' overlay/frontend/src/lib/xray/supplemental-links.ts
-grep -q 'ShadowTLS / SIP003' overlay/frontend/src/lib/xray/supplemental-links.ts
+# Native browser QR/export/info must expose a single working ShadowTLS plugin
+# form. The old second Shadowrocket descriptor imported as plugin=none.
+grep -q "label: 'ShadowTLS'" overlay/frontend/src/lib/xray/supplemental-links.ts
+! grep -q "ShadowTLS / Shadowrocket" overlay/frontend/src/lib/xray/supplemental-links.ts
+! grep -q "shadow-tls=<base64" overlay/internal/sub/singbox_links.go
 grep -q 'mierus://' overlay/frontend/src/lib/xray/supplemental-links.ts
 grep -q 'naive+https://' overlay/frontend/src/lib/xray/supplemental-links.ts
 grep -q 'supplemental-links.ts' scripts/apply-overlay.sh
@@ -84,6 +83,17 @@ grep -q 'supplemental-links.ts' scripts/revert-overlay.sh
 grep -q 'frontend/src/lib/xray/inbound-link.ts' scripts/apply-overlay.sh
 grep -q 'frontend/src/lib/xray/inbound-link.ts' scripts/revert-overlay.sh
 grep -q 'scripts/v11-patch.py' scripts/apply-overlay.sh
+grep -q 'scripts/v12-patch.py' scripts/apply-overlay.sh
+# V11.3 request-scoped client compatibility: raw Shadowrocket gets native HTTPS
+# for NaiveProxy while generic exports retain naive+https.
+grep -q 'clientUserAgent' scripts/v12-patch.py
+grep -q 'scheme = "https"' overlay/internal/sub/singbox_links.go
+grep -q 'heartbeat-interval' overlay/internal/sub/singbox_clash.go
+grep -q 'udp-relay-mode' overlay/internal/sub/singbox_clash.go
+grep -q 'max-open-streams' overlay/internal/sub/singbox_clash.go
+grep -q 'disable-mtu-discovery' overlay/internal/sub/singbox_clash.go
+grep -q 'internal/sub/controller.go' scripts/apply-overlay.sh
+grep -q 'internal/sub/controller.go' scripts/revert-overlay.sh
 # Native 3x-ui TLS files are often under /root, and restricted LXC/NAT VPSes may
 # reject ProtectHome mount namespacing. Do not hide/remount home in this unit.
 grep -q '^ProtectHome=false$' scripts/install-singbox.sh
@@ -177,6 +187,7 @@ for f in \
   scripts/install-singbox.sh \
   scripts/v10-patch.py \
   scripts/v11-patch.py \
+  scripts/v12-patch.py \
   SINGBOX_VERSION; do
   test -s "$f"
 done
