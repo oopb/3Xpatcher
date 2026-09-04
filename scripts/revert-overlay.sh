@@ -27,13 +27,16 @@ modified=(
   frontend/src/lib/xray/inbound-defaults.ts
   frontend/src/lib/xray/protocol-capabilities.ts
   frontend/src/lib/xray/inbound-link.ts
+  frontend/src/pages/inbounds/InboundsPage.tsx
   frontend/src/pages/inbounds/form/protocols/index.ts
   frontend/src/pages/inbounds/form/InboundFormModal.tsx
   frontend/src/pages/inbounds/form/security/tls.tsx
+  frontend/src/pages/inbounds/info/InboundInfoModal.tsx
   frontend/src/pages/inbounds/list/helpers.ts
   frontend/src/pages/inbounds/list/RowActions.tsx
   frontend/src/pages/inbounds/list/types.ts
   frontend/src/pages/inbounds/list/useInboundColumns.tsx
+  frontend/src/pages/inbounds/qr/QrCodeModal.tsx
   frontend/src/pages/inbounds/useInbounds.ts
   frontend/src/pages/clients/ClientFormModal.tsx
   frontend/src/pages/clients/ClientBulkAddModal.tsx
