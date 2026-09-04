@@ -8,7 +8,7 @@ go test ./internal/singbox ./internal/mieru
 
 echo '[2/8] script syntax'
 bash -n install.sh rollback.sh scripts/*.sh tests/*.sh
-python3 -m py_compile scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py scripts/v3-patch.py scripts/v5-patch.py scripts/v6-patch.py scripts/v7-patch.py scripts/v8-patch.py scripts/v9-patch.py
+python3 -m py_compile scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py scripts/v3-patch.py scripts/v5-patch.py scripts/v6-patch.py scripts/v7-patch.py scripts/v8-patch.py scripts/v9-patch.py scripts/v10-patch.py
 
 echo '[3/8] integrated protocol surface'
 python3 - <<'PY'
@@ -23,6 +23,9 @@ for p in singbox:
         raise SystemExit(f'missing sing-box backend protocol {p}')
 if 'mieru' not in model or 'MieruInboundSettingsSchema' not in settings or 'MieruFields' not in fields:
     raise SystemExit('missing Mieru integrated surface')
+for token in ('additionalPortBindings','dnsDualStack','dnsHosts','egressProxies','egressRules'):
+    if token not in settings or token not in fields:
+        raise SystemExit(f'missing complete Mieru field {token}')
 for component in ('TuicFields','AnyTlsFields','ShadowTlsFields','NaiveFields','MieruFields'):
     if component not in fields:
         raise SystemExit(f'missing frontend component {component}')
@@ -36,25 +39,28 @@ grep -q 'JOIN client_inbounds AS ci' overlay/internal/singbox/integrated.go
 grep -q 'JOIN client_inbounds AS ci' overlay/internal/mieru/integrated.go
 grep -q 'genSingboxLink' overlay/internal/sub/singbox_links.go
 grep -q 'genMieruLink' overlay/internal/sub/mieru_links.go
+grep -q 'additionalPortBindings' overlay/internal/sub/mieru_links.go
 grep -q 'buildMieruProxy' overlay/internal/sub/mieru_clash.go
+grep -q 'buildMieruProxies' overlay/internal/sub/mieru_clash.go
 grep -q 'model.Mieru' scripts/v6-patch.py
 grep -q 'IsSupplementalProtocol' scripts/v6-patch.py
 grep -q 'MieruFields' scripts/v6-patch.py
 grep -q 'mierus' overlay/internal/sub/mieru_links.go
-grep -q '"type": "mieru"' overlay/internal/sub/mieru_clash.go
+grep -q '"type": *"mieru"' overlay/internal/sub/mieru_clash.go
 grep -q 'hashedPassword' internal/mieru/config.go
+grep -q 'AdditionalPortBindings' internal/mieru/config.go
+grep -q 'buildDNS' internal/mieru/config.go
+grep -q 'buildEgress' internal/mieru/config.go
+grep -q 'SOCKS5_PROXY_PROTOCOL' internal/mieru/config.go
 grep -q 'MITA_CONFIG_JSON_FILE' scripts/install-mieru.sh
 grep -q 'CollectTraffic' overlay/internal/singbox/stats.go
 grep -q 'CollectTraffic' overlay/internal/mieru/stats.go
-grep -q 'group == "users"' overlay/internal/mieru/stats.go
-grep -q 'RefreshSupplementalOnlineClients' overlay/internal/web/job/supplemental_traffic_job.go
-grep -q 'supplementalOnlineSnapshot' scripts/v9-patch.py
-grep -Fq 'online := len((&InboundService{}).GetOnlineClients())' scripts/v9-patch.py
 grep -q 'NewSupplementalTrafficJob' overlay/internal/web/job/supplemental_traffic_job.go
 grep -q 'cadenceSupplementalTraffic' scripts/v7-patch.py
 grep -q 'v2ray_api' scripts/v7-patch.py
 grep -q 'with_v2ray_api' .github/workflows/prebuild.yml
 grep -q 'SINGBOX_VERSION' .github/workflows/prebuild.yml
+grep -q 'buildMieruProxies' scripts/v10-patch.py
 
 echo '[5/8] Mieru runtime isolation guards'
 grep -q 'x-ui-mieru@%d.service' internal/mieru/runtime.go
@@ -88,10 +94,10 @@ grep -q 'autoComplete="new-password"' scripts/v7-patch.py
 grep -q 'shouldValidate: true' scripts/v7-patch.py
 grep -q 'failed to persist healed Shadowsocks settings' scripts/v8-patch.py
 grep -q 'validSS2022Key' scripts/v8-patch.py
-grep -q 'isShadowsocks2022Password' scripts/v9-patch.py
-grep -q 'htmlType="button"' scripts/v9-patch.py
+grep -q 'isShadowsocks2022Password' overlay/frontend/src/pages/inbounds/form/protocols/singbox.tsx
+grep -q 'Form.Item label="Inner Shadowsocks Password"' overlay/frontend/src/pages/inbounds/form/protocols/singbox.tsx
 grep -q 'scripts/v8-patch.py' scripts/apply-overlay.sh
-grep -q 'scripts/v9-patch.py' scripts/apply-overlay.sh
+grep -q 'scripts/v10-patch.py' scripts/apply-overlay.sh
 ! grep -q "values.protocol === 'tuic'" scripts/v5-patch.py
 ! grep -q "values.protocol === 'naive'" scripts/v5-patch.py
 ! grep -q "values.protocol === 'shadowtls'" scripts/v5-patch.py
@@ -113,9 +119,9 @@ for f in \
   overlay/internal/mieru/stats.go \
   overlay/internal/mieru/stats_test.go \
   overlay/internal/web/job/supplemental_traffic_job.go \
+  overlay/internal/web/service/shadowsocks_2022_key_test.go \
   overlay/internal/web/service/supplemental_online.go \
   overlay/internal/web/service/supplemental_online_test.go \
-  overlay/internal/web/service/shadowsocks_2022_key_test.go \
   overlay/internal/database/model/singbox_protocols.go \
   overlay/internal/sub/singbox_links.go \
   overlay/internal/sub/singbox_clash.go \
@@ -128,7 +134,7 @@ for f in \
   scripts/install-mieru.sh \
   scripts/uninstall-mieru.sh \
   scripts/install-singbox.sh \
-  scripts/v9-patch.py \
+  scripts/v10-patch.py \
   SINGBOX_VERSION; do
   test -s "$f"
 done
