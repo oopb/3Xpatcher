@@ -2,7 +2,6 @@ package sub
 
 import (
 	"strings"
-	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
@@ -62,28 +61,16 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		if v, _ := settings["zeroRTTHandshake"].(bool); v {
 			proxy["reduce-rtt"] = true
 		}
-		if ms := mihomoDurationMilliseconds(settings["heartbeat"]); ms > 0 {
-			proxy["heartbeat-interval"] = ms
-		}
-		proxy["udp-relay-mode"] = "native"
-		if streams := intNumber(settings["maxConcurrentStreams"], 0); streams > 0 {
-			proxy["max-open-streams"] = streams
-		}
-		if disabled, _ := settings["disablePathMTUDiscovery"].(bool); disabled {
-			proxy["disable-mtu-discovery"] = true
-		}
 		applyTLS()
-		if _, hasSNI := proxy["sni"]; !hasSNI {
-			proxy["disable-sni"] = true
-		}
+		// S-UI's current Clash converter forces h3 for TUIC. Keep the
+		// pre-Mieru 3Xpatcher shape that was known-good in Clash Verge and do
+		// not leak sing-box server heartbeat/window/MTU settings into Mihomo.
+		proxy["alpn"] = []string{"h3"}
 		return proxy
 	case model.AnyTLS:
 		if client.Password == "" {
 			return nil
 		}
-		// AnyTLS + Reality works in the sing-box runtime, but current Mihomo
-		// does not support that combination. Omit it rather than exporting a
-		// Clash node that can never complete the handshake.
 		if security, _ := stream["security"].(string); security == "reality" {
 			return nil
 		}
@@ -110,26 +97,8 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		proxy["plugin-opts"] = pluginOpts
 		return proxy
 	case model.Naive:
-		// Mihomo has no Naive proxy type. Do not manufacture an HTTPS proxy:
-		// it would import successfully but speak a different protocol on wire.
 		return nil
 	default:
 		return nil
 	}
-}
-
-func mihomoDurationMilliseconds(value any) int {
-	s, _ := value.(string)
-	if strings.TrimSpace(s) == "" {
-		return 0
-	}
-	d, err := time.ParseDuration(strings.TrimSpace(s))
-	if err != nil || d <= 0 {
-		return 0
-	}
-	ms := d / time.Millisecond
-	if ms <= 0 {
-		return 0
-	}
-	return int(ms)
 }

@@ -110,21 +110,6 @@ function applyTlsParams(
   }
 }
 
-function escapeSip003Option(value: string): string {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/:/g, '\\:')
-    .replace(/;/g, '\\;')
-    .replace(/=/g, '\\=');
-}
-
-function shadowsocksShareUserinfo(method: string, password: string): string {
-  if (method.startsWith('2022')) {
-    return `${encodeURIComponent(method)}:${encodeURIComponent(password)}`;
-  }
-  return Base64.encode(`${method}:${password}`, true);
-}
-
 function buildShadowTlsLinks(input: GenSupplementalLinksInput): SupplementalLinkVariant[] {
   const settings = asRecord(input.inbound.settings);
   const method = asString(settings.innerMethod) || '2022-blake3-aes-128-gcm';
@@ -137,20 +122,69 @@ function buildShadowTlsLinks(input: GenSupplementalLinksInput): SupplementalLink
   }
 
   const endpoint = `${host}:${input.port}`;
-  const plugin = `shadow-tls;host=${escapeSip003Option(handshake)};password=${escapeSip003Option(shadowPassword)};version=3`;
-  const params = new URLSearchParams();
-  params.set('plugin', plugin);
-  const sip003 = buildLink(
-    `ss://${shadowsocksShareUserinfo(method, innerPassword)}@${endpoint}/`,
-    params,
-    input.remark,
+  const descriptor = Base64.encode(
+    JSON.stringify({
+      version: '3',
+      password: shadowPassword,
+      host: handshake,
+      address: input.address.replace(/^\[|\]$/g, ''),
+      port: String(input.port),
+    }),
   );
+  const params = new URLSearchParams();
+  params.set('shadow-tls', descriptor);
+  const authority = Base64.encode(`${method}:${innerPassword}@${endpoint}`);
+  return [
+    {
+      link: buildLink(`ss://${authority}`, params, input.remark),
+      label: 'ShadowTLS / Shadowrocket',
+    },
+  ];
+}
 
-  // Current Shadowrocket and Mihomo both understand the SIP003 shadow-tls
-  // plugin form. Emitting the older shadow-tls=<base64-json> compatibility
-  // variant makes current Shadowrocket create a second plain-SS node with
-  // plugin=none, so browser QR/export must expose only the working variant too.
-  return [{ link: sip003, label: 'ShadowTLS' }];
+function applySuiNaiveParams(settings: AnyRecord, params: URLSearchParams): void {
+  const sni = params.get('sni');
+  if (sni) {
+    params.set('peer', sni);
+    params.delete('sni');
+  }
+  params.set('padding', '1');
+  params.set('tfo', asBoolean(settings.tcpFastOpen) ? '1' : '0');
+}
+
+function buildNaiveLinks(input: GenSupplementalLinksInput): SupplementalLinkVariant[] {
+  const settings = asRecord(input.inbound.settings);
+  const username = (input.client.email || '').trim();
+  const password = input.client.password || '';
+  const host = formatUrlHost(input.address);
+  if (!username || !password || !host) return [];
+
+  const params = new URLSearchParams();
+  applyTlsParams(input.inbound, input.externalProxy, params);
+  applySuiNaiveParams(settings, params);
+
+  const rawAuthority = `${username}:${password}@${host}:${input.port}`;
+  const variants: SupplementalLinkVariant[] = [
+    {
+      link: buildLink(`http2://${Base64.encode(rawAuthority)}`, params, input.remark),
+      label: 'Naive / Shadowrocket HTTP2',
+    },
+  ];
+
+  const network = asString(settings.network);
+  const nativeSchemes = network === 'tcp'
+    ? ['naive+https']
+    : network === 'udp'
+      ? ['naive+quic']
+      : ['naive+https', 'naive+quic'];
+  const encodedAuthority = `${encodeUserinfo(username)}:${encodeUserinfo(password)}@${host}:${input.port}`;
+  for (const scheme of nativeSchemes) {
+    variants.push({
+      link: buildLink(`${scheme}://${encodedAuthority}`, params, input.remark),
+      label: scheme === 'naive+quic' ? 'Naive / QUIC' : 'Naive / HTTPS',
+    });
+  }
+  return variants;
 }
 
 function buildMieruLink(input: GenSupplementalLinksInput): SupplementalLinkVariant[] {
@@ -224,10 +258,8 @@ export function genSupplementalLinks(input: GenSupplementalLinksInput): Suppleme
       const params = new URLSearchParams();
       applyTlsParams(inbound, externalProxy, params);
       const congestion = asString(settings.congestionControl);
-      const heartbeat = asString(settings.heartbeat);
       if (congestion) params.set('congestion_control', congestion);
       if (asBoolean(settings.zeroRTTHandshake)) params.set('zero_rtt_handshake', '1');
-      if (heartbeat) params.set('heartbeat', heartbeat);
       const authority = `${encodeUserinfo(client.id)}:${encodeUserinfo(client.password)}@${host}:${port}`;
       return [{ link: buildLink(`tuic://${authority}`, params, remark), label: 'TUIC' }];
     }
@@ -244,13 +276,8 @@ export function genSupplementalLinks(input: GenSupplementalLinksInput): Suppleme
     }
     case 'shadowtls':
       return buildShadowTlsLinks(input);
-    case 'naive': {
-      if (!client.email || !client.password) return [];
-      const params = new URLSearchParams();
-      applyTlsParams(inbound, externalProxy, params);
-      const authority = `${encodeUserinfo(client.email)}:${encodeUserinfo(client.password)}@${host}:${port}`;
-      return [{ link: buildLink(`naive+https://${authority}`, params, remark), label: 'Naive' }];
-    }
+    case 'naive':
+      return buildNaiveLinks(input);
     case 'mieru':
       return buildMieruLink(input);
     default:
