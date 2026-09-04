@@ -18,9 +18,13 @@ settings=Path('overlay/frontend/src/schemas/protocols/inbound/singbox.ts').read_
 fields=Path('overlay/frontend/src/pages/inbounds/form/protocols/singbox.tsx').read_text()
 model=Path('overlay/internal/database/model/singbox_protocols.go').read_text()
 renderer=Path('internal/singbox/config.go').read_text()
+links=Path('overlay/frontend/src/lib/xray/supplemental-links.ts').read_text()
 for p in singbox:
     if p not in model or p not in renderer:
         raise SystemExit(f'missing sing-box backend protocol {p}')
+for p in ('tuic','anytls','shadowtls','naive','mieru'):
+    if f"case '{p}':" not in links:
+        raise SystemExit(f'missing browser share-link protocol {p}')
 if 'mieru' not in model or 'MieruInboundSettingsSchema' not in settings or 'MieruFields' not in fields:
     raise SystemExit('missing Mieru integrated surface')
 for token in ('additionalPortBindings','dnsDualStack','dnsHosts','egressProxies','egressRules'):
@@ -63,10 +67,22 @@ grep -q 'SINGBOX_VERSION' .github/workflows/prebuild.yml
 grep -q 'buildMieruProxies' scripts/v10-patch.py
 # V11: all supplemental inbounds must enter the upstream client rollup so the
 # native attach/detach/group/delete-all action set is visible.
-for token in 'Protocols.TUIC' 'Protocols.ANYTLS' 'Protocols.SHADOWTLS' 'Protocols.NAIVE'; do
+for token in 'Protocols.TUIC' 'Protocols.ANYTLS' 'Protocols.SHADOWTLS' 'Protocols.NAIVE' 'Protocols.MIERU'; do
   grep -q "$token" scripts/v11-patch.py
 done
 grep -q 'hasClients={clientTotal(record) > 0}' scripts/v11-patch.py
+# The native browser QR/export/info pipeline must use the same supplemental
+# credentials and protocol share links instead of returning empty strings.
+grep -q 'getSupplementalClients' scripts/v11-patch.py
+grep -q 'genSupplementalLinks' scripts/v11-patch.py
+grep -q 'ShadowTLS / Shadowrocket' overlay/frontend/src/lib/xray/supplemental-links.ts
+grep -q 'ShadowTLS / SIP003' overlay/frontend/src/lib/xray/supplemental-links.ts
+grep -q 'mierus://' overlay/frontend/src/lib/xray/supplemental-links.ts
+grep -q 'naive+https://' overlay/frontend/src/lib/xray/supplemental-links.ts
+grep -q 'supplemental-links.ts' scripts/apply-overlay.sh
+grep -q 'supplemental-links.ts' scripts/revert-overlay.sh
+grep -q 'frontend/src/lib/xray/inbound-link.ts' scripts/apply-overlay.sh
+grep -q 'frontend/src/lib/xray/inbound-link.ts' scripts/revert-overlay.sh
 grep -q 'scripts/v11-patch.py' scripts/apply-overlay.sh
 # 3x-ui TLS files are often under /root; hide-home=true was a V10 regression
 # that made TUIC/AnyTLS fail only after systemd launched sing-box.
@@ -75,6 +91,7 @@ grep -q '^ProtectHome=read-only$' scripts/install-singbox.sh
 # Clash/Mihomo representation for standalone ShadowTLS remains the documented
 # Shadowsocks shadow-tls plugin. Naive intentionally has no Mihomo proxy type.
 grep -q 'proxy\["plugin"\] = "shadow-tls"' overlay/internal/sub/singbox_clash.go
+grep -q 'client-fingerprint' overlay/internal/sub/singbox_clash.go
 grep -q 'case model.Naive:' overlay/internal/sub/singbox_clash.go
 
 echo '[5/8] Mieru runtime isolation guards'
@@ -139,11 +156,13 @@ for f in \
   overlay/internal/web/service/supplemental_online_test.go \
   overlay/internal/database/model/singbox_protocols.go \
   overlay/internal/sub/singbox_links.go \
+  overlay/internal/sub/singbox_links_test.go \
   overlay/internal/sub/singbox_clash.go \
   overlay/internal/sub/mieru_links.go \
   overlay/internal/sub/mieru_clash.go \
   overlay/frontend/src/schemas/protocols/inbound/singbox.ts \
   overlay/frontend/src/pages/inbounds/form/protocols/singbox.tsx \
+  overlay/frontend/src/lib/xray/supplemental-links.ts \
   internal/mieru/config.go \
   internal/mieru/runtime.go \
   scripts/install-mieru.sh \
