@@ -35,3 +35,25 @@ rep(
     '''\tonline := 0\n\tif process := currentXrayProcess(); process != nil && process.IsRunning() {\n\t\tonline = len(process.GetOnlineClients())\n\t}\n\tsystemMetrics.append("online", t, float64(online))''',
     '''\tonline := len((&InboundService{}).GetOnlineClients())\n\tsystemMetrics.append("online", t, float64(online))''',
 )
+
+# ---------------------------------------------------------------------------
+# ShadowTLS inner Shadowsocks-2022 key: mirror native 3x-ui's Shadowsocks logic.
+# The custom form used to rely on a manual Generate button only. Heal empty or
+# invalid keys automatically on load/method change, and keep Generate as an
+# explicit rotate action with form-state updates.
+# ---------------------------------------------------------------------------
+rep(
+    'frontend/src/pages/inbounds/form/protocols/singbox.tsx',
+    '''import { Alert, Button, Divider, Input, InputNumber, Select, Space, Switch } from 'antd';\nimport { useFormContext, useWatch } from 'react-hook-form';''',
+    '''import { useEffect } from 'react';\n\nimport { Alert, Button, Divider, Input, InputNumber, Select, Space, Switch } from 'antd';\nimport { useFormContext, useWatch } from 'react-hook-form';''',
+)
+rep(
+    'frontend/src/pages/inbounds/form/protocols/singbox.tsx',
+    '''  const innerMethod = useWatch({ control, name: 'settings.innerMethod' }) as string | undefined;\n  const regenerateInnerPassword = () =>\n    setValue(\n      'settings.innerPassword',\n      RandomUtil.randomShadowsocksPassword(\n        innerMethod === '2022-blake3-aes-256-gcm' || innerMethod === '2022-blake3-chacha20-poly1305'\n          ? innerMethod\n          : '2022-blake3-aes-128-gcm',\n      ),\n      { shouldDirty: true },\n    );''',
+    '''  const innerMethod = useWatch({ control, name: 'settings.innerMethod' }) as string | undefined;\n  const innerPassword = (useWatch({ control, name: 'settings.innerPassword' }) as string | undefined) || '';\n  const keyMethod =\n    innerMethod === '2022-blake3-aes-256-gcm' || innerMethod === '2022-blake3-chacha20-poly1305'\n      ? innerMethod\n      : '2022-blake3-aes-128-gcm';\n\n  const regenerateInnerPassword = () =>\n    setValue('settings.innerPassword', RandomUtil.randomShadowsocksPassword(keyMethod), {\n      shouldDirty: true,\n      shouldTouch: true,\n      shouldValidate: true,\n    });\n\n  useEffect(() => {\n    if (RandomUtil.isShadowsocks2022Password(innerPassword, keyMethod)) return;\n    setValue('settings.innerPassword', RandomUtil.randomShadowsocksPassword(keyMethod), {\n      shouldDirty: true,\n      shouldTouch: true,\n      shouldValidate: true,\n    });\n  }, [innerPassword, keyMethod, setValue]);''',
+)
+rep(
+    'frontend/src/pages/inbounds/form/protocols/singbox.tsx',
+    '''        <Space.Compact block><Input.Password /><Button onClick={regenerateInnerPassword}>Generate</Button></Space.Compact>''',
+    '''        <Space.Compact block>\n          <Input.Password autoComplete="new-password" data-lpignore="true" data-1p-ignore="true" />\n          <Button htmlType="button" onClick={regenerateInnerPassword}>Generate</Button>\n        </Space.Compact>''',
+)
