@@ -127,24 +127,24 @@ func TestGenericNaiveUsesNetworkSpecificNativeScheme(t *testing.T) {
 	}
 }
 
-func TestTUICClashRestoresExactPreMieruShape(t *testing.T) {
+func TestTUICClashMatchesKnownGoodMihomoShape(t *testing.T) {
 	inbound := &model.Inbound{
 		Protocol: model.TUIC,
-		Listen:   "203.0.113.30",
-		Port:     10443,
-		Settings: `{"congestionControl":"bbr","zeroRTTHandshake":true,"heartbeat":"10s","maxConcurrentStreams":20,"disablePathMTUDiscovery":true}`,
+		Listen:   "23.159.248.103",
+		Port:     443,
+		Settings: `{"congestionControl":"bbr","zeroRTTHandshake":false,"heartbeat":"10s","maxConcurrentStreams":20,"disablePathMTUDiscovery":true}`,
 	}
 	client := model.Client{
 		Email:    "tuic@example.com",
-		ID:       "00000000-0000-4000-8000-000000000001",
-		Password: "tuic-password",
+		ID:       "6c9e30c6-72c1-4ae7-f1f7-4bbc3dbe218b",
+		Password: "SrYXR3ELjc",
 	}
 	stream := map[string]any{
 		"security": "tls",
 		"tlsSettings": map[string]any{
-			"serverName":      "tuic.example.com",
+			"serverName":      "www.mozilla.org",
 			"certificateMode": "self_signed_sni",
-			"alpn":            []any{"custom-server-value"},
+			"alpn":            []any{"h3", "h2", "http/1.1"},
 		},
 	}
 
@@ -154,26 +154,37 @@ func TestTUICClashRestoresExactPreMieruShape(t *testing.T) {
 	}
 	checks := map[string]any{
 		"type":                  "tuic",
+		"server":                "23.159.248.103",
+		"port":                  443,
 		"uuid":                  client.ID,
 		"password":              client.Password,
-		"congestion-controller": "bbr",
-		"reduce-rtt":            true,
-		"sni":                   "tuic.example.com",
+		"sni":                   "www.mozilla.org",
 		"skip-cert-verify":      true,
+		"congestion-controller": "bbr",
+		"udp-relay-mode":        "native",
 	}
 	for key, want := range checks {
 		if got := proxy[key]; got != want {
 			t.Fatalf("TUIC field %s: got %#v want %#v; proxy=%#v", key, got, want, proxy)
 		}
 	}
-	for _, forbidden := range []string{"heartbeat-interval", "udp-relay-mode", "max-open-streams", "disable-mtu-discovery", "disable-sni"} {
+	if _, exists := proxy["udp"]; exists {
+		t.Fatalf("known-good Mihomo TUIC shape does not need the generic udp flag: %#v", proxy)
+	}
+	for _, forbidden := range []string{"heartbeat-interval", "max-open-streams", "disable-mtu-discovery", "disable-sni"} {
 		if _, exists := proxy[forbidden]; exists {
-			t.Fatalf("server-side/experimental TUIC field %q leaked into Clash profile: %#v", forbidden, proxy)
+			t.Fatalf("unrelated TUIC field %q leaked into Clash profile: %#v", forbidden, proxy)
 		}
 	}
 	alpn, ok := proxy["alpn"].([]string)
-	if !ok || len(alpn) != 1 || alpn[0] != "custom-server-value" {
-		t.Fatalf("TUIC Clash must preserve the configured TLS ALPN exactly like pre-Mieru: %#v", proxy["alpn"])
+	wantALPN := []string{"h3", "h2", "http/1.1"}
+	if !ok || len(alpn) != len(wantALPN) {
+		t.Fatalf("TUIC Clash ALPN shape mismatch: %#v", proxy["alpn"])
+	}
+	for i := range wantALPN {
+		if alpn[i] != wantALPN[i] {
+			t.Fatalf("TUIC Clash must preserve ordered ALPN list: got %#v want %#v", alpn, wantALPN)
+		}
 	}
 }
 
@@ -200,6 +211,9 @@ func TestTUICClashDoesNotInventALPN(t *testing.T) {
 		t.Fatal("TUIC proxy unexpectedly omitted")
 	}
 	if _, exists := proxy["alpn"]; exists {
-		t.Fatalf("pre-Mieru TUIC did not invent an ALPN when the inbound had none: %#v", proxy)
+		t.Fatalf("TUIC must not invent an ALPN when the inbound had none: %#v", proxy)
+	}
+	if proxy["udp-relay-mode"] != "native" {
+		t.Fatalf("TUIC must explicitly retain Mihomo native UDP relay mode: %#v", proxy)
 	}
 }

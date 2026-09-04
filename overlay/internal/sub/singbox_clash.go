@@ -55,16 +55,21 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		proxy["type"] = "tuic"
 		proxy["uuid"] = client.ID
 		proxy["password"] = client.Password
+		// Mihomo enables UDP for TUIC by protocol default. Match a known-good
+		// Clash Verge TUIC profile instead of carrying the generic udp flag, and
+		// make the TUIC-v5 relay mode explicit rather than relying on client
+		// defaults that have changed across Clash.Meta/Mihomo generations.
+		delete(proxy, "udp")
+		proxy["udp-relay-mode"] = "native"
 		if v, _ := settings["congestionControl"].(string); v != "" {
 			proxy["congestion-controller"] = v
 		}
 		if v, _ := settings["zeroRTTHandshake"].(bool); v {
 			proxy["reduce-rtt"] = true
 		}
-		// Preserve the inbound's configured TLS values exactly. The last
-		// pre-Mieru build did not invent or overwrite TUIC ALPN here; forcing
-		// h3 can make a migrated inbound advertise a client ALPN different from
-		// the TLS ALPN actually rendered into the sing-box server.
+		// Preserve the inbound's configured TLS values exactly. In particular,
+		// do not collapse a working ordered ALPN list such as h3,h2,http/1.1 to
+		// an invented h3-only value.
 		applyTLS()
 		return proxy
 	case model.AnyTLS:

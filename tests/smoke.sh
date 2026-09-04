@@ -93,15 +93,17 @@ grep -q 'clientUserAgent' scripts/v12-patch.py
 grep -q 'internal/sub/controller.go' scripts/apply-overlay.sh
 grep -q 'internal/sub/controller.go' scripts/revert-overlay.sh
 
-# V11.5: TUIC dedicated Clash output must match the last known-good pre-Mieru
-# generator. Preserve the inbound TLS ALPN when configured and never synthesize
-# h3 when it was absent. Server-side sing-box knobs must not leak into Mihomo.
+# V11.6: match the user's known-good Clash Verge/Mihomo TUIC shape. Preserve
+# the complete ordered inbound ALPN list, never synthesize h3, explicitly use
+# TUIC v5 native UDP relay, and omit the redundant generic udp flag.
 ! grep -q 'proxy\["alpn"\] = \[\]string{"h3"}' overlay/internal/sub/singbox_clash.go
 grep -q 'applyTLS()' overlay/internal/sub/singbox_clash.go
-grep -q 'TestTUICClashRestoresExactPreMieruShape' overlay/internal/sub/singbox_links_test.go
+grep -q 'proxy\["udp-relay-mode"\] = "native"' overlay/internal/sub/singbox_clash.go
+grep -q 'delete(proxy, "udp")' overlay/internal/sub/singbox_clash.go
+grep -q 'TestTUICClashMatchesKnownGoodMihomoShape' overlay/internal/sub/singbox_links_test.go
 grep -q 'TestTUICClashDoesNotInventALPN' overlay/internal/sub/singbox_links_test.go
+grep -q 'socks5UDPExchange' overlay/internal/sub/tuic_mihomo_e2e_test.go
 ! grep -q 'heartbeat-interval' overlay/internal/sub/singbox_clash.go
-! grep -q 'udp-relay-mode' overlay/internal/sub/singbox_clash.go
 ! grep -q 'max-open-streams' overlay/internal/sub/singbox_clash.go
 ! grep -q 'disable-mtu-discovery' overlay/internal/sub/singbox_clash.go
 ! grep -q 'disable-sni' overlay/internal/sub/singbox_clash.go

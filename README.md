@@ -2,7 +2,7 @@
 
 3Xpatcher 在尽量保持 **3x-ui 原生 Inbounds / Clients / Subscription / Traffic / Online** 工作流不变的前提下，为官方 3x-ui 增加彼此隔离的 supplemental cores。
 
-当前版本：`0.11.5-integrated-alpha`
+当前版本：`0.11.6-integrated-alpha`
 
 兼容上游：`3x-ui v3.7.0`
 
@@ -71,9 +71,9 @@ sing-box V2Ray-compatible stats 地址持久化到：
 
 如默认端口冲突，会在 loopback `62000-62999` 范围选择空闲地址，panel renderer、collector 与 runtime 始终读取同一个地址。
 
-## V11.4 / V11.5：按 S-UI / sing-box 官方实现修正客户端兼容
+## V11.4 / V11.5 / V11.6：客户端兼容修正
 
-V11.3 对 Shadowrocket / Mihomo 的几项兼容判断是错误的。V11.4 删除这些猜测，并以 S-UI 当前源码、sing-box `v1.14.0` 源码和“加入 Mieru 前已实测可用”的 3Xpatcher TUIC 输出为基线。V11.5 进一步修正 TUIC：V11.4 曾错误地把 Clash TUIC 的 ALPN 强制覆写为 `h3`，而最后一个已知可用的 pre-Mieru 版本并没有这种覆写。
+V11.3 对 Shadowrocket / Mihomo 的几项兼容判断是错误的。V11.4 修正 ShadowTLS/Naive；V11.5 撤销了错误的 TUIC `alpn: [h3]` 强制覆盖；V11.6 进一步以一个在 Clash Verge 中确认可用的 TUIC v5 节点为兼容基线，并用官方 Mihomo 做 TCP + UDP 双路径 E2E。
 
 ### ShadowTLS v3
 
@@ -143,36 +143,38 @@ Mihomo 当前没有 Naive proxy type，因此 `/clash` 不伪造 Naive 节点。
 
 ### TUIC / Clash Verge
 
-V11.5 将 dedicated Clash TUIC 恢复到 **最后一个已知可用的 pre-Mieru 3Xpatcher 生成行为**：
+V11.6 的 dedicated Clash TUIC 以确认可用的 Mihomo / Clash Verge TUIC v5 配置形状为基线：
 
 ```yaml
-- type: tuic
+- name: <name>
+  type: tuic
   server: <server>
   port: <port>
   uuid: <uuid>
   password: <password>
-  congestion-controller: <cubic|bbr|new_reno>
-  reduce-rtt: true   # 仅启用 0-RTT 时
   sni: <server-name>
-  # alpn 仅当 TLS 配置中本来就有时输出，并原样保留
+  skip-cert-verify: true   # 仅自签/允许不安全时
+  congestion-controller: <cubic|bbr|new_reno>
+  udp-relay-mode: native
+  alpn:
+    - h3
+    - h2
+    - http/1.1
 ```
 
-并保留 `skip-cert-verify` 等已有 TLS 映射。
+具体规则：
 
-V11.5 **不再强制生成 `alpn: [h3]`**：
+- `udp-relay-mode: native` 显式输出，不依赖 Mihomo 版本默认值；
+- TUIC 本身默认支持 UDP，因此不再附加冗余的通用 `udp: true`；
+- TLS 配置有 ALPN 时，按原顺序完整保留，例如 `h3, h2, http/1.1`；
+- TLS 没有 ALPN 时，不凭空生成 `h3`；
+- `reduce-rtt: true` 仅在服务端启用 0-RTT 时输出；
+- `heartbeat-interval`、`max-open-streams`、`disable-mtu-discovery`、`disable-sni` 等不会仅因服务端存在相似字段就被错误投影到客户端。
 
-- TLS 原本配置了 ALPN → 原样输出；
-- TLS 原本没有 ALPN → Clash TUIC 也不凭空生成 ALPN。
+CI 使用官方 Mihomo v1.19.30 和与正式发布相同构建形状的 sing-box v1.14.0。测试先锁定上述 Clash 配置字段，再验证：
 
-同时明确不把 sing-box 服务端参数投影成 Mihomo 客户端参数：
-
-- `heartbeat-interval`
-- `udp-relay-mode`
-- `max-open-streams`
-- `disable-mtu-discovery`
-- `disable-sni`
-
-CI 在真实 Mihomo E2E 前先验证上述 pre-Mieru contract，避免测试 fixture 本身把 `h3` 写死而掩盖订阅生成回归。
+1. HTTP/TCP 经过 Mihomo → TUIC → sing-box 成功；
+2. SOCKS5 UDP ASSOCIATE 经过 Mihomo `udp-relay-mode: native` → TUIC → sing-box → UDP echo 成功。
 
 ### AnyTLS
 
