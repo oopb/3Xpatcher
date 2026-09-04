@@ -87,9 +87,10 @@ func (j *SupplementalTrafficJob) Run() {
 		}
 	}
 
-	// The native cache is grace-window based and accumulates activity from each
-	// caller, so this unions supplemental activity with Xray instead of replacing it.
-	j.inboundService.RefreshLocalOnlineClients(emails, tags)
+	// Keep supplemental online state outside xray.Process. This is essential on
+	// installations that only use sing-box/Mieru: the native service getters can
+	// still expose these clients/tags even when no Xray process exists.
+	j.inboundService.RefreshSupplementalOnlineClients(emails, tags)
 
 	if !websocket.HasClients() || (len(traffics) == 0 && len(clients) == 0 && len(emails) == 0) {
 		return
