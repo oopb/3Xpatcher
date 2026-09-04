@@ -70,9 +70,9 @@ for token in 'Protocols.TUIC' 'Protocols.ANYTLS' 'Protocols.SHADOWTLS' 'Protocol
 done
 grep -q 'hasClients={clientTotal(record) > 0}' scripts/v11-patch.py
 
-# V11.4: client formats are based on S-UI/sing-box behavior rather than a
-# fabricated universal URI. Shadowrocket gets its established descriptor
-# ShadowTLS form; Naive gets S-UI's http2 compatibility form.
+# Client formats are based on S-UI/sing-box behavior rather than a fabricated
+# universal URI. Shadowrocket gets its established descriptor ShadowTLS form;
+# Naive gets S-UI's http2 compatibility form.
 grep -q "label: 'ShadowTLS / Shadowrocket'" overlay/frontend/src/lib/xray/supplemental-links.ts
 grep -q "params.set('shadow-tls'" overlay/frontend/src/lib/xray/supplemental-links.ts
 grep -q 'buildShadowrocketShadowTLSLink' overlay/internal/sub/singbox_links.go
@@ -93,10 +93,13 @@ grep -q 'clientUserAgent' scripts/v12-patch.py
 grep -q 'internal/sub/controller.go' scripts/apply-overlay.sh
 grep -q 'internal/sub/controller.go' scripts/revert-overlay.sh
 
-# TUIC dedicated Clash output is intentionally the pre-Mieru known-good shape,
-# plus the h3 ALPN S-UI currently forces. Server-side sing-box knobs must never
-# be projected into Mihomo merely because similarly named client fields exist.
-grep -q 'proxy\["alpn"\] = \[\]string{"h3"}' overlay/internal/sub/singbox_clash.go
+# V11.5: TUIC dedicated Clash output must match the last known-good pre-Mieru
+# generator. Preserve the inbound TLS ALPN when configured and never synthesize
+# h3 when it was absent. Server-side sing-box knobs must not leak into Mihomo.
+! grep -q 'proxy\["alpn"\] = \[\]string{"h3"}' overlay/internal/sub/singbox_clash.go
+grep -q 'applyTLS()' overlay/internal/sub/singbox_clash.go
+grep -q 'TestTUICClashRestoresExactPreMieruShape' overlay/internal/sub/singbox_links_test.go
+grep -q 'TestTUICClashDoesNotInventALPN' overlay/internal/sub/singbox_links_test.go
 ! grep -q 'heartbeat-interval' overlay/internal/sub/singbox_clash.go
 ! grep -q 'udp-relay-mode' overlay/internal/sub/singbox_clash.go
 ! grep -q 'max-open-streams' overlay/internal/sub/singbox_clash.go
