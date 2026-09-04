@@ -130,6 +130,10 @@ func TestTUICMihomoE2E(t *testing.T) {
 			t.Fatalf("TUIC must preserve server ALPN order: got %#v want %#v", generatedALPN, alpn)
 		}
 	}
+	proxyName, ok := proxy["name"].(string)
+	if !ok || proxyName == "" {
+		t.Fatalf("generated TUIC proxy has no usable name: %#v", proxy)
+	}
 
 	mihomoConfig := map[string]any{
 		"mixed-port": mixedPort,
@@ -138,7 +142,7 @@ func TestTUICMihomoE2E(t *testing.T) {
 		"log-level":  "debug",
 		"ipv6":       false,
 		"proxies":    []map[string]any{proxy},
-		"rules":      []string{"MATCH," + name},
+		"rules":      []string{"MATCH," + proxyName},
 	}
 	mihomoYAML, err := yaml.Marshal(mihomoConfig)
 	if err != nil {
