@@ -135,6 +135,14 @@ func CollectTraffic(db *gorm.DB) ([]*xray.Traffic, []*xray.ClientTraffic, []stri
 	return inboundTraffic, clients, emails, tags, errors.Join(errs...)
 }
 
+// parseMetricsJSON normalizes mita's official metrics layout into the flat
+// group shape consumed by mieruMetricDelta. mita serializes ordinary groups as
+// e.g. {"traffic":{"UploadBytes":1}} but nests user counters under a special
+// top-level "users" object: {"users":{"alice":{"UploadBytes":2}}}.
+// Older code attempted to unmarshal the whole document directly into
+// map[string]map[string]int64, which fails as soon as the nested users object is
+// present and therefore prevented all Mieru accounting on real multi-user
+// configurations.
 func parseMetricsJSON(out []byte) (map[string]map[string]int64, error) {
 	text := strings.TrimSpace(string(out))
 	start := strings.IndexByte(text, '{')
@@ -142,12 +150,31 @@ func parseMetricsJSON(out []byte) (map[string]map[string]int64, error) {
 	if start < 0 || end < start {
 		return nil, fmt.Errorf("JSON object not found in output %q", text)
 	}
-	var metrics map[string]map[string]int64
-	if err := json.Unmarshal([]byte(text[start:end+1]), &metrics); err != nil {
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(text[start:end+1]), &raw); err != nil {
 		return nil, err
 	}
-	if metrics == nil {
-		metrics = make(map[string]map[string]int64)
+	metrics := make(map[string]map[string]int64, len(raw))
+	for group, payload := range raw {
+		if group == "users" {
+			var users map[string]map[string]int64
+			if err := json.Unmarshal(payload, &users); err != nil {
+				return nil, fmt.Errorf("decode users metrics: %w", err)
+			}
+			for user, counters := range users {
+				if strings.TrimSpace(user) == "" {
+					continue
+				}
+				metrics["user - "+user] = counters
+			}
+			continue
+		}
+		var counters map[string]int64
+		if err := json.Unmarshal(payload, &counters); err != nil {
+			return nil, fmt.Errorf("decode metric group %q: %w", group, err)
+		}
+		metrics[group] = counters
 	}
 	return metrics, nil
 }
