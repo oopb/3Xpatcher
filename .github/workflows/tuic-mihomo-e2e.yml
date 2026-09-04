@@ -57,13 +57,12 @@ jobs:
             -o /tmp/3x-ui.tar.gz
           tar -xzf /tmp/3x-ui.tar.gz -C source --strip-components=1
 
-      - name: Apply production overlay and E2E tests
+      - name: Apply production overlay and E2E test
         shell: bash
         run: |
           set -euo pipefail
           ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
           cp overlay/internal/sub/tuic_mihomo_e2e_test.go source/internal/sub/tuic_mihomo_e2e_test.go
-          cp overlay/internal/sub/tuic_selfsigned_mihomo_e2e_test.go source/internal/sub/tuic_selfsigned_mihomo_e2e_test.go
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -73,12 +72,12 @@ jobs:
           cache: true
           cache-dependency-path: source/go.sum
 
-      - name: Verify known-good Clash Verge TUIC contract
+      - name: Verify pre-Mieru TUIC shape plus required certificate skip
         working-directory: source
         shell: bash
         run: |
           set -euo pipefail
-          go test ./internal/sub -run '^TestTUICClash(MatchesKnownGoodMihomoShapeFromPersistedSelfSignedState|DoesNotInventALPN)$' -count=1 -v
+          go test ./internal/sub -run '^TestTUICClash(RestoresPreMieruShapeWithRequiredSkipCertVerify|DoesNotInventALPNOrUDPRelayMode)$' -count=1 -v
 
       - name: Build shipped sing-box runtime shape
         id: singbox
@@ -135,7 +134,7 @@ jobs:
           /tmp/mihomo -v
           echo "binary=/tmp/mihomo" >> "$GITHUB_OUTPUT"
 
-      - name: Real TUIC TCP, native UDP, and persisted self-signed TLS through Mihomo
+      - name: Real TUIC through Mihomo with required skip-cert-verify
         working-directory: source
         env:
           SINGBOX_E2E_BINARY: ${{ steps.singbox.outputs.binary }}
@@ -143,4 +142,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test ./internal/sub -run '^TestTUIC(MihomoE2E|PersistedSelfSignedMihomoE2E)$' -count=1 -v
+          go test ./internal/sub -run '^TestTUICMihomoE2E$' -count=1 -v

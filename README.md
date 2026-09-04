@@ -2,7 +2,7 @@
 
 3Xpatcher 在尽量保持 **3x-ui 原生 Inbounds / Clients / Subscription / Traffic / Online** 工作流不变的前提下，为官方 3x-ui 增加彼此隔离的 supplemental cores。
 
-当前版本：`0.11.7-integrated-alpha`
+当前版本：`0.11.8-integrated-alpha`
 
 兼容上游：`3x-ui v3.7.0`
 
@@ -71,9 +71,11 @@ sing-box V2Ray-compatible stats 地址持久化到：
 
 如默认端口冲突，会在 loopback `62000-62999` 范围选择空闲地址，panel renderer、collector 与 runtime 始终读取同一个地址。
 
-## V11.4 / V11.5 / V11.6 / V11.7：客户端兼容修正
+## V11.4 – V11.8：客户端兼容修正
 
-V11.3 对 Shadowrocket / Mihomo 的几项兼容判断是错误的。V11.4 修正 ShadowTLS/Naive；V11.5 撤销了错误的 TUIC `alpn: [h3]` 强制覆盖；V11.6 进一步以一个在 Clash Verge 中确认可用的 TUIC v5 节点为兼容基线，并用官方 Mihomo 做 TCP + UDP 双路径 E2E。V11.7 修复升级/历史入站的自签 TLS 状态识别：即使 `certificateMode` 标记缺失，只要仍存在 3Xpatcher 持久化的 `selfSignedCertificatePath` + `selfSignedKeyPath`，客户端导出就会正确带上 `skip-cert-verify: true` / `insecure=1`。
+V11.3 对 Shadowrocket / Mihomo 的几项兼容判断是错误的。V11.4 修正 ShadowTLS/Naive；V11.5 撤销错误的 TUIC `alpn: [h3]` 强制覆盖。V11.6/V11.7 为定位 Clash Verge TUIC 问题曾加入 `udp-relay-mode`、删除 `udp: true`、以及根据持久化证书元数据推断自签 TLS 等实验性改动。
+
+真实 Clash Verge A/B 最终确认：**TUIC 不通的根因只有生成配置缺少 `skip-cert-verify: true`；在同一节点上手动补这一项后立即恢复。** V11.8 因此撤销这些多余的 TUIC 实验性修改，将 Clash TUIC 恢复到 Mieru 引入前的字段形状，只保留已验证的证书校验修复。
 
 ### ShadowTLS v3
 
@@ -143,7 +145,7 @@ Mihomo 当前没有 Naive proxy type，因此 `/clash` 不伪造 Naive 节点。
 
 ### TUIC / Clash Verge
 
-V11.7 的 dedicated Clash TUIC 继续以确认可用的 Mihomo / Clash Verge TUIC v5 配置形状为基线：
+V11.8 的 dedicated Clash TUIC 以 **Mieru 引入前的已知可用生成逻辑**为基线，并只额外加入已经由真实 Clash Verge A/B 验证必要的 `skip-cert-verify: true`：
 
 ```yaml
 - name: <name>
@@ -153,9 +155,9 @@ V11.7 的 dedicated Clash TUIC 继续以确认可用的 Mihomo / Clash Verge TUI
   uuid: <uuid>
   password: <password>
   sni: <server-name>
-  skip-cert-verify: true   # 3Xpatcher 生成的自签证书或显式 allowInsecure 时
+  skip-cert-verify: true
   congestion-controller: <cubic|bbr|new_reno>
-  udp-relay-mode: native
+  udp: true
   alpn:
     - h3
     - h2
@@ -166,19 +168,14 @@ V11.7 的 dedicated Clash TUIC 继续以确认可用的 Mihomo / Clash Verge TUI
 
 - `server` / `port` / `uuid` / `password` 来自当前订阅 endpoint 与客户端记录；
 - `sni` 和 `alpn` 从服务端 TLS 配置直接映射，ALPN 按原顺序完整保留；
-- TLS 没有 ALPN 时，不凭空生成 `h3`；
-- `udp-relay-mode: native` 显式输出，不依赖 Mihomo 版本默认值；
-- TUIC 本身默认支持 UDP，因此不再附加冗余的通用 `udp: true`；
+- TLS 没有配置 ALPN 时，客户端也不凭空生成 ALPN；
+- 保留 Mieru 前原有的 `udp: true`；
+- 不再人为添加 `udp-relay-mode`；
 - `reduce-rtt: true` 仅在服务端启用 0-RTT 时输出；
-- `skip-cert-verify: true` 在 3Xpatcher 自签 TLS 时必须输出；V11.7 同时识别 `certificateMode=self_signed_sni`、旧 `settings.tlsMode=self_signed_sni`，以及持久化的 `selfSignedCertificatePath` + `selfSignedKeyPath`；
-- 公网 CA / native TLS 且没有上述自签标记时，不会无条件关闭证书校验；
-- `heartbeat-interval`、`max-open-streams`、`disable-mtu-discovery`、`disable-sni` 等不会仅因服务端存在相似字段就被错误投影到客户端。
+- dedicated Clash TUIC 固定输出 `skip-cert-verify: true`，不再依赖 `certificateMode` 或推断持久化证书元数据；
+- `heartbeat-interval`、`max-open-streams`、`disable-mtu-discovery`、`disable-sni` 等不会从服务端设置错误投影到 Mihomo 客户端。
 
-CI 使用官方 Mihomo v1.19.30 和与正式发布相同构建形状的 sing-box v1.14.0。测试验证：
-
-1. HTTP/TCP 经过 Mihomo → TUIC → sing-box 成功；
-2. SOCKS5 UDP ASSOCIATE 经过 Mihomo `udp-relay-mode: native` → TUIC → sing-box → UDP echo 成功；
-3. 单独启动真实自签 TUIC 服务端，并故意让客户端 fixture 缺失 `certificateMode`；只有生成器能从持久化自签证书路径恢复出 `skip-cert-verify: true` 时，Mihomo TLS/TUIC 握手才能成功。
+CI 使用官方 Mihomo v1.19.30 和与正式发布相同构建形状的 sing-box v1.14.0。回归测试故意不给客户端 fixture 提供 `certificateMode` 或自签证书元数据，要求生产 Clash 生成器仍直接输出 `skip-cert-verify: true`，同时保持 `udp: true`、不出现 `udp-relay-mode`、SNI/ALPN 与服务端一致；随后用生成的真实 Mihomo 配置完成 TUIC/TLS 数据路径请求。
 
 ### AnyTLS
 
