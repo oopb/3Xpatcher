@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+VERSION_FILE="$ROOT/MIERU_VERSION"
+INSTALL_ROOT="${MIERU_ROOT:-/usr/local/x-ui-mieru}"
+SERVICE_FILE="${MIERU_SERVICE_FILE:-/etc/systemd/system/x-ui-mieru@.service}"
+REPO="${MIERU_REPO:-enfein/mieru}"
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || { echo "install-mieru.sh must run as root" >&2; exit 1; }
+[[ -r "$VERSION_FILE" ]] || { echo "Missing $VERSION_FILE" >&2; exit 1; }
+for cmd in curl python3 sha256sum dpkg-deb systemctl getent groupadd useradd chown chmod find; do command -v "$cmd" >/dev/null || { echo "Missing required command: $cmd" >&2; exit 1; }; done
+
+if ! getent group mita >/dev/null 2>&1; then groupadd --system mita; fi
+if ! id -u mita >/dev/null 2>&1; then useradd --system --gid mita --home-dir /nonexistent --shell /usr/sbin/nologin mita; fi
+
+version=$(tr -d '\r\n' < "$VERSION_FILE")
+[[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid MIERU_VERSION: $version" >&2; exit 1; }
+plain=${version#v}
+case "$(uname -m)" in
+  x86_64|amd64) arch=amd64 ;;
+  aarch64|arm64) arch=arm64 ;;
+  *) echo "Mieru runtime supports amd64/arm64 in this installer" >&2; exit 1 ;;
+esac
+asset="mita_${plain}_${arch}.deb"
+work=$(mktemp -d /var/tmp/3xpatcher-mieru.XXXXXXXX)
+trap 'rm -rf "$work"' EXIT
+
+curl -fsSL --retry 4 --retry-all-errors "https://api.github.com/repos/${REPO}/releases/tags/${version}" -o "$work/release.json"
+mapfile -t meta < <(python3 - "$work/release.json" "$asset" <<'PY'
+import json,sys
+p,name=sys.argv[1:]
+r=json.load(open(p,encoding='utf-8'))
+a=next((x for x in r.get('assets',[]) if x.get('name')==name),None)
+if not a: raise SystemExit(1)
+print(a.get('browser_download_url',''))
+print(a.get('digest','') or '')
+PY
+)
+[[ ${#meta[@]} -eq 2 && "${meta[0]}" == https://github.com/* ]] || { echo "Mieru asset not found: $asset" >&2; exit 1; }
+[[ "${meta[1]}" =~ ^sha256:([0-9a-fA-F]{64})$ ]] || { echo "Mieru release asset has no SHA256 digest" >&2; exit 1; }
+expected="${BASH_REMATCH[1]}"
+curl -fL --retry 4 --retry-all-errors --connect-timeout 15 "${meta[0]}" -o "$work/$asset"
+actual=$(sha256sum "$work/$asset" | awk '{print $1}')
+[[ "${actual,,}" == "${expected,,}" ]] || { echo "Mieru SHA256 mismatch" >&2; exit 1; }
+
+dpkg-deb -x "$work/$asset" "$work/root"
+bin=$(find "$work/root" -type f -path '*/bin/mita' -perm -u+x | head -n1)
+[[ -n "$bin" ]] || { echo "mita binary not found in $asset" >&2; exit 1; }
+install -d -m 0755 "$INSTALL_ROOT/bin"
+install -d -m 2750 -o root -g mita "$INSTALL_ROOT/config"
+install -d -m 0755 /var/lib/mita /var/lib/x-ui-mieru
+find "$INSTALL_ROOT/config" -maxdepth 1 -type f -name '*.json' -exec chown root:mita {} + -exec chmod 0640 {} + 2>/dev/null || true
+install -m 0755 "$bin" "$INSTALL_ROOT/bin/mita"
+
+cat > "$SERVICE_FILE" <<'EOF'
+[Unit]
+Description=3Xpatcher Mieru inbound %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mita
+Group=mita
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+Environment="MITA_CONFIG_JSON_FILE=/usr/local/x-ui-mieru/config/%i.json"
+Environment="MITA_UDS_PATH=/run/x-ui-mieru/%i.sock"
+Environment="MITA_LOG_NO_TIMESTAMP=true"
+RuntimeDirectory=x-ui-mieru
+RuntimeDirectoryMode=0750
+StateDirectory=x-ui-mieru/%i
+StateDirectoryMode=0750
+# Mieru v3.36 writes persistent counters to the fixed path
+# /var/lib/mita/metrics.pb. Give every template instance a private view of that
+# directory so independent 3x-ui inbounds never share or overwrite counters.
+BindPaths=/var/lib/x-ui-mieru/%i:/var/lib/mita
+ExecStart=/usr/local/x-ui-mieru/bin/mita run
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=1048576
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
+EOF
+chmod 0644 "$SERVICE_FILE"
+systemctl daemon-reload
+
+installed=$($INSTALL_ROOT/bin/mita version 2>&1 | head -n1 | tr -d '\r' || true)
+[[ -n "$installed" ]] || { echo "Installed mita failed version check" >&2; exit 1; }
+echo "Mieru runtime installed: $installed"
+echo "Binary: $INSTALL_ROOT/bin/mita"
+echo "Config: $INSTALL_ROOT/config/<inbound-id>.json"
+echo "Metrics: /var/lib/x-ui-mieru/<inbound-id>/metrics.pb"
+echo "Service: x-ui-mieru@<inbound-id>.service (User=mita)"

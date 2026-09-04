@@ -11,6 +11,7 @@ modified=(
   internal/web/service/client_inbound_apply.go
   internal/web/service/inbound_clients.go
   internal/web/service/xray.go
+  internal/web/web.go
   internal/web/controller/server.go
   internal/web/runtime/local.go
   internal/sub/service.go
@@ -33,14 +34,17 @@ for f in "${modified[@]}"; do
   [[ -f "$BACKUP/$f" ]] || { echo "Invalid backup; missing $f" >&2; exit 1; }
   cp "$BACKUP/$f" "$SRC/$f"
 done
-rm -rf "$SRC/internal/singbox"
+rm -rf "$SRC/internal/singbox" "$SRC/internal/mieru"
 rm -f \
   "$SRC/internal/database/model/singbox_protocols.go" \
   "$SRC/internal/sub/singbox_links.go" \
   "$SRC/internal/sub/singbox_clash.go" \
+  "$SRC/internal/sub/mieru_links.go" \
+  "$SRC/internal/sub/mieru_clash.go" \
   "$SRC/internal/web/controller/singbox_cert.go" \
+  "$SRC/internal/web/job/supplemental_traffic_job.go" \
   "$SRC/frontend/src/schemas/protocols/inbound/singbox.ts" \
   "$SRC/frontend/src/pages/inbounds/form/protocols/singbox.tsx"
 
-echo "3Xpatcher V4 source overlay reverted from: $BACKUP"
-echo "Database rows/tables and generated certificate files are intentionally not dropped."
+echo "3Xpatcher V7 source overlay reverted from: $BACKUP"
+echo "Database rows/tables and generated runtime/certificate files are intentionally not dropped."

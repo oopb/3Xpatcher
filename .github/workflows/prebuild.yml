@@ -3,19 +3,19 @@ name: Prebuild patched 3x-ui
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, v6-mieru-integration]
     paths:
       - VERSION
       - UPSTREAM_COMPAT
+      - MIERU_VERSION
+      - SINGBOX_VERSION
       - internal/**
       - frontend/**
-      - scripts/apply-overlay.sh
-      - scripts/apply-v2*.py
-      - scripts/v2_patchlib.py
-      - scripts/v3-patch.py
-      - scripts/v5-patch.py
+      - scripts/**
       - overlay/**
       - tests/**
+      - install.sh
+      - rollback.sh
       - .github/workflows/prebuild.yml
 
 permissions:
@@ -40,9 +40,12 @@ jobs:
           set -euo pipefail
           target=$(tr -d '\r\n' < UPSTREAM_COMPAT)
           patch_version=$(tr -d '\r\n' < VERSION)
+          singbox_version=$(tr -d '\r\n' < SINGBOX_VERSION)
           [[ "$target" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$singbox_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           echo "upstream=$target" >> "$GITHUB_OUTPUT"
           echo "patch_version=$patch_version" >> "$GITHUB_OUTPUT"
+          echo "singbox_version=$singbox_version" >> "$GITHUB_OUTPUT"
       - name: Download matching 3x-ui source
         shell: bash
         run: |
@@ -50,13 +53,53 @@ jobs:
           mkdir source
           curl -fL --retry 5 --retry-all-errors "https://codeload.github.com/MHSanaei/3x-ui/tar.gz/${{ steps.target.outputs.upstream }}" -o /tmp/3x-ui.tar.gz
           tar -xzf /tmp/3x-ui.tar.gz -C source --strip-components=1
-      - name: Apply dual-core overlay
+      - name: Apply three-core overlay
         shell: bash
         run: |
           set -euo pipefail
           ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
           cp internal/singbox/config_test.go source/internal/singbox/config_test.go
           cp overlay/internal/singbox/integrated_test.go source/internal/singbox/integrated_test.go
+          cp overlay/internal/singbox/stats_test.go source/internal/singbox/stats_test.go
+          cp internal/mieru/config_test.go source/internal/mieru/config_test.go
+          cp overlay/internal/mieru/stats_test.go source/internal/mieru/stats_test.go
+          cp overlay/internal/web/service/shadowsocks_2022_key_test.go source/internal/web/service/shadowsocks_2022_key_test.go
+      - name: Download verified official Mieru validator
+        id: mieru
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(tr -d '\r\n' < MIERU_VERSION)
+          plain=${version#v}
+          asset="mita_${plain}_amd64.deb"
+          curl -fsSL --retry 5 --retry-all-errors "https://api.github.com/repos/enfein/mieru/releases/tags/${version}" -o /tmp/mieru-release.json
+          mapfile -t meta < <(python3 - /tmp/mieru-release.json "$asset" <<'PY'
+          import json,sys
+          p,name=sys.argv[1:]
+          r=json.load(open(p,encoding='utf-8'))
+          a=next((x for x in r.get('assets',[]) if x.get('name')==name),None)
+          if not a: raise SystemExit(1)
+          print(a.get('browser_download_url',''))
+          print(a.get('digest','') or '')
+          PY
+          )
+          [[ ${#meta[@]} -eq 2 && "${meta[1]}" =~ ^sha256:([0-9a-fA-F]{64})$ ]]
+          expected="${BASH_REMATCH[1]}"
+          curl -fL --retry 5 --retry-all-errors "${meta[0]}" -o /tmp/mita.deb
+          actual=$(sha256sum /tmp/mita.deb | awk '{print $1}')
+          [[ "${actual,,}" == "${expected,,}" ]]
+          mkdir -p /tmp/mita-root
+          dpkg-deb -x /tmp/mita.deb /tmp/mita-root
+          bin=$(find /tmp/mita-root -type f -path '*/bin/mita' -perm -u+x | head -n1)
+          [[ -n "$bin" ]]
+          "$bin" version
+          echo "binary=$bin" >> "$GITHUB_OUTPUT"
+      - name: Provision official mita runtime account
+        shell: bash
+        run: |
+          set -euo pipefail
+          getent group mita >/dev/null 2>&1 || sudo groupadd --system mita
+          id -u mita >/dev/null 2>&1 || sudo useradd --system --gid mita --home-dir /nonexistent --shell /usr/sbin/nologin mita
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
@@ -64,11 +107,54 @@ jobs:
           check-latest: true
           cache: true
           cache-dependency-path: source/go.sum
-      - name: Test supplemental renderer
+      - name: Build stats-enabled sing-box runtimes
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ steps.target.outputs.singbox_version }}'
+          plain=${version#v}
+          mkdir -p /tmp/singbox-src dist
+          curl -fL --retry 5 --retry-all-errors "https://codeload.github.com/SagerNet/sing-box/tar.gz/${version}" -o /tmp/sing-box.tar.gz
+          tar -xzf /tmp/sing-box.tar.gz -C /tmp/singbox-src --strip-components=1
+          tags=$(tr -d '\r\n' < /tmp/singbox-src/release/DEFAULT_BUILD_TAGS_OTHERS)
+          tags="${tags},with_v2ray_api"
+          ldflags="-X github.com/sagernet/sing-box/constant.Version=${plain} $(cat /tmp/singbox-src/release/LDFLAGS) -s -w -buildid="
+          build_one() {
+            local arch="$1"
+            local pkg="/tmp/singbox-pkg-$arch"
+            rm -rf "$pkg"; mkdir -p "$pkg"
+            (cd /tmp/singbox-src && CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -buildvcs=false -trimpath -tags "$tags" -ldflags "$ldflags" -o "$pkg/sing-box" ./cmd/sing-box)
+            "$pkg/sing-box" version | head -n1 || true
+            tar -C "$pkg" -czf "$GITHUB_WORKSPACE/dist/sing-box-stats-${version}-linux-${arch}.tar.gz" sing-box
+          }
+          build_one amd64
+          build_one arm64
+          cat >/tmp/singbox-check.json <<'JSON'
+          {
+            "log": {"level":"error"},
+            "experimental": {
+              "v2ray_api": {
+                "listen":"127.0.0.1:62789",
+                "stats":{"enabled":true,"inbounds":[],"users":[]}
+              }
+            },
+            "inbounds": []
+          }
+          JSON
+          /tmp/singbox-pkg-amd64/sing-box check -c /tmp/singbox-check.json
+      - name: Test supplemental renderers with official mita
         working-directory: source
-        run: go test ./internal/singbox
+        env:
+          MIERU_OFFICIAL_BINARY: ${{ steps.mieru.outputs.binary }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./internal/singbox
+          go test -c ./internal/mieru -o /tmp/3xpatcher-mieru.test
+          sudo env "MIERU_OFFICIAL_BINARY=$MIERU_OFFICIAL_BINARY" /tmp/3xpatcher-mieru.test
+          go test ./internal/web/service -run 'Shadowsocks|SS2022' -count=1
       - name: Remove overlay-only unit tests from production source
-        run: rm -f source/internal/singbox/config_test.go source/internal/singbox/integrated_test.go
+        run: rm -f source/internal/singbox/config_test.go source/internal/singbox/integrated_test.go source/internal/singbox/stats_test.go source/internal/mieru/config_test.go source/internal/mieru/stats_test.go source/internal/web/service/shadowsocks_2022_key_test.go
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -137,4 +223,4 @@ jobs:
           patch_version=$(tr -d '\r\n' < VERSION)
           tag="prebuilt-${target}"
           gh release delete "$tag" --yes --cleanup-tag >/dev/null 2>&1 || true
-          gh release create "$tag" --target "$GITHUB_SHA" --title "3Xpatcher prebuilt for ${target}" --notes "Prebuilt static patched 3x-ui binaries for 3Xpatcher ${patch_version}. Generated by GitHub Actions; use install.sh rather than installing these assets manually." --prerelease dist/*
+          gh release create "$tag" --target "$GITHUB_SHA" --title "3Xpatcher prebuilt for ${target}" --notes "Prebuilt patched 3x-ui plus stats-enabled sing-box runtimes for 3Xpatcher ${patch_version}. Generated by GitHub Actions; use install.sh rather than installing these assets manually." --prerelease dist/*
