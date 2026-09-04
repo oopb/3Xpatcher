@@ -35,6 +35,7 @@ modified=(
   frontend/src/pages/inbounds/form/security/tls.tsx
   frontend/src/pages/inbounds/list/helpers.ts
   frontend/src/pages/inbounds/list/RowActions.tsx
+  frontend/src/pages/inbounds/list/types.ts
   frontend/src/pages/inbounds/list/useInboundColumns.tsx
   frontend/src/pages/inbounds/useInbounds.ts
   frontend/src/pages/clients/ClientFormModal.tsx
