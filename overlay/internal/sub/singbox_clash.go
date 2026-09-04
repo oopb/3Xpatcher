@@ -31,6 +31,7 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 					if sni, _ := settings["camouflageSNI"].(string); strings.TrimSpace(sni) != "" {
 						proxy["sni"] = strings.TrimSpace(sni)
 					}
+				}
 			}
 		}
 		if selfSigned {
