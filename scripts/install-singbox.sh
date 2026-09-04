@@ -8,6 +8,9 @@ BIN="$BASE/bin"
 CONF="$BASE/config"
 BACKUP="$BASE/backup"
 UNIT=/etc/systemd/system/x-ui-singbox.service
+STATE_DIR=/etc/3xpatcher
+STATS_ADDR_FILE="$STATE_DIR/singbox-stats.addr"
+DEFAULT_STATS_ADDR=127.0.0.1:62789
 
 err_report() {
   local code=$?
@@ -23,8 +26,8 @@ done
 [[ -r "$ROOT/SINGBOX_VERSION" && -r "$ROOT/UPSTREAM_COMPAT" ]] || { echo "Missing pinned sing-box/upstream version metadata" >&2; exit 1; }
 [[ "$PATCH_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "Invalid PATCH_REPO" >&2; exit 1; }
 
-mkdir -p "$BASE" "$CONF" "$BACKUP"
-chmod 700 "$BASE" "$CONF" "$BACKUP"
+mkdir -p "$BASE" "$CONF" "$BACKUP" "$STATE_DIR"
+chmod 700 "$BASE" "$CONF" "$BACKUP" "$STATE_DIR"
 
 case "$(uname -m)" in
   x86_64|amd64) arch=amd64 ;;
@@ -95,6 +98,7 @@ JSON
 
 stamp=$(date +%Y%m%d-%H%M%S)
 old=""
+binary_changed=0
 current_was_active=0
 systemctl is-active --quiet x-ui-singbox.service 2>/dev/null && current_was_active=1 || true
 
@@ -103,12 +107,13 @@ if [[ -f "$UNIT" ]]; then
   cp -a "$UNIT" "$tmp/x-ui-singbox.service.old"
   had_unit=1
 fi
+cp -a "$CONF/config.json" "$tmp/config.json.old"
 
-if [[ -d "$BIN" ]]; then
-  old="$BACKUP/bin-$stamp"
-  mv "$BIN" "$old"
+had_stats_addr=0
+if [[ -f "$STATS_ADDR_FILE" ]]; then
+  cp -a "$STATS_ADDR_FILE" "$tmp/singbox-stats.addr.old"
+  had_stats_addr=1
 fi
-mv "$stage" "$BIN"
 
 rollback_runtime() {
   local reason=$1
@@ -119,9 +124,19 @@ rollback_runtime() {
   journalctl -u x-ui-singbox.service -n 100 --no-pager >&2 || true
 
   systemctl stop x-ui-singbox.service >/dev/null 2>&1 || true
-  rm -rf "$BIN"
-  if [[ -n "$old" && -d "$old" ]]; then
-    mv "$old" "$BIN"
+
+  if (( binary_changed == 1 )); then
+    rm -rf "$BIN"
+    if [[ -n "$old" && -d "$old" ]]; then
+      mv "$old" "$BIN"
+    fi
+  fi
+
+  install -m 0600 "$tmp/config.json.old" "$CONF/config.json" || true
+  if (( had_stats_addr == 1 )); then
+    install -m 0600 "$tmp/singbox-stats.addr.old" "$STATS_ADDR_FILE" || true
+  else
+    rm -f "$STATS_ADDR_FILE"
   fi
 
   if (( had_unit == 1 )); then
@@ -131,18 +146,137 @@ rollback_runtime() {
   fi
   systemctl daemon-reload || true
 
-  if [[ -d "$BIN" && $had_unit -eq 1 ]]; then
+  if (( current_was_active == 1 )) && [[ -d "$BIN" && $had_unit -eq 1 ]]; then
     if ! systemctl restart x-ui-singbox.service; then
       echo "[3Xpatcher] WARNING: previous sing-box runtime was restored but could not be restarted." >&2
-    elif (( current_was_active == 0 )); then
-      echo "[3Xpatcher] NOTE: the previous sing-box service was already inactive before this install attempt." >&2
     fi
+  else
+    echo "[3Xpatcher] NOTE: the previous sing-box service was not healthy/active before this install attempt; leaving it stopped." >&2
   fi
 
   echo "[3Xpatcher] Available runtime backups:" >&2
   find "$BACKUP" -mindepth 1 -maxdepth 1 -type d -name 'bin-*' -printf '  %f\n' 2>/dev/null | sort -r | head -n 8 >&2 || true
   exit 1
 }
+
+# Stop our own service before probing the stats address. This distinguishes a
+# port legitimately held by the previous x-ui-singbox instance from a collision
+# with an unrelated process. Never kill the unrelated process; choose another
+# loopback-only port instead.
+systemctl stop x-ui-singbox.service >/dev/null 2>&1 || true
+
+if ! stats_addr=$(python3 - "$STATS_ADDR_FILE" "$DEFAULT_STATS_ADDR" <<'PY'
+from pathlib import Path
+import re
+import socket
+import sys
+
+state_path = Path(sys.argv[1])
+default = sys.argv[2]
+
+def valid(addr):
+    m = re.fullmatch(r"127\.0\.0\.1:(\d{1,5})", addr.strip())
+    if not m:
+        return None
+    port = int(m.group(1))
+    if not 1 <= port <= 65535:
+        return None
+    return port
+
+def available(port):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(("127.0.0.1", port))
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+candidate = default
+try:
+    saved = state_path.read_text(encoding="utf-8").strip()
+    if valid(saved) is not None:
+        candidate = saved
+except OSError:
+    pass
+
+port = valid(candidate)
+if port is not None and available(port):
+    print(f"127.0.0.1:{port}")
+    raise SystemExit(0)
+
+# 62000-62999 is deliberately above Linux's common default ephemeral range.
+# Start after the historical port, then wrap around for deterministic reuse.
+for port in list(range(62790, 63000)) + list(range(62000, 62789)):
+    if available(port):
+        print(f"127.0.0.1:{port}")
+        raise SystemExit(0)
+raise SystemExit("no free loopback stats port in 62000-62999")
+PY
+); then
+  rollback_runtime "unable to allocate a loopback stats port"
+fi
+
+if [[ "$stats_addr" != "$DEFAULT_STATS_ADDR" ]]; then
+  echo "[3Xpatcher] Stats address $DEFAULT_STATS_ADDR is unavailable or overridden; using $stats_addr."
+else
+  echo "[3Xpatcher] Stats address: $stats_addr"
+fi
+
+addr_tmp="$STATE_DIR/.singbox-stats.addr.$$"
+printf '%s\n' "$stats_addr" > "$addr_tmp"
+chmod 600 "$addr_tmp"
+if ! mv -f "$addr_tmp" "$STATS_ADDR_FILE"; then
+  rollback_runtime "failed to persist stats address"
+fi
+
+# Existing patched installs already have experimental.v2ray_api in config.json.
+# Rewrite only its listen field; a fresh vanilla install has no v2ray_api yet,
+# so the new panel will add it later using the same persisted address.
+if ! python3 - "$CONF/config.json" "$stats_addr" <<'PY'
+import json
+import os
+import stat
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+addr = sys.argv[2]
+data = json.loads(path.read_text(encoding="utf-8"))
+exp = data.get("experimental")
+changed = False
+if isinstance(exp, dict):
+    api = exp.get("v2ray_api")
+    if isinstance(api, dict):
+        api["listen"] = addr
+        changed = True
+if changed:
+    mode = stat.S_IMODE(path.stat().st_mode)
+    tmp = path.with_name(f".{path.name}.3xpatcher.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.chmod(tmp, mode)
+    os.replace(tmp, path)
+PY
+then
+  rollback_runtime "failed to update existing sing-box stats address"
+fi
+
+if ! "$stage/sing-box" check -c "$CONF/config.json"; then
+  rollback_runtime "config check failed after stats-address migration"
+fi
+
+if [[ -d "$BIN" ]]; then
+  old="$BACKUP/bin-$stamp"
+  if ! mv "$BIN" "$old"; then
+    rollback_runtime "failed to stage previous sing-box runtime backup"
+  fi
+  binary_changed=1
+fi
+if ! mv "$stage" "$BIN"; then
+  rollback_runtime "failed to activate new sing-box binary directory"
+fi
+binary_changed=1
 
 cat > "$UNIT" <<EOF2
 [Unit]
@@ -187,12 +321,12 @@ done
 pid=$(systemctl show -p MainPID --value x-ui-singbox.service 2>/dev/null || true)
 [[ "$pid" =~ ^[1-9][0-9]*$ ]] || rollback_runtime "service has no live MainPID"
 
-# The unit may be healthy while the old config has no active inbounds; that is
-# valid. At this point only process health is required.
+# The unit may be healthy while a fresh vanilla config has no active inbounds;
+# that is valid. At this point only process health is required.
 echo "Installed $($BIN/sing-box version | head -n1) (3Xpatcher stats build)"
 echo "Service: x-ui-singbox.service"
 echo "Config:  $CONF/config.json"
-echo "Stats:   127.0.0.1:62789 (configured by panel)"
+echo "Stats:   $stats_addr (persisted in $STATS_ADDR_FILE)"
 if [[ -n "$old" ]]; then
   echo "Previous runtime backup: $old"
 fi

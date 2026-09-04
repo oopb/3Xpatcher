@@ -3,7 +3,11 @@ package singbox
 import (
 	"context"
 	"fmt"
+	"net"
+	"os"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,12 +17,34 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// StatsListenAddress is intentionally loopback-only. The sing-box runtime used
-// by 3Xpatcher is built with with_v2ray_api and exposes the wire-compatible
-// legacy V2Ray stats service here. Nothing on the public interface can reach it.
-const StatsListenAddress = "127.0.0.1:62789"
+const (
+	defaultStatsListenAddress = "127.0.0.1:62789"
+	statsListenAddressFile    = "/etc/3xpatcher/singbox-stats.addr"
+	queryStatsMethod          = "/v2ray.core.app.stats.command.StatsService/QueryStats"
+)
 
-const queryStatsMethod = "/v2ray.core.app.stats.command.StatsService/QueryStats"
+// StatsListenAddress is intentionally loopback-only. The installer persists an
+// available address so 3Xpatcher does not collide with unrelated local services
+// that happen to use the historical 62789 port. The same value is used both by
+// the sing-box config renderer and by the panel-side stats collector.
+var StatsListenAddress = loadStatsListenAddress(statsListenAddressFile)
+
+func loadStatsListenAddress(path string) string {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return defaultStatsListenAddress
+	}
+	addr := strings.TrimSpace(string(raw))
+	host, portRaw, err := net.SplitHostPort(addr)
+	if err != nil || host != "127.0.0.1" {
+		return defaultStatsListenAddress
+	}
+	port, err := strconv.Atoi(portRaw)
+	if err != nil || port < 1 || port > 65535 {
+		return defaultStatsListenAddress
+	}
+	return net.JoinHostPort(host, strconv.Itoa(port))
+}
 
 var (
 	statsTrafficRE = regexp.MustCompile(`^(inbound)>>>([^>]+)>>>traffic>>>(downlink|uplink)$`)
