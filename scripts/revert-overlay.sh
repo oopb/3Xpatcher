@@ -31,6 +31,7 @@ modified=(
   frontend/src/pages/inbounds/form/protocols/index.ts
   frontend/src/pages/inbounds/form/InboundFormModal.tsx
   frontend/src/pages/inbounds/form/security/tls.tsx
+  frontend/src/pages/inbounds/info/helpers.ts
   frontend/src/pages/inbounds/info/InboundInfoModal.tsx
   frontend/src/pages/inbounds/list/helpers.ts
   frontend/src/pages/inbounds/list/RowActions.tsx
