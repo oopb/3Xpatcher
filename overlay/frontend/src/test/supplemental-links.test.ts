@@ -71,7 +71,7 @@ describe('supplemental browser share links', () => {
     expect(url.searchParams.get('insecure')).toBe('1');
   });
 
-  it('exports both SIP003 and Shadowrocket ShadowTLS representations', () => {
+  it('exports one SIP003 ShadowTLS representation', () => {
     const ib = inbound('shadowtls', {
       clients: [{ email: 'shadow@test', password: 'outer-pass' }],
       handshakeServer: 'www.cloudflare.com',
@@ -86,11 +86,10 @@ describe('supplemental browser share links', () => {
       remark: 'shadow',
       client,
     });
-    expect(variants).toHaveLength(2);
-    expect(variants[0].label).toContain('SIP003');
+    expect(variants).toHaveLength(1);
+    expect(variants[0].label).toBe('ShadowTLS');
     expect(variants[0].link).toContain('plugin=shadow-tls');
-    expect(variants[1].label).toContain('Shadowrocket');
-    expect(variants[1].link).toContain('shadow-tls=');
+    expect(variants[0].link).not.toContain('shadow-tls=');
   });
 
   it('exports protocol-native Naive URI', () => {

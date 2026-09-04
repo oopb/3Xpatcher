@@ -21,6 +21,7 @@ modified=(
   internal/sub/service.go
   internal/sub/json_service.go
   internal/sub/clash_service.go
+  internal/sub/controller.go
   frontend/src/schemas/primitives/protocol.ts
   frontend/src/schemas/protocols/inbound/index.ts
   frontend/src/schemas/protocols/security/tls.ts
@@ -62,5 +63,5 @@ rm -f \
   "$SRC/frontend/src/pages/inbounds/form/protocols/singbox.tsx" \
   "$SRC/frontend/src/lib/xray/supplemental-links.ts"
 
-echo "3Xpatcher V11 source overlay reverted from: $BACKUP"
+echo "3Xpatcher V11.3 source overlay reverted from: $BACKUP"
 echo "Database rows/tables and generated runtime/certificate files are intentionally not dropped."

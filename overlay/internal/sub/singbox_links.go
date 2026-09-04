@@ -2,7 +2,6 @@ package sub
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -81,7 +80,16 @@ func (s *SubService) buildSingboxEndpointLink(inbound *model.Inbound, client mod
 		if client.Password == "" {
 			return ""
 		}
-		return buildLinkWithParams(fmt.Sprintf("naive+https://%s:%s@%s", encodeUserinfo(client.Email), encodeUserinfo(client.Password), joinHostPort(host, port)), params, remark)
+		scheme := "naive+https"
+		// Shadowrocket implements NaiveProxy as its native HTTPS proxy type.
+		// Its raw subscription importer currently ignores the standards-oriented
+		// naive+https URI even though manual NaiveProxy/HTTPS entries work. Serve
+		// native HTTPS only to an actual Shadowrocket /sub request; every other
+		// context retains the portable naive+https form.
+		if strings.Contains(strings.ToLower(s.clientUserAgent), "shadowrocket") {
+			scheme = "https"
+		}
+		return buildLinkWithParams(fmt.Sprintf("%s://%s:%s@%s", scheme, encodeUserinfo(client.Email), encodeUserinfo(client.Password), joinHostPort(host, port)), params, remark)
 	default:
 		return ""
 	}
@@ -89,15 +97,13 @@ func (s *SubService) buildSingboxEndpointLink(inbound *model.Inbound, client mod
 
 // buildShadowTLSShareLinks exports the standalone ShadowTLS inbound as the
 // protocol stack it actually is on wire: an inner Shadowsocks connection
-// wrapped by ShadowTLS v3. The old custom shadowtls:// URI was not a standard
-// share format and was silently dropped by common subscription clients.
+// wrapped by ShadowTLS v3.
 //
-// We emit two interoperable representations in a raw subscription:
-//   1. SIP002/SIP022 Shadowsocks + SIP003 shadow-tls plugin, understood by
-//      Mihomo/Clash-family parsers that support the plugin.
-//   2. Shadowrocket's established `shadow-tls=<base64 json>` extension. It is
-//      still an ss:// node, so clients that do not know the extension may
-//      ignore that variant instead of misclassifying a made-up protocol.
+// A previous compatibility attempt emitted a second Shadowrocket-specific
+// `shadow-tls=<base64 json>` SS variant. Current Shadowrocket imports that
+// second URI as ordinary Shadowsocks with plugin=none, creating a duplicate
+// dead node. SIP002/SIP022 + SIP003 shadow-tls is understood correctly by
+// current Shadowrocket and Mihomo, so export exactly one working variant.
 func buildShadowTLSShareLinks(settings map[string]any, shadowPassword, host string, port int, remark string) string {
 	method, _ := settings["innerMethod"].(string)
 	if method == "" {
@@ -113,36 +119,11 @@ func buildShadowTLSShareLinks(settings map[string]any, shadowPassword, host stri
 	userinfo := shadowsocksShareUserinfo(method, innerPassword)
 	plugin := "shadow-tls;host=" + escapeSIP003Option(handshake) +
 		";password=" + escapeSIP003Option(shadowPassword) + ";version=3"
-	sip002 := buildLinkWithParams(
+	return buildLinkWithParams(
 		fmt.Sprintf("ss://%s@%s/", userinfo, endpoint),
 		map[string]string{"plugin": plugin},
 		remark,
 	)
-
-	// Shadowrocket has long represented an SS+ShadowTLS chain with a base64
-	// legacy Shadowsocks authority plus a base64 JSON shadow-tls descriptor.
-	// Keep address/port explicit so the outer ShadowTLS endpoint is unambiguous.
-	legacyAuthority := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s@%s", method, innerPassword, endpoint)))
-	descriptor, err := json.Marshal(map[string]any{
-		"version":  "3",
-		"password": shadowPassword,
-		"host":     handshake,
-		"address":  host,
-		"port":     fmt.Sprintf("%d", port),
-	})
-	if err != nil {
-		return sip002
-	}
-	shadowrocket := buildLinkWithParams(
-		"ss://"+legacyAuthority,
-		map[string]string{"shadow-tls": base64.StdEncoding.EncodeToString(descriptor)},
-		remark,
-	)
-
-	if shadowrocket == sip002 {
-		return sip002
-	}
-	return sip002 + "\n" + shadowrocket
 }
 
 func shadowsocksShareUserinfo(method, password string) string {

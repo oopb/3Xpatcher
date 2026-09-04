@@ -2,7 +2,7 @@
 
 3Xpatcher 在尽量保持 **3x-ui 原生 Inbounds / Clients / Subscription / Traffic / Online** 工作流不变的前提下，为官方 3x-ui 增加彼此隔离的 supplemental cores。
 
-当前版本：`0.11.1-integrated-alpha`
+当前版本：`0.11.3-integrated-alpha`
 
 兼容上游：`3x-ui v3.7.0`
 
@@ -72,21 +72,37 @@ V11 补齐了 V10 中遗漏的客户端计数与 UI capability 链路。TUIC / A
 
 ## V11.1：TUIC / AnyTLS / TLS runtime 安装修复
 
-V10 的 `x-ui-singbox.service` 使用了 `ProtectHome=true`。当 3x-ui TLS 证书位于常见的 `/root/...` 路径时：
+V10 的 `x-ui-singbox.service` 使用了 `ProtectHome=true`。当 3x-ui TLS 证书位于常见的 `/root/...` 路径时，panel-side `sing-box check` 能读取证书，而 systemd runtime 可能无法读取。
 
-- 面板进程执行 `sing-box check` 可以读取证书；
-- systemd 启动的 sing-box 却看不到 `/root`；
-- 因而 TUIC / AnyTLS / Naive 等 TLS inbound 会在真正启动时失败。
-
-V11 最初改成了 `ProtectHome=read-only`。这能让普通 systemd 主机读取 `/root`，但部分受限 LXC/NAT VPS 对 `ProtectHome` 所需的 mount namespace 本身不兼容。因此 V11.1 明确使用：
+V11.1 使用：
 
 ```ini
 ProtectHome=false
 ```
 
-即不隐藏、也不重新挂载 `/root`。`x-ui-singbox` 仍保持独立 systemd unit 与 `NoNewPrivileges=true`，但不会因为 home namespace 阻断 3x-ui 已有 TLS 证书。
+即不隐藏、也不重新挂载 `/root`。`x-ui-singbox` 仍保持独立 systemd unit 与 `NoNewPrivileges=true`。
 
-V11.1 同时修复安装器事务边界：`Type=simple` 的 `systemctl restart` 可能先返回成功、随后 sing-box 在启动后立即退出。安装器现在要求服务通过连续启动稳定性检查；若失败，会自动打印 `systemctl status` 与最近 100 行 journal，并恢复之前的 sing-box binary 与 systemd unit，而不是静默留下一个 dead service。
+V11.1 同时修复安装器事务边界：`Type=simple` 的 `systemctl restart` 可能先返回成功、随后 sing-box 在启动后立即退出。安装器现在要求服务通过连续启动稳定性检查；若失败，会自动打印 `systemctl status` 与最近 100 行 journal，并恢复之前的 sing-box binary 与 systemd unit。
+
+## V11.2：sing-box stats 端口冲突
+
+旧版固定使用 `127.0.0.1:62789` 作为 sing-box V2Ray-compatible stats API。V11.2 改为持久化 loopback-only 地址：
+
+```text
+/etc/3xpatcher/singbox-stats.addr
+```
+
+安装器先停止自己的旧 runtime，再检测已保存/默认端口；若被无关进程占用，会从 `127.0.0.1:62000-62999` 自动选择空闲地址，并同步迁移现有 `config.json`。panel renderer、stats collector 与 sing-box runtime 始终读取同一个地址。
+
+## V11.3：客户端订阅兼容
+
+V11.3 针对真实客户端导入行为补齐兼容：
+
+- ShadowTLS raw subscription 与浏览器 QR/Export 只输出一个 SIP003 `shadow-tls` plugin 节点，移除会被当前 Shadowrocket 退化成 `plugin=none` 的旧 descriptor 变体；
+- Shadowrocket 请求原始 `/sub` 时，Naive 使用其可识别的原生 HTTPS/NaiveProxy 表示；其他 raw/QR/export 仍保留标准 `naive+https://`；
+- TUIC 的 dedicated Clash YAML 补充 Mihomo 的 `heartbeat-interval`、`udp-relay-mode`、`max-open-streams`、`disable-mtu-discovery` 与显式 SNI 行为；
+- AnyTLS+Reality 继续不输出到 Mihomo，因为 Mihomo 不支持这一组合；普通 TLS AnyTLS 正常输出；
+- Naive 继续不输出到 Mihomo/Clash Verge，因为 Mihomo 没有 Naive proxy type，不制造只能显示、无法握手的伪节点。
 
 ## Native Traffic / Online
 
@@ -107,12 +123,10 @@ Online cache 使用 20 秒 grace window，以覆盖采样间隔和持续连接�
 
 ## Subscription / QR / Export
 
-V11 将 supplemental protocols 同时接入两套 3x-ui 链路：
+supplemental protocols 同时接入两套 3x-ui 链路：
 
 1. Go 后端 subscription provider；
 2. 浏览器侧原生 `inbound-link.ts`，供 Inbound Export / Client Info / QR 使用。
-
-因此不会再出现“订阅里有节点，但面板二维码/导出为空”或反过来的情况。
 
 ### Raw subscription
 
@@ -120,16 +134,17 @@ V11 将 supplemental protocols 同时接入两套 3x-ui 链路：
 
 - TUIC `tuic://`
 - AnyTLS `anytls://`
-- ShadowTLS v3（见下方兼容格式）
-- Naive `naive+https://`
+- ShadowTLS v3：`ss://...?...plugin=shadow-tls...`
+- Naive：标准 `naive+https://`；Shadowrocket raw `/sub` 请求按 UA 输出原生 HTTPS/NaiveProxy 表示
 - Mieru 官方 `mierus://`
 
 ### ShadowTLS v3
 
-V10 的自定义 `shadowtls://` 已移除。V11 按真实协议栈导出为 **Shadowsocks + ShadowTLS v3**，并提供两种兼容表示：
+V10 的自定义 `shadowtls://` 已移除。当前按真实协议栈导出为 **Shadowsocks + ShadowTLS v3**，只输出 SIP002/SIP003：
 
-1. SIP002/SIP003：`ss://...?...plugin=shadow-tls...`
-2. Shadowrocket 兼容的 `ss://` + `shadow-tls=<descriptor>`
+```text
+ss://...?...plugin=shadow-tls;host=...;password=...;version=3
+```
 
 Mihomo / Clash Verge 的专用 YAML 使用：
 
@@ -147,19 +162,22 @@ Mihomo / Clash Verge 的专用 YAML 使用：
 
 ### Clash / Mihomo 专用订阅
 
-3x-ui 的 dedicated Clash subscription URI 现在不仅出现在 Clients 页面，也贯通到：
+3x-ui 的 dedicated Clash subscription URI 贯通：
 
 - Inbound subscription export
 - Inbound QR
 - Inbound client info
+- Clients 页面
 
-Clash Verge 推荐使用该专用 Clash / Mihomo URL，而不是依赖普通 `/sub/` 的 User-Agent 自动识别。
+Clash Verge 推荐使用专用 `/clash/:subId`，而不是依赖普通 `/sub/` 的 User-Agent 自动识别。
 
-### Naive 客户端边界
+### Naive / AnyTLS 客户端边界
 
-服务器端 Naive 与 `naive+https://` raw link 均保留。
+服务器端 Naive 由 sing-box 正常运行。Shadowrocket raw `/sub` 使用其原生 HTTPS/NaiveProxy 兼容表示；通用导出继续使用 `naive+https://`。
 
-当前 Mihomo / Clash Verge 没有 Naive proxy type，因此 3Xpatcher **不会**把 Naive 伪造成 HTTP/HTTPS/SS 节点；那样只能“显示”，协议握手仍然错误。Shadowrocket 同样没有可直接表达 sing-box Naive inbound 的通用节点类型。
+Mihomo / Clash Verge 当前没有 Naive proxy type，因此 dedicated Clash 订阅不会出现 Naive。
+
+普通 TLS AnyTLS 可以输出 Mihomo `type: anytls`。AnyTLS+Reality 在 sing-box 服务端可运行，但 Mihomo 不支持，因此 dedicated Clash 订阅会跳过该组合。
 
 ### Mieru raw
 
@@ -206,7 +224,7 @@ Reality 支持矩阵：
 
 | Protocol | Reality |
 | --- | --- |
-| AnyTLS | Yes |
+| AnyTLS | Yes（sing-box；Mihomo dedicated Clash 不支持该组合） |
 | TUIC | No |
 | ShadowTLS v3 | No |
 | Naive | No |
@@ -291,7 +309,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/install.
 - 备份原 x-ui binary 与 `/etc/x-ui`；
 - 校验 Xray binaries SHA256 不变；
 - sing-box 新 runtime 必须通过启动稳定性检查；
-- sing-box 启动失败时自动打印 status/journal 并恢复旧 runtime/unit；
+- sing-box 启动失败时自动打印 status/journal 并恢复旧 runtime/unit/config/stats address；
 - panel 激活失败时恢复原 panel，并清理本次首次引入的 runtime。
 
 目标 VPS 不需要 Go / Node / npm。
@@ -304,6 +322,7 @@ sing-box：
 /usr/local/x-ui-singbox/bin/sing-box
 /usr/local/x-ui-singbox/config/config.json
 /usr/local/x-ui-singbox/certs/
+/etc/3xpatcher/singbox-stats.addr
 /etc/systemd/system/x-ui-singbox.service
 ```
 
@@ -333,7 +352,7 @@ PURGE_MIERU=1 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher
 PURGE_SINGBOX=1 PURGE_MIERU=1 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/rollback.sh)
 ```
 
-V11 的 source overlay / revert 列表保持对称，包含新增的 `inbound-link.ts`、Inbound Info、QR、client count/action type 等原生文件。
+V11.3 的 source overlay / revert 列表保持对称，包含订阅 controller、`inbound-link.ts`、Inbound Info、QR、client count/action type 等原生文件。
 
 ## 当前边界
 

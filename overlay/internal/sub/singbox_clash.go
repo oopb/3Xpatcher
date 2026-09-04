@@ -2,6 +2,7 @@ package sub
 
 import (
 	"strings"
+	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
@@ -61,15 +62,28 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		if v, _ := settings["zeroRTTHandshake"].(bool); v {
 			proxy["reduce-rtt"] = true
 		}
+		if ms := mihomoDurationMilliseconds(settings["heartbeat"]); ms > 0 {
+			proxy["heartbeat-interval"] = ms
+		}
+		proxy["udp-relay-mode"] = "native"
+		if streams := intNumber(settings["maxConcurrentStreams"], 0); streams > 0 {
+			proxy["max-open-streams"] = streams
+		}
+		if disabled, _ := settings["disablePathMTUDiscovery"].(bool); disabled {
+			proxy["disable-mtu-discovery"] = true
+		}
 		applyTLS()
+		if _, hasSNI := proxy["sni"]; !hasSNI {
+			proxy["disable-sni"] = true
+		}
 		return proxy
 	case model.AnyTLS:
 		if client.Password == "" {
 			return nil
 		}
-		// sing-box 1.14 supports AnyTLS+Reality end-to-end. Current Mihomo
-		// explicitly does not support that combination, so omit it rather than
-		// exporting a proxy that can never connect.
+		// AnyTLS + Reality works in the sing-box runtime, but current Mihomo
+		// does not support that combination. Omit it rather than exporting a
+		// Clash node that can never complete the handshake.
 		if security, _ := stream["security"].(string); security == "reality" {
 			return nil
 		}
@@ -84,10 +98,6 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		if client.Password == "" || innerMethod == "" || innerPassword == "" {
 			return nil
 		}
-		// Mihomo models standalone ShadowTLS as a Shadowsocks proxy with the
-		// built-in shadow-tls plugin. Its current documented example also uses
-		// a client uTLS fingerprint; keeping it explicit avoids client-version
-		// dependent defaults in Clash Verge / Mihomo.
 		proxy["type"] = "ss"
 		proxy["cipher"] = innerMethod
 		proxy["password"] = innerPassword
@@ -106,4 +116,20 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 	default:
 		return nil
 	}
+}
+
+func mihomoDurationMilliseconds(value any) int {
+	s, _ := value.(string)
+	if strings.TrimSpace(s) == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(strings.TrimSpace(s))
+	if err != nil || d <= 0 {
+		return 0
+	}
+	ms := d / time.Millisecond
+	if ms <= 0 {
+		return 0
+	}
+	return int(ms)
 }
