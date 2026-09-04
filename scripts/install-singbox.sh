@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 PATCH_REPO="${PATCH_REPO:-oopb/3Xpatcher}"
@@ -7,6 +7,14 @@ BASE=/usr/local/x-ui-singbox
 BIN="$BASE/bin"
 CONF="$BASE/config"
 BACKUP="$BASE/backup"
+UNIT=/etc/systemd/system/x-ui-singbox.service
+
+err_report() {
+  local code=$?
+  echo "[3Xpatcher] sing-box installer failed (exit ${code}) near line ${BASH_LINENO[0]}: ${BASH_COMMAND}" >&2
+  return "$code"
+}
+trap err_report ERR
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || { echo "Run as root" >&2; exit 1; }
 for cmd in curl tar systemctl sha256sum python3; do
@@ -32,7 +40,9 @@ asset="sing-box-stats-${version}-linux-${arch}.tar.gz"
 release_tag="prebuilt-${upstream}"
 
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+cleanup_tmp() { rm -rf "$tmp"; }
+trap cleanup_tmp EXIT
+
 curl -fsSL --retry 4 --retry-all-errors "https://api.github.com/repos/${PATCH_REPO}/releases/tags/${release_tag}" -o "$tmp/release.json"
 mapfile -t meta < <(python3 - "$tmp/release.json" "$asset" <<'PY'
 import json,re,sys
@@ -85,13 +95,56 @@ JSON
 
 stamp=$(date +%Y%m%d-%H%M%S)
 old=""
+current_was_active=0
+systemctl is-active --quiet x-ui-singbox.service 2>/dev/null && current_was_active=1 || true
+
+had_unit=0
+if [[ -f "$UNIT" ]]; then
+  cp -a "$UNIT" "$tmp/x-ui-singbox.service.old"
+  had_unit=1
+fi
+
 if [[ -d "$BIN" ]]; then
   old="$BACKUP/bin-$stamp"
   mv "$BIN" "$old"
 fi
 mv "$stage" "$BIN"
 
-cat > /etc/systemd/system/x-ui-singbox.service <<EOF2
+rollback_runtime() {
+  local reason=$1
+  echo "[3Xpatcher] New sing-box did not remain healthy: $reason" >&2
+  echo "[3Xpatcher] --- x-ui-singbox.service status ---" >&2
+  systemctl status x-ui-singbox.service --no-pager -l >&2 || true
+  echo "[3Xpatcher] --- recent x-ui-singbox.service journal ---" >&2
+  journalctl -u x-ui-singbox.service -n 100 --no-pager >&2 || true
+
+  systemctl stop x-ui-singbox.service >/dev/null 2>&1 || true
+  rm -rf "$BIN"
+  if [[ -n "$old" && -d "$old" ]]; then
+    mv "$old" "$BIN"
+  fi
+
+  if (( had_unit == 1 )); then
+    install -m 0644 "$tmp/x-ui-singbox.service.old" "$UNIT"
+  else
+    rm -f "$UNIT"
+  fi
+  systemctl daemon-reload || true
+
+  if [[ -d "$BIN" && $had_unit -eq 1 ]]; then
+    if ! systemctl restart x-ui-singbox.service; then
+      echo "[3Xpatcher] WARNING: previous sing-box runtime was restored but could not be restarted." >&2
+    elif (( current_was_active == 0 )); then
+      echo "[3Xpatcher] NOTE: the previous sing-box service was already inactive before this install attempt." >&2
+    fi
+  fi
+
+  echo "[3Xpatcher] Available runtime backups:" >&2
+  find "$BACKUP" -mindepth 1 -maxdepth 1 -type d -name 'bin-*' -printf '  %f\n' 2>/dev/null | sort -r | head -n 8 >&2 || true
+  exit 1
+}
+
+cat > "$UNIT" <<EOF2
 [Unit]
 Description=3x-ui Supplemental sing-box Core (stats enabled)
 After=network-online.target
@@ -104,32 +157,38 @@ Restart=on-failure
 RestartSec=3
 LimitNOFILE=1048576
 NoNewPrivileges=true
-# Native 3x-ui certificates are frequently stored below /root. Hide-home breaks
-# TUIC/AnyTLS/Naive only at service runtime even though the panel-side config check
-# succeeds. Keep home trees readable but immutable to the supplemental runtime.
-ProtectHome=read-only
+# Do not hide or remount /root: native 3x-ui TLS certificates are commonly
+# stored there. Some restricted VPS/LXC environments also reject ProtectHome
+# mount namespacing entirely. The supplemental core still runs in its own unit.
+ProtectHome=false
 PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
 EOF2
 
-systemctl daemon-reload
-systemctl enable x-ui-singbox.service >/dev/null
-if ! systemctl restart x-ui-singbox.service; then
-  echo "New sing-box failed to start; rolling back binary directory." >&2
-  systemctl stop x-ui-singbox.service 2>/dev/null || true
-  failed="$BACKUP/failed-bin-$stamp"
-  mv "$BIN" "$failed" || true
-  if [[ -n "$old" && -d "$old" ]]; then
-    mv "$old" "$BIN"
-    systemctl restart x-ui-singbox.service || true
-  fi
-  exit 1
+if ! systemctl daemon-reload; then
+  rollback_runtime "systemd daemon-reload failed"
 fi
-sleep 1
-systemctl is-active --quiet x-ui-singbox.service
+if ! systemctl enable x-ui-singbox.service >/dev/null; then
+  rollback_runtime "systemd enable failed"
+fi
+if ! systemctl restart x-ui-singbox.service; then
+  rollback_runtime "systemd restart returned failure"
+fi
 
+# Type=simple can report a successful restart before the process immediately
+# exits. Require it to stay active through a short stabilization window.
+for _ in 1 2 3 4; do
+  sleep 1
+  systemctl is-active --quiet x-ui-singbox.service || rollback_runtime "service exited during startup stabilization"
+done
+
+pid=$(systemctl show -p MainPID --value x-ui-singbox.service 2>/dev/null || true)
+[[ "$pid" =~ ^[1-9][0-9]*$ ]] || rollback_runtime "service has no live MainPID"
+
+# The unit may be healthy while the old config has no active inbounds; that is
+# valid. At this point only process health is required.
 echo "Installed $($BIN/sing-box version | head -n1) (3Xpatcher stats build)"
 echo "Service: x-ui-singbox.service"
 echo "Config:  $CONF/config.json"
