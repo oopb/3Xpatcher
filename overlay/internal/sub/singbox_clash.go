@@ -32,6 +32,7 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 					if sni, _ := settings["camouflageSNI"].(string); strings.TrimSpace(sni) != "" {
 						proxy["sni"] = strings.TrimSpace(sni)
 					}
+				}
 			}
 		}
 		if selfSigned {
@@ -61,13 +62,9 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		if v, _ := settings["zeroRTTHandshake"].(bool); v {
 			proxy["reduce-rtt"] = true
 		}
-		// Mihomo's TUIC client uses milliseconds for heartbeat-interval, while
-		// the sing-box inbound UI stores Go duration strings such as "10s".
 		if ms := mihomoDurationMilliseconds(settings["heartbeat"]); ms > 0 {
 			proxy["heartbeat-interval"] = ms
 		}
-		// Keep Mihomo on TUIC v5's native datagram relay path explicitly. This
-		// avoids client-version dependent defaults in Clash Verge.
 		proxy["udp-relay-mode"] = "native"
 		if streams := intNumber(settings["maxConcurrentStreams"], 0); streams > 0 {
 			proxy["max-open-streams"] = streams
@@ -76,9 +73,6 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 			proxy["disable-mtu-discovery"] = true
 		}
 		applyTLS()
-		// When the panel intentionally has no SNI, tell Mihomo not to derive an
-		// IP/domain SNI from `server`; sing-box TUIC accepts an empty SNI in this
-		// configuration and this matches Mihomo's documented TUIC knob.
 		if _, hasSNI := proxy["sni"]; !hasSNI {
 			proxy["disable-sni"] = true
 		}
@@ -87,9 +81,6 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		if client.Password == "" {
 			return nil
 		}
-		// sing-box 1.14 supports AnyTLS+Reality end-to-end. Current Mihomo
-		// explicitly does not support that combination, so omit it rather than
-		// exporting a proxy that can never connect.
 		if security, _ := stream["security"].(string); security == "reality" {
 			return nil
 		}
@@ -104,10 +95,6 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		if client.Password == "" || innerMethod == "" || innerPassword == "" {
 			return nil
 		}
-		// Mihomo models standalone ShadowTLS as a Shadowsocks proxy with the
-		// built-in shadow-tls plugin. Its current documented example also uses
-		// a client uTLS fingerprint; keeping it explicit avoids client-version
-		// dependent defaults in Clash Verge / Mihomo.
 		proxy["type"] = "ss"
 		proxy["cipher"] = innerMethod
 		proxy["password"] = innerPassword
