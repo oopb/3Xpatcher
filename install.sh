@@ -78,6 +78,8 @@ SUCCESS=0
 BINARY_SWAPPED=0
 SINGBOX_WAS_PRESENT=0
 MIERU_WAS_PRESENT=0
+SINGBOX_INSTALL_STARTED=0
+MIERU_INSTALL_STARTED=0
 PANEL_VERSION=""
 UPSTREAM_REF=""
 TARGET_VERSION=""
@@ -91,13 +93,16 @@ cleanup() {
     install -m 0755 "$BACKUP_DIR/x-ui" "$XUI_DIR/x-ui"
     systemctl start "$XUI_SERVICE" >/dev/null 2>&1 || true
   fi
-  if [[ "$SUCCESS" != 1 && "$SINGBOX_WAS_PRESENT" == 0 && -f "$PATCH_ROOT/scripts/uninstall-singbox.sh" ]]; then
+  # Only purge a runtime when this invocation actually entered that runtime's
+  # installer and the runtime did not exist beforehand. Early failures such as
+  # stale/missing prebuilt assets must never touch an existing supplemental core.
+  if [[ "$SUCCESS" != 1 && "$SINGBOX_INSTALL_STARTED" == 1 && "$SINGBOX_WAS_PRESENT" == 0 && -f "$PATCH_ROOT/scripts/uninstall-singbox.sh" ]]; then
     if systemctl cat x-ui-singbox.service >/dev/null 2>&1 || [[ -d /usr/local/x-ui-singbox ]]; then
       warn "Removing sing-box runtime introduced by the failed installation."
       PURGE=1 bash "$PATCH_ROOT/scripts/uninstall-singbox.sh" >/dev/null 2>&1 || true
     fi
   fi
-  if [[ "$SUCCESS" != 1 && "$MIERU_WAS_PRESENT" == 0 && -f "$PATCH_ROOT/scripts/uninstall-mieru.sh" ]]; then
+  if [[ "$SUCCESS" != 1 && "$MIERU_INSTALL_STARTED" == 1 && "$MIERU_WAS_PRESENT" == 0 && -f "$PATCH_ROOT/scripts/uninstall-mieru.sh" ]]; then
     if [[ -d /usr/local/x-ui-mieru || -f /etc/systemd/system/x-ui-mieru@.service ]]; then
       warn "Removing Mieru runtime introduced by the failed installation."
       PURGE=1 bash "$PATCH_ROOT/scripts/uninstall-mieru.sh" >/dev/null 2>&1 || true
@@ -201,6 +206,7 @@ backup_current_install() {
 install_singbox_core() {
   [[ "$SKIP_SINGBOX" == 1 ]] && { warn "SKIP_SINGBOX=1: leaving sing-box runtime unchanged."; return 0; }
   if systemctl cat x-ui-singbox.service >/dev/null 2>&1 || [[ -e /usr/local/x-ui-singbox ]]; then SINGBOX_WAS_PRESENT=1; fi
+  SINGBOX_INSTALL_STARTED=1
   info "Installing/updating stable sing-box runtime..."
   bash "$PATCH_ROOT/scripts/install-singbox.sh"
 }
@@ -208,6 +214,7 @@ install_singbox_core() {
 install_mieru_core() {
   [[ "$SKIP_MIERU" == 1 ]] && { warn "SKIP_MIERU=1: leaving Mieru runtime unchanged."; return 0; }
   if [[ -e /usr/local/x-ui-mieru || -f /etc/systemd/system/x-ui-mieru@.service ]]; then MIERU_WAS_PRESENT=1; fi
+  MIERU_INSTALL_STARTED=1
   info "Installing/updating official Mieru mita runtime..."
   bash "$PATCH_ROOT/scripts/install-mieru.sh"
 }
@@ -287,7 +294,7 @@ main() {
   echo "Install mode: prebuilt"
   echo "Backup:       $BACKUP_DIR"
   echo "State:        /etc/3xpatcher/install.env"
-  echo "Protocols:    TUIC / AnyTLS / ShadowTLS v3 / Naive / Mieru"
+  echo "Protocols:    TUIC / AnyTLS / ShadowTLS v3 / Naive / Snell v5 / Mieru"
   echo "Rollback:     bash <(curl -fsSL https://raw.githubusercontent.com/${PATCH_REPO}/${PATCH_REF}/rollback.sh)"
 }
 
