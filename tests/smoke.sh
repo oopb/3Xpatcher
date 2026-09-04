@@ -8,7 +8,7 @@ go test ./internal/singbox ./internal/mieru
 
 echo '[2/8] script syntax'
 bash -n install.sh rollback.sh scripts/*.sh tests/*.sh
-python3 -m py_compile scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py scripts/v3-patch.py scripts/v5-patch.py scripts/v6-patch.py scripts/v7-patch.py scripts/v8-patch.py
+python3 -m py_compile scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py scripts/v3-patch.py scripts/v5-patch.py scripts/v6-patch.py scripts/v7-patch.py scripts/v8-patch.py scripts/v9-patch.py
 
 echo '[3/8] integrated protocol surface'
 python3 - <<'PY'
@@ -46,6 +46,10 @@ grep -q 'hashedPassword' internal/mieru/config.go
 grep -q 'MITA_CONFIG_JSON_FILE' scripts/install-mieru.sh
 grep -q 'CollectTraffic' overlay/internal/singbox/stats.go
 grep -q 'CollectTraffic' overlay/internal/mieru/stats.go
+grep -q 'group == "users"' overlay/internal/mieru/stats.go
+grep -q 'RefreshSupplementalOnlineClients' overlay/internal/web/job/supplemental_traffic_job.go
+grep -q 'supplementalOnlineSnapshot' scripts/v9-patch.py
+grep -Fq 'online := len((&InboundService{}).GetOnlineClients())' scripts/v9-patch.py
 grep -q 'NewSupplementalTrafficJob' overlay/internal/web/job/supplemental_traffic_job.go
 grep -q 'cadenceSupplementalTraffic' scripts/v7-patch.py
 grep -q 'v2ray_api' scripts/v7-patch.py
@@ -84,7 +88,10 @@ grep -q 'autoComplete="new-password"' scripts/v7-patch.py
 grep -q 'shouldValidate: true' scripts/v7-patch.py
 grep -q 'failed to persist healed Shadowsocks settings' scripts/v8-patch.py
 grep -q 'validSS2022Key' scripts/v8-patch.py
+grep -q 'isShadowsocks2022Password' scripts/v9-patch.py
+grep -q 'htmlType="button"' scripts/v9-patch.py
 grep -q 'scripts/v8-patch.py' scripts/apply-overlay.sh
+grep -q 'scripts/v9-patch.py' scripts/apply-overlay.sh
 ! grep -q "values.protocol === 'tuic'" scripts/v5-patch.py
 ! grep -q "values.protocol === 'naive'" scripts/v5-patch.py
 ! grep -q "values.protocol === 'shadowtls'" scripts/v5-patch.py
@@ -106,6 +113,8 @@ for f in \
   overlay/internal/mieru/stats.go \
   overlay/internal/mieru/stats_test.go \
   overlay/internal/web/job/supplemental_traffic_job.go \
+  overlay/internal/web/service/supplemental_online.go \
+  overlay/internal/web/service/supplemental_online_test.go \
   overlay/internal/web/service/shadowsocks_2022_key_test.go \
   overlay/internal/database/model/singbox_protocols.go \
   overlay/internal/sub/singbox_links.go \
@@ -119,6 +128,7 @@ for f in \
   scripts/install-mieru.sh \
   scripts/uninstall-mieru.sh \
   scripts/install-singbox.sh \
+  scripts/v9-patch.py \
   SINGBOX_VERSION; do
   test -s "$f"
 done
