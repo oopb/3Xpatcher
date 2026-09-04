@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Inbound } from '@/schemas/api/inbound';
 import { genSupplementalLinks, getSupplementalClients } from '@/lib/xray/supplemental-links';
+import { Base64 } from '@/utils';
 
 function inbound(protocol: string, settings: Record<string, unknown>, streamSettings: Record<string, unknown> = {}): Inbound {
   return {
@@ -23,7 +24,7 @@ function inbound(protocol: string, settings: Record<string, unknown>, streamSett
 }
 
 describe('supplemental browser share links', () => {
-  it('exports TUIC with native TLS and tuning params', () => {
+  it('exports TUIC without server heartbeat leakage', () => {
     const ib = inbound(
       'tuic',
       {
@@ -49,6 +50,7 @@ describe('supplemental browser share links', () => {
     expect(url.searchParams.get('alpn')).toBe('h3');
     expect(url.searchParams.get('congestion_control')).toBe('bbr');
     expect(url.searchParams.get('zero_rtt_handshake')).toBe('1');
+    expect(url.searchParams.get('heartbeat')).toBeNull();
   });
 
   it('exports AnyTLS and marks generated self-signed TLS insecure', () => {
@@ -71,7 +73,7 @@ describe('supplemental browser share links', () => {
     expect(url.searchParams.get('insecure')).toBe('1');
   });
 
-  it('exports one SIP003 ShadowTLS representation', () => {
+  it('exports Shadowrocket descriptor ShadowTLS instead of SIP003', () => {
     const ib = inbound('shadowtls', {
       clients: [{ email: 'shadow@test', password: 'outer-pass' }],
       handshakeServer: 'www.cloudflare.com',
@@ -87,20 +89,51 @@ describe('supplemental browser share links', () => {
       client,
     });
     expect(variants).toHaveLength(1);
-    expect(variants[0].label).toBe('ShadowTLS');
-    expect(variants[0].link).toContain('plugin=shadow-tls');
-    expect(variants[0].link).not.toContain('shadow-tls=');
+    expect(variants[0].label).toBe('ShadowTLS / Shadowrocket');
+    const url = new URL(variants[0].link);
+    expect(url.searchParams.get('plugin')).toBeNull();
+    const descriptorRaw = url.searchParams.get('shadow-tls');
+    expect(descriptorRaw).toBeTruthy();
+    const descriptor = JSON.parse(Base64.decode(descriptorRaw!));
+    expect(descriptor).toMatchObject({
+      version: '3',
+      password: 'outer-pass',
+      host: 'www.cloudflare.com',
+      address: 'shadow.example',
+      port: '443',
+    });
   });
 
-  it('exports protocol-native Naive URI', () => {
+  it('exports S-UI compatible Naive HTTP2 plus native link', () => {
     const ib = inbound(
       'naive',
-      { clients: [{ email: 'naive-user', password: 'naive-pass' }] },
-      { security: 'tls', tlsSettings: { serverName: 'naive.example' } },
+      {
+        clients: [{ email: 'naive-user', password: 'naive-pass' }],
+        network: 'tcp',
+        tcpFastOpen: true,
+      },
+      {
+        security: 'tls',
+        tlsSettings: {
+          serverName: 'naive.example',
+          alpn: ['h2'],
+          certificateMode: 'self_signed_sni',
+        },
+      },
     );
     const client = getSupplementalClients(ib)![0];
-    const link = genSupplementalLinks({ inbound: ib, address: 'naive.example', port: 443, client })[0].link;
-    expect(link).toContain('naive+https://naive-user:naive-pass@naive.example:443');
+    const variants = genSupplementalLinks({ inbound: ib, address: '203.0.113.40', port: 443, client });
+    expect(variants).toHaveLength(2);
+    const http2 = new URL(variants[0].link);
+    expect(http2.protocol).toBe('http2:');
+    expect(Base64.decode(http2.host)).toBe('naive-user:naive-pass@203.0.113.40:443');
+    expect(http2.searchParams.get('padding')).toBe('1');
+    expect(http2.searchParams.get('peer')).toBe('naive.example');
+    expect(http2.searchParams.get('sni')).toBeNull();
+    expect(http2.searchParams.get('alpn')).toBe('h2');
+    expect(http2.searchParams.get('insecure')).toBe('1');
+    expect(http2.searchParams.get('tfo')).toBe('1');
+    expect(variants[1].link).toContain('naive+https://naive-user:naive-pass@203.0.113.40:443');
   });
 
   it('exports Mieru primary range and additional bindings', () => {
