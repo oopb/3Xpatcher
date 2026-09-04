@@ -81,6 +81,9 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		if client.Password == "" {
 			return nil
 		}
+		// AnyTLS + Reality works in the sing-box runtime, but current Mihomo
+		// does not support that combination. Omit it rather than exporting a
+		// Clash node that can never complete the handshake.
 		if security, _ := stream["security"].(string); security == "reality" {
 			return nil
 		}
