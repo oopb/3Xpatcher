@@ -65,35 +65,44 @@ grep -q 'v2ray_api' scripts/v7-patch.py
 grep -q 'with_v2ray_api' .github/workflows/prebuild.yml
 grep -q 'SINGBOX_VERSION' .github/workflows/prebuild.yml
 grep -q 'buildMieruProxies' scripts/v10-patch.py
-# V11: all supplemental inbounds must enter the upstream client rollup so the
-# native attach/detach/group/delete-all action set is visible.
 for token in 'Protocols.TUIC' 'Protocols.ANYTLS' 'Protocols.SHADOWTLS' 'Protocols.NAIVE' 'Protocols.MIERU'; do
   grep -q "$token" scripts/v11-patch.py
 done
 grep -q 'hasClients={clientTotal(record) > 0}' scripts/v11-patch.py
-# Native browser QR/export/info must expose a single working ShadowTLS plugin
-# form. The old second Shadowrocket descriptor imported as plugin=none.
-grep -q "label: 'ShadowTLS'" overlay/frontend/src/lib/xray/supplemental-links.ts
-! grep -q "ShadowTLS / Shadowrocket" overlay/frontend/src/lib/xray/supplemental-links.ts
-! grep -q "shadow-tls=<base64" overlay/internal/sub/singbox_links.go
+
+# V11.4: client formats are based on S-UI/sing-box behavior rather than a
+# fabricated universal URI. Shadowrocket gets its established descriptor
+# ShadowTLS form; Naive gets S-UI's http2 compatibility form.
+grep -q "label: 'ShadowTLS / Shadowrocket'" overlay/frontend/src/lib/xray/supplemental-links.ts
+grep -q "params.set('shadow-tls'" overlay/frontend/src/lib/xray/supplemental-links.ts
+grep -q 'buildShadowrocketShadowTLSLink' overlay/internal/sub/singbox_links.go
+grep -q 'shadow-tls.*base64' overlay/internal/sub/singbox_links.go
+grep -q 'buildShadowrocketNaiveHTTP2Link' overlay/internal/sub/singbox_links.go
+grep -q '"http2://"' overlay/internal/sub/singbox_links.go
+grep -q 'params\["peer"\]' overlay/internal/sub/singbox_links.go
+grep -q 'params\["padding"\] = "1"' overlay/internal/sub/singbox_links.go
 grep -q 'mierus://' overlay/frontend/src/lib/xray/supplemental-links.ts
-grep -q 'naive+https://' overlay/frontend/src/lib/xray/supplemental-links.ts
+grep -q 'naive+https' overlay/frontend/src/lib/xray/supplemental-links.ts
 grep -q 'supplemental-links.ts' scripts/apply-overlay.sh
 grep -q 'supplemental-links.ts' scripts/revert-overlay.sh
 grep -q 'frontend/src/lib/xray/inbound-link.ts' scripts/apply-overlay.sh
 grep -q 'frontend/src/lib/xray/inbound-link.ts' scripts/revert-overlay.sh
 grep -q 'scripts/v11-patch.py' scripts/apply-overlay.sh
 grep -q 'scripts/v12-patch.py' scripts/apply-overlay.sh
-# V11.3 request-scoped client compatibility: raw Shadowrocket gets native HTTPS
-# for NaiveProxy while generic exports retain naive+https.
 grep -q 'clientUserAgent' scripts/v12-patch.py
-grep -q 'scheme = "https"' overlay/internal/sub/singbox_links.go
-grep -q 'heartbeat-interval' overlay/internal/sub/singbox_clash.go
-grep -q 'udp-relay-mode' overlay/internal/sub/singbox_clash.go
-grep -q 'max-open-streams' overlay/internal/sub/singbox_clash.go
-grep -q 'disable-mtu-discovery' overlay/internal/sub/singbox_clash.go
 grep -q 'internal/sub/controller.go' scripts/apply-overlay.sh
 grep -q 'internal/sub/controller.go' scripts/revert-overlay.sh
+
+# TUIC dedicated Clash output is intentionally the pre-Mieru known-good shape,
+# plus the h3 ALPN S-UI currently forces. Server-side sing-box knobs must never
+# be projected into Mihomo merely because similarly named client fields exist.
+grep -q 'proxy\["alpn"\] = \[\]string{"h3"}' overlay/internal/sub/singbox_clash.go
+! grep -q 'heartbeat-interval' overlay/internal/sub/singbox_clash.go
+! grep -q 'udp-relay-mode' overlay/internal/sub/singbox_clash.go
+! grep -q 'max-open-streams' overlay/internal/sub/singbox_clash.go
+! grep -q 'disable-mtu-discovery' overlay/internal/sub/singbox_clash.go
+! grep -q 'disable-sni' overlay/internal/sub/singbox_clash.go
+
 # Native 3x-ui TLS files are often under /root, and restricted LXC/NAT VPSes may
 # reject ProtectHome mount namespacing. Do not hide/remount home in this unit.
 grep -q '^ProtectHome=false$' scripts/install-singbox.sh
@@ -105,8 +114,8 @@ grep -q 'rollback_runtime' scripts/install-singbox.sh
 grep -q 'journalctl -u x-ui-singbox.service -n 100' scripts/install-singbox.sh
 grep -q 'startup stabilization' scripts/install-singbox.sh
 grep -q 'x-ui-singbox.service.old' scripts/install-singbox.sh
-# Clash/Mihomo representation for standalone ShadowTLS remains the documented
-# Shadowsocks shadow-tls plugin. Naive intentionally has no Mihomo proxy type.
+# Clash/Mihomo standalone ShadowTLS remains SS + shadow-tls plugin; Naive has
+# no Mihomo proxy type and must not be faked as HTTPS.
 grep -q 'proxy\["plugin"\] = "shadow-tls"' overlay/internal/sub/singbox_clash.go
 grep -q 'client-fingerprint' overlay/internal/sub/singbox_clash.go
 grep -q 'case model.Naive:' overlay/internal/sub/singbox_clash.go
@@ -136,7 +145,7 @@ grep -q 'installRealityFromNative3xui' overlay/internal/singbox/reality.go
 grep -q 'Reality is not supported by TUIC/QUIC' internal/singbox/config.go
 grep -q 'Reality is not supported by sing-box Naive outbound' internal/singbox/config.go
 grep -q 'security.*reality' overlay/internal/sub/singbox_links.go
-grep -q 'AnyTLS.*Reality' overlay/internal/sub/singbox_clash.go
+grep -q 'security.*reality' overlay/internal/sub/singbox_clash.go
 grep -q 'normalizeShadowsocksServerKey' scripts/v7-patch.py
 grep -q 'normalizeShadowsocks2022Keys' scripts/v7-patch.py
 grep -q 'autoComplete="new-password"' scripts/v7-patch.py
