@@ -35,26 +35,3 @@ rep(
     '''\tonline := 0\n\tif process := currentXrayProcess(); process != nil && process.IsRunning() {\n\t\tonline = len(process.GetOnlineClients())\n\t}\n\tsystemMetrics.append("online", t, float64(online))''',
     '''\tonline := len((&InboundService{}).GetOnlineClients())\n\tsystemMetrics.append("online", t, float64(online))''',
 )
-
-# ---------------------------------------------------------------------------
-# ShadowTLS inner Shadowsocks-2022 key: mirror native 3x-ui's Shadowsocks logic.
-# FormField only binds value/onChange to its DIRECT child. Wrapping Space.Compact
-# inside FormField therefore left Input.Password uncontrolled, which is why the
-# old Generate button appeared to do nothing. Native 3x-ui uses Form.Item outside
-# and a noStyle FormField directly around the input; keep that exact structure.
-# ---------------------------------------------------------------------------
-rep(
-    'frontend/src/pages/inbounds/form/protocols/singbox.tsx',
-    '''import { Alert, Button, Divider, Input, InputNumber, Select, Space, Switch } from 'antd';\nimport { useFormContext, useWatch } from 'react-hook-form';''',
-    '''import { useEffect } from 'react';\n\nimport { Alert, Button, Divider, Form, Input, InputNumber, Select, Space, Switch } from 'antd';\nimport { useFormContext, useWatch } from 'react-hook-form';''',
-)
-rep(
-    'frontend/src/pages/inbounds/form/protocols/singbox.tsx',
-    '''  const innerMethod = useWatch({ control, name: 'settings.innerMethod' }) as string | undefined;\n  const regenerateInnerPassword = () =>\n    setValue(\n      'settings.innerPassword',\n      RandomUtil.randomShadowsocksPassword(\n        innerMethod === '2022-blake3-aes-256-gcm' || innerMethod === '2022-blake3-chacha20-poly1305'\n          ? innerMethod\n          : '2022-blake3-aes-128-gcm',\n      ),\n      { shouldDirty: true },\n    );''',
-    '''  const innerMethod = useWatch({ control, name: 'settings.innerMethod' }) as string | undefined;\n  const innerPassword = (useWatch({ control, name: 'settings.innerPassword' }) as string | undefined) || '';\n  const keyMethod =\n    innerMethod === '2022-blake3-aes-256-gcm' || innerMethod === '2022-blake3-chacha20-poly1305'\n      ? innerMethod\n      : '2022-blake3-aes-128-gcm';\n\n  const regenerateInnerPassword = () =>\n    setValue('settings.innerPassword', RandomUtil.randomShadowsocksPassword(keyMethod), {\n      shouldDirty: true,\n      shouldTouch: true,\n      shouldValidate: true,\n    });\n\n  useEffect(() => {\n    if (RandomUtil.isShadowsocks2022Password(innerPassword, keyMethod)) return;\n    setValue('settings.innerPassword', RandomUtil.randomShadowsocksPassword(keyMethod), {\n      shouldDirty: true,\n      shouldTouch: true,\n      shouldValidate: true,\n    });\n  }, [innerPassword, keyMethod, setValue]);''',
-)
-rep(
-    'frontend/src/pages/inbounds/form/protocols/singbox.tsx',
-    '''      <FormField label="Inner Shadowsocks Password" name={['settings', 'innerPassword']}>\n        <Space.Compact block><Input.Password /><Button onClick={regenerateInnerPassword}>Generate</Button></Space.Compact>\n      </FormField>''',
-    '''      <Form.Item label="Inner Shadowsocks Password">\n        <Space.Compact block>\n          <FormField name={['settings', 'innerPassword']} noStyle>\n            <Input.Password autoComplete="new-password" data-lpignore="true" data-1p-ignore="true" />\n          </FormField>\n          <Button htmlType="button" onClick={regenerateInnerPassword}>Generate</Button>\n        </Space.Compact>\n      </Form.Item>''',
-)
