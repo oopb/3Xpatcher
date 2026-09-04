@@ -93,16 +93,25 @@ grep -q 'clientUserAgent' scripts/v12-patch.py
 grep -q 'internal/sub/controller.go' scripts/apply-overlay.sh
 grep -q 'internal/sub/controller.go' scripts/revert-overlay.sh
 
-# V11.6: match the user's known-good Clash Verge/Mihomo TUIC shape. Preserve
-# the complete ordered inbound ALPN list, never synthesize h3, explicitly use
-# TUIC v5 native UDP relay, and omit the redundant generic udp flag.
+# V11.7: match the user's known-good Clash Verge/Mihomo TUIC TLS contract.
+# Preserve the complete ordered inbound ALPN list, explicitly use TUIC v5
+# native UDP relay, and infer generated self-signed trust policy from the
+# persisted selfSignedCertificatePath/selfSignedKeyPath metadata even when an
+# upgraded row no longer carries certificateMode.
 ! grep -q 'proxy\["alpn"\] = \[\]string{"h3"}' overlay/internal/sub/singbox_clash.go
 grep -q 'applyTLS()' overlay/internal/sub/singbox_clash.go
 grep -q 'proxy\["udp-relay-mode"\] = "native"' overlay/internal/sub/singbox_clash.go
 grep -q 'delete(proxy, "udp")' overlay/internal/sub/singbox_clash.go
-grep -q 'TestTUICClashMatchesKnownGoodMihomoShape' overlay/internal/sub/singbox_links_test.go
+grep -q 'isSupplementalSelfSignedTLS' overlay/internal/sub/singbox_clash.go
+grep -q 'selfSignedCertificatePath' overlay/internal/sub/singbox_clash.go
+grep -q 'selfSignedKeyPath' overlay/internal/sub/singbox_clash.go
+grep -q 'proxy\["skip-cert-verify"\] = true' overlay/internal/sub/singbox_clash.go
+grep -q 'params\["insecure"\] = "1"' overlay/internal/sub/singbox_links.go
+grep -q 'isPersistedSelfSignedTls' overlay/frontend/src/lib/xray/supplemental-links.ts
+grep -q 'TestTUICClashMatchesKnownGoodMihomoShapeFromPersistedSelfSignedState' overlay/internal/sub/singbox_links_test.go
 grep -q 'TestTUICClashDoesNotInventALPN' overlay/internal/sub/singbox_links_test.go
 grep -q 'socks5UDPExchange' overlay/internal/sub/tuic_mihomo_e2e_test.go
+grep -q 'TestTUICPersistedSelfSignedMihomoE2E' overlay/internal/sub/tuic_selfsigned_mihomo_e2e_test.go
 ! grep -q 'heartbeat-interval' overlay/internal/sub/singbox_clash.go
 ! grep -q 'max-open-streams' overlay/internal/sub/singbox_clash.go
 ! grep -q 'disable-mtu-discovery' overlay/internal/sub/singbox_clash.go
@@ -189,6 +198,7 @@ for f in \
   overlay/internal/sub/singbox_links.go \
   overlay/internal/sub/singbox_links_test.go \
   overlay/internal/sub/singbox_clash.go \
+  overlay/internal/sub/tuic_selfsigned_mihomo_e2e_test.go \
   overlay/internal/sub/mieru_links.go \
   overlay/internal/sub/mieru_clash.go \
   overlay/frontend/src/schemas/protocols/inbound/singbox.ts \

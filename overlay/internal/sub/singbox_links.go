@@ -216,7 +216,7 @@ func applySingboxTLSLinkParams(settings, stream, ep map[string]any, params map[s
 		applyNativeRealityLinkParams(stream, params)
 	} else {
 		tls, _ := stream["tlsSettings"].(map[string]any)
-		selfSigned := false
+		selfSigned := isSupplementalSelfSignedTLS(settings, tls)
 		if tls != nil {
 			if sni, _ := tls["serverName"].(string); sni != "" {
 				params["sni"] = sni
@@ -224,21 +224,13 @@ func applySingboxTLSLinkParams(settings, stream, ep map[string]any, params map[s
 			if alpn := anyStringSlice(tls["alpn"]); len(alpn) > 0 {
 				params["alpn"] = strings.Join(alpn, ",")
 			}
-			if mode, _ := tls["certificateMode"].(string); mode == "self_signed_sni" {
-				selfSigned = true
-			}
-		}
-		if !selfSigned {
-			if mode, _ := settings["tlsMode"].(string); mode == "self_signed_sni" {
-				selfSigned = true
-				if _, exists := params["sni"]; !exists {
-					if sni, _ := settings["camouflageSNI"].(string); strings.TrimSpace(sni) != "" {
-						params["sni"] = strings.TrimSpace(sni)
-					}
-				}
-			}
 		}
 		if selfSigned {
+			if _, exists := params["sni"]; !exists {
+				if sni, _ := settings["camouflageSNI"].(string); strings.TrimSpace(sni) != "" {
+					params["sni"] = strings.TrimSpace(sni)
+				}
+			}
 			params["insecure"] = "1"
 		}
 	}

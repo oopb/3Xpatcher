@@ -24,7 +24,7 @@ function inbound(protocol: string, settings: Record<string, unknown>, streamSett
 }
 
 describe('supplemental browser share links', () => {
-  it('exports TUIC without server heartbeat leakage', () => {
+  it('exports TUIC with exact TLS contract and persisted self-signed trust policy', () => {
     const ib = inbound(
       'tuic',
       {
@@ -33,21 +33,31 @@ describe('supplemental browser share links', () => {
         zeroRTTHandshake: true,
         heartbeat: '10s',
       },
-      { security: 'tls', tlsSettings: { serverName: 'tuic.example', alpn: ['h3'] } },
+      {
+        security: 'tls',
+        tlsSettings: {
+          serverName: 'www.mozilla.org',
+          alpn: ['h3', 'h2', 'http/1.1'],
+          selfSignedServerName: 'www.mozilla.org',
+          selfSignedCertificatePath: '/usr/local/x-ui-singbox/certs/fixture/cert.pem',
+          selfSignedKeyPath: '/usr/local/x-ui-singbox/certs/fixture/key.pem',
+        },
+      },
     );
     const client = getSupplementalClients(ib)?.[0];
     expect(client).toBeTruthy();
     const link = genSupplementalLinks({
       inbound: ib,
-      address: 'edge.example',
+      address: '23.159.248.103',
       port: 443,
       remark: 'TUIC test',
       client: client!,
     })[0]?.link;
-    expect(link).toContain('tuic://11111111-1111-4111-8111-111111111111:secret@edge.example:443');
+    expect(link).toContain('tuic://11111111-1111-4111-8111-111111111111:secret@23.159.248.103:443');
     const url = new URL(link!);
-    expect(url.searchParams.get('sni')).toBe('tuic.example');
-    expect(url.searchParams.get('alpn')).toBe('h3');
+    expect(url.searchParams.get('sni')).toBe('www.mozilla.org');
+    expect(url.searchParams.get('alpn')).toBe('h3,h2,http/1.1');
+    expect(url.searchParams.get('insecure')).toBe('1');
     expect(url.searchParams.get('congestion_control')).toBe('bbr');
     expect(url.searchParams.get('zero_rtt_handshake')).toBe('1');
     expect(url.searchParams.get('heartbeat')).toBeNull();
