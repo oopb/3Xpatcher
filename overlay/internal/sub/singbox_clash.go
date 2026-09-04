@@ -31,7 +31,6 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 					if sni, _ := settings["camouflageSNI"].(string); strings.TrimSpace(sni) != "" {
 						proxy["sni"] = strings.TrimSpace(sni)
 					}
-				}
 			}
 		}
 		if selfSigned {
@@ -61,11 +60,11 @@ func (s *SubClashService) buildSingboxProxy(subReq *SubService, inbound *model.I
 		if v, _ := settings["zeroRTTHandshake"].(bool); v {
 			proxy["reduce-rtt"] = true
 		}
+		// Preserve the inbound's configured TLS values exactly. The last
+		// pre-Mieru build did not invent or overwrite TUIC ALPN here; forcing
+		// h3 can make a migrated inbound advertise a client ALPN different from
+		// the TLS ALPN actually rendered into the sing-box server.
 		applyTLS()
-		// S-UI's current Clash converter forces h3 for TUIC. Keep the
-		// pre-Mieru 3Xpatcher shape that was known-good in Clash Verge and do
-		// not leak sing-box server heartbeat/window/MTU settings into Mihomo.
-		proxy["alpn"] = []string{"h3"}
 		return proxy
 	case model.AnyTLS:
 		if client.Password == "" {
