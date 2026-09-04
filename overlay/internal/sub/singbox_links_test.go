@@ -127,7 +127,7 @@ func TestGenericNaiveUsesNetworkSpecificNativeScheme(t *testing.T) {
 	}
 }
 
-func TestTUICClashMatchesKnownGoodMihomoShape(t *testing.T) {
+func TestTUICClashMatchesKnownGoodMihomoShapeFromPersistedSelfSignedState(t *testing.T) {
 	inbound := &model.Inbound{
 		Protocol: model.TUIC,
 		Listen:   "23.159.248.103",
@@ -142,9 +142,11 @@ func TestTUICClashMatchesKnownGoodMihomoShape(t *testing.T) {
 	stream := map[string]any{
 		"security": "tls",
 		"tlsSettings": map[string]any{
-			"serverName":      "www.mozilla.org",
-			"certificateMode": "self_signed_sni",
-			"alpn":            []any{"h3", "h2", "http/1.1"},
+			"serverName":                "www.mozilla.org",
+			"alpn":                      []any{"h3", "h2", "http/1.1"},
+			"selfSignedServerName":      "www.mozilla.org",
+			"selfSignedCertificatePath": "/usr/local/x-ui-singbox/certs/fixture/cert.pem",
+			"selfSignedKeyPath":         "/usr/local/x-ui-singbox/certs/fixture/key.pem",
 		},
 	}
 
@@ -186,6 +188,18 @@ func TestTUICClashMatchesKnownGoodMihomoShape(t *testing.T) {
 			t.Fatalf("TUIC Clash must preserve ordered ALPN list: got %#v want %#v", alpn, wantALPN)
 		}
 	}
+
+	raw := (&SubService{}).buildSingboxEndpointLink(inbound, client, map[string]any{"congestionControl": "bbr"}, stream, nil, "23.159.248.103", 443)
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("parse TUIC raw link: %v", err)
+	}
+	if got := parsed.Query().Get("insecure"); got != "1" {
+		t.Fatalf("persisted generated self-signed TUIC raw link must set insecure=1: %s", raw)
+	}
+	if got := parsed.Query().Get("alpn"); got != "h3,h2,http/1.1" {
+		t.Fatalf("TUIC raw link must preserve server ALPN order: got %q link=%s", got, raw)
+	}
 }
 
 func TestTUICClashDoesNotInventALPN(t *testing.T) {
@@ -215,5 +229,8 @@ func TestTUICClashDoesNotInventALPN(t *testing.T) {
 	}
 	if proxy["udp-relay-mode"] != "native" {
 		t.Fatalf("TUIC must explicitly retain Mihomo native UDP relay mode: %#v", proxy)
+	}
+	if _, exists := proxy["skip-cert-verify"]; exists {
+		t.Fatalf("public/native TLS without self-signed markers must not disable verification: %#v", proxy)
 	}
 }
