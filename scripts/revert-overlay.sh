@@ -28,6 +28,7 @@ modified=(
   frontend/src/schemas/protocols/security/tls.ts
   frontend/src/lib/xray/inbound-defaults.ts
   frontend/src/lib/xray/protocol-capabilities.ts
+  frontend/src/lib/xray/inbound-link.ts
   frontend/src/pages/inbounds/form/protocols/index.ts
   frontend/src/pages/inbounds/form/InboundFormModal.tsx
   frontend/src/pages/inbounds/form/security/tls.tsx
@@ -56,7 +57,8 @@ rm -f \
   "$SRC/internal/web/job/supplemental_traffic_job.go" \
   "$SRC/internal/web/service/supplemental_online.go" \
   "$SRC/frontend/src/schemas/protocols/inbound/singbox.ts" \
-  "$SRC/frontend/src/pages/inbounds/form/protocols/singbox.tsx"
+  "$SRC/frontend/src/pages/inbounds/form/protocols/singbox.tsx" \
+  "$SRC/frontend/src/lib/xray/supplemental-links.ts"
 
 echo "3Xpatcher V11 source overlay reverted from: $BACKUP"
 echo "Database rows/tables and generated runtime/certificate files are intentionally not dropped."
