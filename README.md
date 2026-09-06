@@ -1,231 +1,87 @@
 # 3Xpatcher — 3x-ui Integrated Multi-Core Patch
 
-3Xpatcher 在尽量保持 **3x-ui 原生 Inbounds / Clients / Subscription / Traffic / Online** 工作流不变的前提下，为官方 3x-ui 增加彼此隔离的 supplemental cores。
+3Xpatcher 是面向官方 **3x-ui** 的多内核集成补丁。
 
-当前版本：`0.11.8-integrated-alpha`
+目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-兼容上游：`3x-ui v3.7.0`
+当前版本：`0.12.0-integrated-alpha`
 
-固定运行时：
+当前兼容上游：`3x-ui v3.7.0`
 
-- sing-box `v1.14.0`（基于官方 `DEFAULT_BUILD_TAGS_OTHERS`，额外启用 `with_v2ray_api`）
-- Mieru / mita `v3.36.0`
+固定补充运行时：
 
-## 协议与核心
+- sing-box `v1.14.0`，使用官方默认构建标签并额外启用 `with_v2ray_api`
+- Mieru / official `mita` `v3.36.0`
 
-| Protocol | Runtime | Multi-user | Native traffic / online |
-| --- | --- | ---: | ---: |
-| TUIC | sing-box | Yes | Yes |
-| AnyTLS | sing-box | Yes | Yes |
-| ShadowTLS v3 | sing-box | Yes | Yes |
-| Naive | sing-box | Yes | Yes |
-| Mieru | official `mita` | Yes | Yes |
+> 3Xpatcher 不替换 3x-ui 自带的 Xray。Xray 与 supplemental runtimes 相互隔离。
+
+## 架构
 
 ```text
-3x-ui UI / DB / Clients / Traffic / Subscription
-                 │
-        ┌────────┼───────────────┐
-        ▼        ▼               ▼
-   Xray protocols  sing-box protocols   Mieru
-        │        │               │
-       Xray   x-ui-singbox   mita per inbound
-                          x-ui-mieru@<id>
+                   3x-ui
+        UI / DB / Clients / Subscription
+          Traffic / Online / Nodes
+                     │
+        ┌────────────┼────────────┐
+        │            │            │
+        ▼            ▼            ▼
+      Xray        sing-box      Mieru
+   官方原生内核    supplemental   official mita
+                    runtime       per inbound
+        │            │            │
+        │      x-ui-singbox   x-ui-mieru@<id>
+        │
+        └── 官方 Xray 升级与运行方式保持不变
 ```
 
-Xray 全量配置会过滤 supplemental protocols；3Xpatcher 不替换 3x-ui 自带的 Xray binary，安装前后会校验 Xray SHA256。
+补充协议与普通 3x-ui 入站共用原生数据库、ClientRecord、ClientInbound、流量统计和订阅体系，不维护第二套用户数据库。
 
-## 原生 3x-ui 集成
+## 支持协议
 
-TUIC / AnyTLS / ShadowTLS / Naive / Mieru 进入 3x-ui 原生 Clients / ClientInbound / `client_traffics` 数据模型，不维护第二套用户数据库。因此可以继续使用：
+| 协议 | 运行时 | 用户模型 | 原生 Traffic / Online | 主要客户端导出 |
+| --- | --- | --- | --- | --- |
+| 3x-ui 原生 Xray 协议 | Xray | 原生 | 原生 | 原生 |
+| TUIC | sing-box | 多用户 | Yes | Shadowrocket / Mihomo |
+| AnyTLS | sing-box | 多用户 | Yes | Shadowrocket / Mihomo |
+| ShadowTLS v3 | sing-box | 多用户 | Yes | Shadowrocket / Mihomo |
+| Naive TCP / HTTP2 | sing-box | 多用户 | Yes | Shadowrocket / native Naive |
+| Naive UDP / QUIC | sing-box | 多用户 | Yes | Shadowrocket HTTP3 / native Naive QUIC |
+| Snell v5 | sing-box | 单活动客户端 | Yes | Shadowrocket / Mihomo |
+| Mieru | official `mita` | 多用户 | Yes | Mieru compatible clients |
 
-- Attach / Detach clients
-- Group / bulk add / delete all
-- Enable / Disable
+## 3x-ui 原生集成
+
+Supplemental protocols 直接进入 3x-ui 原生数据模型，因此可以继续使用：
+
+- Inbound 创建、编辑、启用、禁用
+- Clients Attach / Detach
+- Group / bulk add / delete
+- Client enable / disable
 - Expiry / traffic limit / reset traffic
-- Client subscription IDs
+- Client subscription ID
 - Inbound / Client traffic
 - Online / Last Online
 - Inbound Export / Client Info / QR
+- 原生订阅入口
+- Dashboard 在线状态与流量展示
 
-Remote Node `Deploy To` 暂不对 supplemental protocols 自动开放，因为远端 runtime provisioning 尚未实现。
+Xray 配置生成时会过滤 supplemental protocols，它们不会被错误写入 Xray JSON。
 
-## V11.1 / V11.2 runtime 修复
+## 运行时隔离
 
-### TLS 文件可见性
+### Xray
 
-`x-ui-singbox.service` 使用：
-
-```ini
-ProtectHome=false
-```
-
-避免 3x-ui 的 TLS 证书位于 `/root/...` 时被 systemd home namespace 隐藏，同时保留独立 unit 与 `NoNewPrivileges=true`。
-
-### stats API 端口
-
-sing-box V2Ray-compatible stats 地址持久化到：
+3Xpatcher 不替换：
 
 ```text
-/etc/3xpatcher/singbox-stats.addr
+/usr/local/x-ui/bin/xray-*
 ```
 
-如默认端口冲突，会在 loopback `62000-62999` 范围选择空闲地址，panel renderer、collector 与 runtime 始终读取同一个地址。
+安装过程中会记录并校验 Xray SHA256，补丁面板不会把 sing-box / Mieru 注入 Xray binary。
 
-## V11.4 – V11.8：客户端兼容修正
+### sing-box
 
-V11.3 对 Shadowrocket / Mihomo 的几项兼容判断是错误的。V11.4 修正 ShadowTLS/Naive；V11.5 撤销错误的 TUIC `alpn: [h3]` 强制覆盖。V11.6/V11.7 为定位 Clash Verge TUIC 问题曾加入 `udp-relay-mode`、删除 `udp: true`、以及根据持久化证书元数据推断自签 TLS 等实验性改动。
-
-真实 Clash Verge A/B 最终确认：**TUIC 不通的根因只有生成配置缺少 `skip-cert-verify: true`；在同一节点上手动补这一项后立即恢复。** V11.8 因此撤销这些多余的 TUIC 实验性修改，将 Clash TUIC 恢复到 Mieru 引入前的字段形状，只保留已验证的证书校验修复。
-
-### ShadowTLS v3
-
-sing-box 官方的协议结构是：
-
-```text
-Shadowsocks outbound
-        │ detour
-        ▼
-ShadowTLS v3 outbound
-        │
-        ▼
-server ShadowTLS inbound
-        │ detour
-        ▼
-server Shadowsocks inbound
-```
-
-3Xpatcher 服务端继续按这一结构运行：公开 ShadowTLS v3 inbound detour 到隐藏 Shadowsocks inbound。
-
-S-UI 当前没有把 ShadowTLS 放进通用 raw `LinkGenerator`，因此不存在一个可假定所有客户端都支持的“官方 ShadowTLS URI”。3Xpatcher 按目标客户端区分：
-
-- **Shadowrocket raw `/sub`**：使用其既有 `ss://...?...shadow-tls=<base64 JSON>` descriptor 表示；
-- **面板 QR / Export**：默认输出同一 Shadowrocket descriptor 表示；
-- **通用非 Shadowrocket raw**：保留 SIP003 `plugin=shadow-tls` 表示，仅供明确支持该插件 URI 的客户端；
-- **Mihomo / Clash Verge `/clash`**：继续输出 `type: ss` + `plugin: shadow-tls` + `plugin-opts`，不依赖 raw URI。
-
-Shadowrocket descriptor 包含：
-
-```json
-{
-  "version": "3",
-  "password": "<shadowtls-user-password>",
-  "host": "<handshake-host>",
-  "address": "<outer-server>",
-  "port": "<outer-port>"
-}
-```
-
-### Naive
-
-sing-box `v1.14.0` Naive inbound 在 TCP 模式使用 HTTP/2 CONNECT，并要求 `Padding` 与 Basic Proxy Authorization；其 TLS listener 会在需要时自动加入 `h2` ALPN。
-
-S-UI 当前客户端分享格式包含兼容 `http2://` 表示。3Xpatcher 对 Shadowrocket raw `/sub` 使用同样的形式：
-
-```text
-http2://BASE64(username:password@server:port)?padding=1&peer=<SNI>&alpn=...&insecure=...&tfo=...
-```
-
-关键兼容参数：
-
-- `peer`：TLS SNI
-- `padding=1`
-- `alpn`
-- `insecure=1`（仅自签/允许不安全时）
-- `tfo=0|1`
-
-通用导出继续按 network 输出：
-
-- TCP → `naive+https://`
-- UDP → `naive+quic://`
-- network 未限制 → 两种 native link
-
-面板 QR / Export 会同时给出 Shadowrocket HTTP2 与相应 native Naive link。
-
-Mihomo 当前没有 Naive proxy type，因此 `/clash` 不伪造 Naive 节点。
-
-### TUIC / Clash Verge
-
-V11.8 的 dedicated Clash TUIC 以 **Mieru 引入前的已知可用生成逻辑**为基线，并只额外加入已经由真实 Clash Verge A/B 验证必要的 `skip-cert-verify: true`：
-
-```yaml
-- name: <name>
-  type: tuic
-  server: <server>
-  port: <port>
-  uuid: <uuid>
-  password: <password>
-  sni: <server-name>
-  skip-cert-verify: true
-  congestion-controller: <cubic|bbr|new_reno>
-  udp: true
-  alpn:
-    - h3
-    - h2
-    - http/1.1
-```
-
-具体规则：
-
-- `server` / `port` / `uuid` / `password` 来自当前订阅 endpoint 与客户端记录；
-- `sni` 和 `alpn` 从服务端 TLS 配置直接映射，ALPN 按原顺序完整保留；
-- TLS 没有配置 ALPN 时，客户端也不凭空生成 ALPN；
-- 保留 Mieru 前原有的 `udp: true`；
-- 不再人为添加 `udp-relay-mode`；
-- `reduce-rtt: true` 仅在服务端启用 0-RTT 时输出；
-- dedicated Clash TUIC 固定输出 `skip-cert-verify: true`，不再依赖 `certificateMode` 或推断持久化证书元数据；
-- `heartbeat-interval`、`max-open-streams`、`disable-mtu-discovery`、`disable-sni` 等不会从服务端设置错误投影到 Mihomo 客户端。
-
-CI 使用官方 Mihomo v1.19.30 和与正式发布相同构建形状的 sing-box v1.14.0。回归测试故意不给客户端 fixture 提供 `certificateMode` 或自签证书元数据，要求生产 Clash 生成器仍直接输出 `skip-cert-verify: true`，同时保持 `udp: true`、不出现 `udp-relay-mode`、SNI/ALPN 与服务端一致；随后用生成的真实 Mihomo 配置完成 TUIC/TLS 数据路径请求。
-
-### AnyTLS
-
-普通 TLS AnyTLS 可以输出 Mihomo `type: anytls`。AnyTLS + Reality 在 sing-box 服务端可运行，但当前 Mihomo 不支持该组合，所以 dedicated Clash subscription 会跳过。
-
-## Subscription / QR / Export
-
-推荐：
-
-- Shadowrocket：使用普通 `/sub/:subId`
-- Clash Verge / Mihomo：使用 dedicated `/clash/:subId`
-
-原生 `/sub` 可包含 TUIC / AnyTLS / ShadowTLS / Naive / Mieru；实际 URI 会按客户端能力进行上述兼容处理。
-
-## Mieru
-
-每个启用的 Mieru Inbound 使用独立 official mita 实例：
-
-```text
-/usr/local/x-ui-mieru/config/<inbound-id>.json
-x-ui-mieru@<inbound-id>.service
-/run/x-ui-mieru/<inbound-id>.sock
-/var/lib/x-ui-mieru/<inbound-id>/metrics.pb
-```
-
-支持 primary + additional port bindings、TCP/UDP、DNS、SOCKS5 egress、rules、traffic pattern、multiplexing、handshake mode 等当前集成字段。
-
-## 安装 / 升级
-
-已有 3x-ui 用户直接执行：
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/install.sh)
-```
-
-安装器会：
-
-- 识别当前 3x-ui stable version；
-- 下载对应 rolling prebuilt panel；
-- 校验 GitHub Release digest、patch version、upstream version、architecture；
-- 安装/更新 sing-box 与 official mita；
-- 备份当前 panel 与 `/etc/x-ui`；
-- 校验 Xray binaries SHA256 不变；
-- runtime / panel 启动失败时自动恢复。
-
-目标 VPS 不需要 Go / Node / npm。
-
-## Runtime paths
-
-sing-box：
+TUIC / AnyTLS / ShadowTLS / Naive / Snell 共用独立 sing-box sidecar：
 
 ```text
 /usr/local/x-ui-singbox/bin/sing-box
@@ -235,7 +91,11 @@ sing-box：
 /etc/systemd/system/x-ui-singbox.service
 ```
 
-Mieru：
+stats API 仅监听 loopback，并由 panel 与 collector 使用同一持久化地址。
+
+### Mieru
+
+每个启用的 Mieru inbound 使用独立 official `mita` 实例：
 
 ```text
 /usr/local/x-ui-mieru/bin/mita
@@ -245,24 +105,306 @@ Mieru：
 /var/lib/x-ui-mieru/<inbound-id>/metrics.pb
 ```
 
-## 回滚
+Mieru 实例之间的配置、socket 与 metrics state 相互隔离。
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/rollback.sh)
+## 协议说明
+
+### TUIC
+
+服务端由 sing-box 运行。
+
+Dedicated Clash / Mihomo subscription 保留 TUIC UDP，并输出当前客户端兼容所需的 TLS 参数，包括：
+
+```yaml
+- name: example
+  type: tuic
+  server: example.com
+  port: 443
+  uuid: <uuid>
+  password: <password>
+  sni: example.com
+  skip-cert-verify: true
+  congestion-controller: bbr
+  udp: true
 ```
 
-可选清理 runtime：
+如果服务端配置了 ALPN，则按服务端配置原样导出；不会人为覆盖不存在的 ALPN。
+
+### AnyTLS
+
+普通 TLS AnyTLS 可生成 Mihomo `type: anytls` 节点。
+
+AnyTLS + Reality 可以作为 sing-box 服务端运行，但如果目标客户端本身不支持对应组合，dedicated Clash subscription 会跳过无法正确表达的节点，而不是生成伪配置。
+
+### ShadowTLS v3
+
+服务端结构保持 sing-box 的 ShadowTLS + Shadowsocks detour 模型：
+
+```text
+public ShadowTLS v3 inbound
+          │
+          ▼
+hidden Shadowsocks inbound
+```
+
+客户端导出按客户端能力生成：
+
+- Shadowrocket raw subscription / QR：Shadowrocket 可识别的 ShadowTLS descriptor
+- Mihomo / Clash Verge：`type: ss` + `plugin: shadow-tls` + `plugin-opts`
+- 其他 raw consumer：仅输出其能够明确表达的 URI 形式
+
+### Naive
+
+Naive 支持 TCP 与 UDP 两种服务端 network：
+
+```text
+TCP  -> HTTP/2 CONNECT
+UDP  -> QUIC / HTTP/3
+```
+
+Shadowrocket：
+
+```text
+TCP -> http2://...
+UDP -> http3://...
+```
+
+UDP / QUIC 导出会包含 `alpn=h3`，TLS SNI 使用 `peer` 参数。
+
+Native Naive links：
+
+```text
+TCP -> naive+https://...
+UDP -> naive+quic://...
+```
+
+当前 Mihomo 没有可直接对应的 Naive proxy type，因此 dedicated Clash subscription 不会伪造 Naive 节点。
+
+### Snell v5
+
+Snell 使用兼容客户端最稳定的单活动客户端模型：
+
+```text
+3x-ui ClientRecord.Password == Snell PSK
+```
+
+每个 Snell inbound 最多一个活动客户端。
+
+Shadowrocket raw subscription / QR 使用：
+
+```text
+snell://<base64(chacha20-ietf-poly1305:PSK@host:port)>?version=5&tfo=...
+```
+
+启用 HTTP obfs 时会附加：
+
+```text
+obfs=http
+obfs-host=<host>
+```
+
+Mihomo dedicated subscription 使用 `type: snell`、`version: 5`、`psk` 与 `udp: true`。
+
+### Mieru
+
+Mieru 使用 official `mita`，支持当前集成字段，包括：
+
+- TCP / UDP
+- primary / additional port bindings
+- DNS
+- DNS dual stack / hosts
+- SOCKS5 egress
+- egress rules
+- multiplexing
+- traffic pattern
+- handshake mode
+
+## Subscription / QR / Export
+
+推荐入口：
+
+```text
+Shadowrocket        -> 普通 /sub/:subId
+Clash Verge/Mihomo  -> dedicated /clash/:subId
+```
+
+不同协议会根据客户端 User-Agent 与实际能力输出对应格式，不会为了“看起来有节点”而伪造客户端不支持的协议类型。
+
+## Nodes / 多面板部署
+
+3Xpatcher 不会从主面板远程安装 sing-box 或 Mieru runtime。
+
+因此：
+
+- 主面板需要管理 supplemental protocols 时，应安装 3Xpatcher；
+- **实际运行 TUIC / AnyTLS / ShadowTLS / Naive / Snell / Mieru 的远程面板必须安装兼容版本的 3Xpatcher**；
+- 只运行官方 Xray 协议的节点可以继续使用官方 3x-ui；
+- 多级节点或希望 Traffic / Online / quota 行为完全一致时，建议相关面板统一使用同一版本 3Xpatcher；
+- 不能假设只在主面板安装补丁，就能让未安装 supplemental runtimes 的远端节点运行这些协议。
+
+3x-ui 原生 Node / traffic / online 机制仍由各面板本地运行内核并同步状态，3Xpatcher 不改变这一基本模型。
+
+## 系统要求
+
+快速安装器当前面向：
+
+- Debian
+- Ubuntu
+- Armbian
+- systemd
+- amd64 / x86_64
+- arm64 / aarch64
+- 已安装可正常运行的官方 3x-ui
+
+目标 VPS 不需要预装 Go / Node.js / npm。
+
+## 安装 / 更新
+
+已有 3x-ui 用户执行：
 
 ```bash
-PURGE_SINGBOX=1 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/rollback.sh)
-PURGE_MIERU=1 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/rollback.sh)
-PURGE_SINGBOX=1 PURGE_MIERU=1 bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/rollback.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/install.sh)
+```
+
+安装器会：
+
+1. 识别当前稳定版 3x-ui；
+2. 获取与该上游版本匹配的 prebuilt patched panel；
+3. 校验 GitHub Release digest；
+4. 校验 patch version / upstream version / CPU architecture；
+5. 安装或更新 sing-box runtime；
+6. 安装或更新 official Mieru `mita`；
+7. 备份当前 panel 与 `/etc/x-ui`；
+8. 替换 panel binary；
+9. 校验 Xray binary SHA256 未发生变化；
+10. 启动失败时自动恢复安装前状态。
+
+## 完全卸载
+
+完全卸载使用：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/uninstall.sh)
+```
+
+卸载脚本采用 **database guard**。
+
+在任何停止服务、替换 binary 或删除文件之前，会先以只读方式检查数据库是否仍存在以下协议：
+
+```text
+tuic
+anytls
+shadowtls
+naive
+snell
+mieru
+```
+
+如果发现任意 supplemental inbound：
+
+```text
+立即拒绝卸载
+不修改数据库
+不停止 x-ui
+不停止 supplemental runtimes
+不替换 panel binary
+不删除任何 3Xpatcher 文件
+```
+
+需要先从面板中自行删除这些 supplemental inbounds，再重新运行卸载脚本。
+
+### 仅检查是否可以卸载
+
+```bash
+CHECK_ONLY=1 \
+bash <(curl -fsSL https://raw.githubusercontent.com/oopb/3Xpatcher/main/uninstall.sh)
+```
+
+`CHECK_ONLY=1` 只检查数据库，不执行文件或服务操作。
+
+### 数据库保护
+
+SQLite 使用只读连接：
+
+```text
+mode=ro
+PRAGMA query_only = ON
+```
+
+PostgreSQL 使用只读事务。
+
+卸载器不会对 3x-ui 数据库执行：
+
+```text
+INSERT
+UPDATE
+DELETE
+ALTER
+DROP
+```
+
+数据库检查通过后，卸载器会：
+
+1. 根据当前 3x-ui 版本从 `MHSanaei/3x-ui` 官方 GitHub Release 下载对应原版；
+2. 校验官方 Release SHA256 digest；
+3. 使用官方 `x-ui` 替换 patched panel binary；
+4. 确认官方 `x-ui.service` 可以正常运行；
+5. 删除 sing-box / Mieru sidecars；
+6. 删除 3Xpatcher systemd units；
+7. 删除 3Xpatcher runtime / state / backup / install files；
+8. 保留 `/etc/x-ui`、数据库以及官方 3x-ui 数据与配置。
+
+如果官方面板替换后无法正常启动，卸载器会恢复卸载前的 panel binary，并保留 3Xpatcher 文件，不继续清理。
+
+完整卸载不依赖历史 `/var/lib/3xpatcher/backups/.../x-ui` 作为官方 binary 来源，而是重新获取并验证对应版本的官方 Release。
+
+## 完全卸载会清理的路径
+
+在数据库 guard 通过并成功恢复官方 panel 后，主要清理：
+
+```text
+/usr/local/x-ui-singbox
+/usr/local/x-ui-mieru
+/var/lib/x-ui-mieru
+/run/x-ui-mieru
+/usr/local/share/3xpatcher
+/etc/3xpatcher
+/var/lib/3xpatcher
+```
+
+以及：
+
+```text
+/etc/systemd/system/x-ui-singbox.service
+/etc/systemd/system/x-ui-mieru@.service
+x-ui-mieru@*.service
+```
+
+不会删除：
+
+```text
+/etc/x-ui
+/etc/x-ui/x-ui.db
+/usr/local/x-ui/bin/xray-*
 ```
 
 ## 当前边界
 
-- 历史 `singbox_inbounds` 表不会自动 DROP，以保护回滚与数据恢复。
-- Xray JSON subscription 无法表达 supplemental-only protocols。
-- Naive 没有 Mihomo proxy type。
-- AnyTLS + Reality 没有当前 Mihomo dedicated Clash 表示。
-- Supplemental protocols 暂不自动部署到远端 3x-ui Nodes。
+- 当前项目为 alpha，建议在重要机器上保留可用备份；
+- 3Xpatcher 不修改数据库来完成卸载；存在 supplemental inbound 时必须先由用户自行删除；
+- Naive 当前没有 Mihomo proxy type；
+- AnyTLS + Reality 无法在当前 Mihomo dedicated Clash 格式中无损表达；
+- supplemental runtime 不会自动安装到未打补丁的远程 Node；
+- 客户端是否支持某个导出格式最终取决于对应客户端自身实现。
+
+## License / Upstream
+
+3Xpatcher 是对 3x-ui 的补充集成工程。
+
+上游项目：
+
+- 3x-ui: `MHSanaei/3x-ui`
+- sing-box: `SagerNet/sing-box`
+- Mieru: `enfein/mieru`
+
+使用时请同时遵守各上游项目的许可证与使用条款。
