@@ -88,4 +88,14 @@ replace_once(
     "v3.8 multi-user protocol helper",
 )
 
+# v11 extends the protocol set used by the native inbound client roll-up.
+# 3x-ui v3.8 already contributes TUIC, so normalize directly to v11's final
+# set (including Mieru) and let the legacy v11 patch recognize it as applied.
+replace_once(
+    "frontend/src/pages/inbounds/useInbounds.ts",
+    "  Protocols.AMNEZIAWG,\n  Protocols.TUIC,\n];",
+    "  Protocols.AMNEZIAWG,\n  Protocols.TUIC,\n  Protocols.ANYTLS,\n  Protocols.SHADOWTLS,\n  Protocols.NAIVE,\n  Protocols.MIERU,\n];",
+    "v3.8 inbound client roll-up protocols",
+)
+
 print("V15 frontend compatibility normalization applied.")
