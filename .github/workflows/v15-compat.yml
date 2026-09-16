@@ -1,0 +1,65 @@
+name: Validate 3x-ui v3.8.5 compatibility
+
+on:
+  push:
+    branches: [compat/3x-ui-v3.8.5]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v15-compat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 3Xpatcher
+        uses: actions/checkout@v7
+
+      - name: Static patch smoke
+        run: ./tests/smoke.sh
+
+      - name: Download matching 3x-ui source
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=$(tr -d '\r\n' < UPSTREAM_COMPAT)
+          mkdir source
+          curl -fL --retry 5 --retry-all-errors "https://codeload.github.com/MHSanaei/3x-ui/tar.gz/${target}" -o /tmp/3x-ui.tar.gz
+          tar -xzf /tmp/3x-ui.tar.gz -C source --strip-components=1
+
+      - name: Apply overlay
+        run: ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: source/go.mod
+          check-latest: true
+          cache: true
+          cache-dependency-path: source/go.sum
+
+      - name: Compile affected Go packages
+        working-directory: source
+        run: |
+          go test ./internal/singbox
+          go test ./internal/mieru
+          go test ./internal/sub
+          go test ./internal/web/service
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: source/.nvmrc
+          cache: npm
+          cache-dependency-path: source/frontend/package-lock.json
+
+      - name: Frontend typecheck and production build
+        working-directory: source/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run build
