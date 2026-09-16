@@ -107,4 +107,14 @@ remove_once(
     "native TUIC genLink dispatch",
 )
 
+# InboundInfoModal's share-link display whitelist gained native TUIC in v3.8.
+# Normalize directly to the v11-final supplemental set so valid generated links
+# remain visible for all extra runtimes.
+replace_once(
+    "frontend/src/pages/inbounds/info/helpers.ts",
+    "  Protocols.HYSTERIA,\n  Protocols.MTPROTO,\n  Protocols.TUIC,\n]);",
+    "  Protocols.HYSTERIA,\n  Protocols.MTPROTO,\n  Protocols.TUIC,\n  Protocols.ANYTLS,\n  Protocols.SHADOWTLS,\n  Protocols.NAIVE,\n  Protocols.MIERU,\n]);",
+    "v3.8 inbound info share-link whitelist",
+)
+
 print("V15 frontend compatibility normalization applied.")
