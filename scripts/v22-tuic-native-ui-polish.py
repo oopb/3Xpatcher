@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import subprocess
 import sys
 
 if len(sys.argv) != 2:
@@ -35,3 +36,8 @@ if count != 1:
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 print("V22 native TUIC browser-link ownership polish applied.")
+
+subprocess.run(
+    [sys.executable, str(Path(__file__).resolve().parent / 'v23-tuic-selfsigned-export.py'), sys.argv[1]],
+    check=True,
+)
