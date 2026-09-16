@@ -70,4 +70,13 @@ remove_once(
     "native TUIC defaults dispatch",
 )
 
+# Native v3.8 TUIC is already listed in the protocol-tab whitelist. Extend that
+# list with the other supplemental protocols instead of trying to add TUIC twice.
+replace_once(
+    "frontend/src/pages/inbounds/form/InboundFormModal.tsx",
+    "                    Protocols.AMNEZIAWG,\n                    Protocols.TUIC,\n                  ] as string[]",
+    "                    Protocols.AMNEZIAWG,\n                    Protocols.TUIC,\n                    Protocols.ANYTLS,\n                    Protocols.SHADOWTLS,\n                    Protocols.NAIVE,\n                  ] as string[]",
+    "native TUIC protocol-tab whitelist",
+)
+
 print("V15 frontend compatibility normalization applied.")
