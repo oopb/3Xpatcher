@@ -8,7 +8,7 @@ import (
 )
 
 func TestBuildMieruSimpleLinkPrimaryUDP(t *testing.T) {
-	inbound := &model.Inbound{Port: 45678}
+	inbound := &model.Inbound{Port: 45678, Remark: "Mieru UDP"}
 	settings := map[string]any{
 		"transport":           "UDP",
 		"portRangeEnd":        float64(0),
@@ -16,13 +16,14 @@ func TestBuildMieruSimpleLinkPrimaryUDP(t *testing.T) {
 		"clientMultiplexing":  "MULTIPLEXING_LOW",
 		"clientHandshakeMode": "HANDSHAKE_STANDARD",
 	}
-	link := buildMieruSimpleLink(
+	svc := &SubService{}
+	link := svc.buildMieruSimpleLink(
 		inbound,
 		model.Client{Email: "udp-user", Password: "udp-pass"},
 		settings,
+		nil,
 		"mieru.example",
-		mieruShareBindings(inbound, settings),
-		"Mieru UDP",
+		45678,
 	)
 	if link == "" {
 		t.Fatal("expected Mieru UDP link")
