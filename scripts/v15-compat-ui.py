@@ -19,6 +19,17 @@ def replace_once(rel: str, old: str, new: str, label: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
+def remove_once(rel: str, old: str, label: str) -> None:
+    path = root / rel
+    text = path.read_text(encoding="utf-8")
+    count = text.count(old)
+    if count == 0:
+        return
+    if count != 1:
+        raise SystemExit(f"v15 ui {label}: expected at most one anchor, found {count}")
+    path.write_text(text.replace(old, "", 1), encoding="utf-8")
+
+
 # v3.8.x includes native TUIC among client-attachable protocols. Preserve TUIC
 # and append only the additional supplemental protocols owned by 3Xpatcher.
 for rel in (
@@ -31,5 +42,32 @@ for rel in (
         "  'amneziawg',\n  'tuic',\n  'anytls',\n  'shadowtls',\n  'naive',\n]);",
         f"{rel} attachable protocols",
     )
+
+# Keep the upstream TUIC client helper/type available, but detach the native
+# TUIC inbound-settings type and factory. 3Xpatcher's TUIC runtime is sing-box,
+# whose settings schema is intentionally different from the v3.8 sidecar shape.
+defaults = "frontend/src/lib/xray/inbound-defaults.ts"
+replace_once(
+    defaults,
+    "import type { TuicClient, TuicInboundSettings } from '@/schemas/protocols/inbound/tuic';\n",
+    "import type { TuicClient } from '@/schemas/protocols/inbound/tuic';\n",
+    "native TUIC inbound settings import",
+)
+remove_once(
+    defaults,
+    "export function createDefaultTuicInboundSettings(): TuicInboundSettings {\n  return {\n    server: {\n      certificate: '',\n      private_key: '',\n      congestion_control: 'bbr',\n      alpn: ['h3', 'spdy/3.1'],\n      udp_relay_mode: 'native',\n      zero_rtt_handshake: true,\n      log_level: 'info',\n      max_idle_time: 15,\n      authentication_timeout: 3,\n      max_udp_relay_packet_size: 1500,\n      sni: '',\n    },\n    clients: [],\n  };\n}\n\n",
+    "native TUIC inbound defaults factory",
+)
+replace_once(
+    defaults,
+    "  | MtprotoInboundSettings\n  | AmneziawgInboundSettings\n  | TuicInboundSettings;",
+    "  | MtprotoInboundSettings\n  | AmneziawgInboundSettings;",
+    "native TUIC inbound settings union",
+)
+remove_once(
+    defaults,
+    "    case 'tuic':\n      return createDefaultTuicInboundSettings();\n",
+    "native TUIC defaults dispatch",
+)
 
 print("V15 frontend compatibility normalization applied.")
