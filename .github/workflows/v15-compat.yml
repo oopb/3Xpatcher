@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - UPSTREAM_COMPAT
+      - install.sh
       - internal/**
       - frontend/**
       - overlay/**
@@ -31,6 +32,29 @@ jobs:
 
       - name: Static patch smoke
         run: ./tests/smoke.sh
+
+      - name: Assert upgrade-safe runtime order
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          text = Path('install.sh').read_text(encoding='utf-8')
+          start = text.index('main() {')
+          end = text.index('\n}\n\nmain "$@"', start)
+          main = text[start:end]
+          guard = 'if [[ "$SKIP_SINGBOX" != 1 ]] && {'
+          if guard not in main:
+              raise SystemExit('missing existing sing-box upgrade branch')
+          upgrade = main.split(guard, 1)[1].split('\n  else\n', 1)[0]
+          fresh = main.split('\n  else\n', 1)[1].split('\n  fi\n', 1)[0]
+          if upgrade.index('activate_panel') > upgrade.index('install_singbox_core'):
+              raise SystemExit('upgrade path must activate patched panel before sing-box health check')
+          if fresh.index('install_singbox_core') > fresh.index('activate_panel'):
+              raise SystemExit('fresh path must install sing-box runtime before first panel reconcile')
+          print('installer TUIC upgrade/fresh ordering: OK')
+          PY
 
       - name: Download matching 3x-ui source
         shell: bash
