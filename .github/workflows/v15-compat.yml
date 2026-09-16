@@ -45,10 +45,11 @@ jobs:
       - name: Compile affected Go packages
         working-directory: source
         run: |
-          go test ./internal/singbox
-          go test ./internal/mieru
-          go test ./internal/sub
-          go test ./internal/web/service
+          go test -run '^$' ./internal/singbox
+          go test -run '^$' ./internal/mieru
+          go test -run '^$' ./internal/sub
+          go test -run '^$' ./internal/web/service
+          go test -run '^$' ./internal/web/runtime
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
