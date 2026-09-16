@@ -79,4 +79,13 @@ replace_once(
     "native TUIC protocol-tab whitelist",
 )
 
+# The list helper also treats native TUIC as a multi-user protocol in v3.8.
+# Keep that behavior and append the remaining supplemental protocols.
+replace_once(
+    "frontend/src/pages/inbounds/list/helpers.ts",
+    "    case 'amneziawg':\n    case 'tuic':\n      return true;",
+    "    case 'amneziawg':\n    case 'tuic':\n    case 'anytls':\n    case 'shadowtls':\n    case 'naive':\n      return true;",
+    "v3.8 multi-user protocol helper",
+)
+
 print("V15 frontend compatibility normalization applied.")
