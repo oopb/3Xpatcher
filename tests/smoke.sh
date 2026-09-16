@@ -8,7 +8,13 @@ go test ./internal/singbox ./internal/mieru
 
 echo '[2/8] script syntax'
 bash -n install.sh rollback.sh scripts/*.sh tests/*.sh
-python3 -m py_compile scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py scripts/v3-patch.py scripts/v5-patch.py scripts/v6-patch.py scripts/v7-patch.py scripts/v8-patch.py scripts/v9-patch.py scripts/v10-patch.py scripts/v11-patch.py scripts/v11-final-patch.py scripts/v12-patch.py
+python3 -m py_compile \
+  scripts/apply-v2.py scripts/v2_patchlib.py scripts/v2-patch-*.py \
+  scripts/v3-patch.py scripts/v5-patch.py scripts/v6-patch.py scripts/v7-patch.py \
+  scripts/v8-patch.py scripts/v9-patch.py scripts/v10-patch.py scripts/v11-patch.py \
+  scripts/v11-final-patch.py scripts/v12-patch.py scripts/v13-patch.py scripts/v14-patch.py \
+  scripts/v15-compat-pre.py scripts/v15-compat-go.py scripts/v15-compat-ui.py \
+  scripts/v15-compat-tuic-frontend.py scripts/v16-hotfix.py scripts/v17-shadowtls-stats.py
 
 echo '[3/8] integrated protocol surface'
 python3 - <<'PY'
@@ -69,6 +75,15 @@ for token in 'Protocols.TUIC' 'Protocols.ANYTLS' 'Protocols.SHADOWTLS' 'Protocol
   grep -q "$token" scripts/v11-patch.py
 done
 grep -q 'hasClients={clientTotal(record) > 0}' scripts/v11-patch.py
+
+# ShadowTLS v3 payload bytes live on the generated inner Shadowsocks transport.
+# The v2ray stats API must monitor that inner tag and the collector must map it
+# back to the canonical native 3x-ui ShadowTLS inbound tag.
+grep -q 'scripts/v17-shadowtls-stats.py' scripts/apply-overlay.sh
+grep -q 'ProtocolShadowTLS' scripts/v17-shadowtls-stats.py
+grep -q 'statsInbounds = append(statsInbounds, extraTags' scripts/v17-shadowtls-stats.py
+grep -q 'canonicalStatsTag' overlay/internal/singbox/stats.go
+grep -q 'TestApplyStatsSnapshotShadowTLSInnerFold' overlay/internal/singbox/stats_test.go
 
 # Client formats are based on S-UI/sing-box behavior rather than a fabricated
 # universal URI. Shadowrocket gets its established descriptor ShadowTLS form;
@@ -207,6 +222,14 @@ for f in \
   scripts/v10-patch.py \
   scripts/v11-patch.py \
   scripts/v12-patch.py \
+  scripts/v13-patch.py \
+  scripts/v14-patch.py \
+  scripts/v15-compat-pre.py \
+  scripts/v15-compat-go.py \
+  scripts/v15-compat-ui.py \
+  scripts/v15-compat-tuic-frontend.py \
+  scripts/v16-hotfix.py \
+  scripts/v17-shadowtls-stats.py \
   SINGBOX_VERSION; do
   test -s "$f"
 done
