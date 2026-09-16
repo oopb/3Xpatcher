@@ -75,6 +75,72 @@ subprocess.run(
     check=True,
 )
 
+# Extend, do not replace, the native TUIC editor: keep the upstream certificate
+# path workflow and add 3Xpatcher's SNI self-signed generator beside it. Both
+# Native and sing-box runtimes consume the same native certificate/private_key
+# fields, so switching cores never requires re-entering TLS material.
+tuic_ui = target / "frontend/src/pages/inbounds/form/protocols/tuic.tsx"
+text = tuic_ui.read_text(encoding="utf-8")
+state_anchor = "  const [loadingPanelCert, setLoadingPanelCert] = useState(false);\n"
+if state_anchor not in text:
+    raise SystemExit("v21-run: native TUIC certificate state anchor missing")
+text = text.replace(
+    state_anchor,
+    state_anchor + "  const [generatingSelfSigned, setGeneratingSelfSigned] = useState(false);\n",
+    1,
+)
+func_anchor = "  const certOptions = sni\n"
+if func_anchor not in text:
+    raise SystemExit("v21-run: native TUIC cert options anchor missing")
+generate_func = """  const generateSelfSigned = async () => {
+    const cleanSni = (sni || '').trim();
+    if (!cleanSni) {
+      message.warning(t('pages.xray.tuic.sniHint'));
+      return;
+    }
+    setGeneratingSelfSigned(true);
+    try {
+      const msg = await HttpUtil.post('/panel/api/server/generateSingboxSniCert', {
+        sni: cleanSni,
+        validityDays: 3650,
+      });
+      if (!msg?.success || !msg.obj) {
+        message.warning(msg?.msg || t('somethingWentWrong'));
+        return;
+      }
+      const info = msg.obj as { certificatePath?: string; keyPath?: string };
+      if (!info.certificatePath || !info.keyPath) {
+        message.warning(t('somethingWentWrong'));
+        return;
+      }
+      setValue('settings.server.certificate', info.certificatePath, { shouldDirty: true });
+      setValue('settings.server.private_key', info.keyPath, { shouldDirty: true });
+      message.success(t('pages.inbounds.setSuccess'));
+    } catch {
+      message.error(t('somethingWentWrong'));
+    } finally {
+      setGeneratingSelfSigned(false);
+    }
+  };
+
+"""
+text = text.replace(func_anchor, generate_func + func_anchor, 1)
+button_anchor = """          <Button
+            danger
+            onClick={() => {
+              setValue('settings.server.certificate', '');
+              setValue('settings.server.private_key', '');
+            }}
+          >"""
+if button_anchor not in text:
+    raise SystemExit("v21-run: native TUIC clear certificate button anchor missing")
+selfsigned_button = """          <Button loading={generatingSelfSigned} onClick={generateSelfSigned}>
+            Generate Self-signed
+          </Button>
+"""
+text = text.replace(button_anchor, selfsigned_button + button_anchor, 1)
+tuic_ui.write_text(text, encoding="utf-8")
+
 # The final unified schema must expose TUIC only from the native module. V2/V13
 # still leave TuicInboundSettings* exported from ./singbox for legacy patching;
 # avoid wildcard re-exporting those duplicate names while preserving every other
