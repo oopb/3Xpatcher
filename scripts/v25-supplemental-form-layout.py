@@ -8,7 +8,7 @@ if len(sys.argv) != 2:
 root = Path(sys.argv[1]).resolve()
 
 
-def path(rel):
+def p(rel: str) -> Path:
     return root / rel
 
 
@@ -19,67 +19,106 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def component_slice(text: str, start_marker: str, end_marker: str, label: str):
+    start = text.find(start_marker)
+    if start < 0:
+        raise SystemExit(f"v25 {label}: start marker missing")
+    end = text.find(end_marker, start + len(start_marker))
+    if end < 0:
+        raise SystemExit(f"v25 {label}: end marker missing")
+    return start, end, text[start:end]
+
+
 # ---------------------------------------------------------------------------
-# Split protocol-owned UI by semantic layer without changing storage keys.
+# Supplemental protocol form layout. Storage stays under settings.*; only the
+# UI ownership is split into Protocol / Stream / Advanced.
 # ---------------------------------------------------------------------------
 rel = "frontend/src/pages/inbounds/form/protocols/singbox.tsx"
-p = path(rel)
-text = p.read_text(encoding="utf-8")
+path = p(rel)
+text = path.read_text(encoding="utf-8")
 
-text = replace_once(
+# AnyTLS: padding is protocol-owned; listener/socket tuning is transport-owned.
+start, end, segment = component_slice(
     text,
-    '''export function AnyTlsFields() {\n  return (\n    <>\n      <FormField label="Padding Scheme" name={['settings', 'paddingScheme']}>\n        <Select mode="tags" tokenSeparators={[',']} placeholder="Leave empty for sing-box defaults" style={{ width: '100%' }} />\n      </FormField>\n      <ListenTuningFields />\n    </>\n  );\n}''',
-    '''export function AnyTlsFields() {\n  return (\n    <FormField label="Padding Scheme" name={['settings', 'paddingScheme']}>\n      <Select mode="tags" tokenSeparators={[',']} placeholder="Leave empty for sing-box defaults" style={{ width: '100%' }} />\n    </FormField>\n  );\n}\n\nexport function AnyTlsTransportFields() {\n  return <ListenTuningFields />;\n}''',
-    "AnyTLS split",
+    "export function AnyTlsFields() {",
+    "export function ShadowTlsFields() {",
+    "AnyTLS component",
 )
+if segment.count("      <ListenTuningFields />\n") != 1:
+    raise SystemExit("v25 AnyTLS: expected one ListenTuningFields")
+segment = segment.replace("      <ListenTuningFields />\n", "", 1)
+segment += "export function AnyTlsTransportFields() {\n  return <ListenTuningFields />;\n}\n\n"
+text = text[:start] + segment + text[end:]
 
-text = replace_once(
+# Snell: version/obfuscation are protocol-owned; socket tuning moves to Stream.
+start, end, segment = component_slice(
     text,
-    '''export function NaiveFields() {\n  return (\n    <>\n      <FormField label="Network" name={['settings', 'network']}><Select options={[{ value: '', label: 'TCP + UDP' }, { value: 'tcp', label: 'TCP' }, { value: 'udp', label: 'UDP / QUIC' }]} /></FormField>\n      <FormField label="QUIC Congestion Control" name={['settings', 'quicCongestionControl']}><Select options={['bbr', 'cubic', 'reno'].map((value) => ({ value, label: value }))} /></FormField>\n      <ListenTuningFields />\n    </>\n  );\n}''',
-    '''export function NaiveFields() {\n  return null;\n}\n\nexport function NaiveTransportFields() {\n  return (\n    <>\n      <FormField label="Network" name={['settings', 'network']}><Select options={[{ value: '', label: 'TCP + UDP' }, { value: 'tcp', label: 'TCP' }, { value: 'udp', label: 'UDP / QUIC' }]} /></FormField>\n      <FormField label="QUIC Congestion Control" name={['settings', 'quicCongestionControl']}><Select options={['bbr', 'cubic', 'reno'].map((value) => ({ value, label: value }))} /></FormField>\n      <ListenTuningFields />\n    </>\n  );\n}''',
-    "Naive split",
+    "export function SnellFields() {",
+    "export function NaiveFields() {",
+    "Snell component",
 )
+if segment.count("      <ListenTuningFields />\n") != 1:
+    raise SystemExit(f"v25 Snell: expected one ListenTuningFields, found {segment.count('      <ListenTuningFields />' + chr(10))}")
+segment = segment.replace("      <ListenTuningFields />\n", "", 1)
+segment += "export function SnellTransportFields() {\n  return <ListenTuningFields />;\n}\n\n"
+text = text[:start] + segment + text[end:]
 
-text = replace_once(
+# Naive has no remaining protocol-only knobs: network/QUIC/listener controls are
+# all transport settings, while TLS/Reality already use the native Security tab.
+start, end, segment = component_slice(
     text,
-    '''      {obfsMode === 'http' && (\n        <FormField label="Obfs Host" name={['settings', 'obfsHost']}><Input placeholder="bing.com" /></FormField>\n      )}\n      <ListenTuningFields />\n    </>\n  );\n}\n\nexport function NaiveFields()''',
-    '''      {obfsMode === 'http' && (\n        <FormField label="Obfs Host" name={['settings', 'obfsHost']}><Input placeholder="bing.com" /></FormField>\n      )}\n    </>\n  );\n}\n\nexport function SnellTransportFields() {\n  return <ListenTuningFields />;\n}\n\nexport function NaiveFields()''',
-    "Snell split",
+    "export function NaiveFields() {",
+    "function MieruPortBindings() {",
+    "Naive component",
 )
+transport_segment = segment.replace(
+    "export function NaiveFields() {",
+    "export function NaiveTransportFields() {",
+    1,
+)
+segment = "export function NaiveFields() {\n  return null;\n}\n\n" + transport_segment
+text = text[:start] + segment + text[end:]
 
+# Mieru: split listener transport, server/user policy, and advanced networking.
 text = replace_once(
     text,
     "export function MieruFields() {",
     "export function MieruFields({ section = 'protocol' }: { section?: 'protocol' | 'transport' | 'advanced' } = {}) {",
     "Mieru section signature",
 )
-
-# Keep the runtime explanation at the top of each Mieru page, then expose only
-# the fields owned by that semantic section.
 text = replace_once(
     text,
-    '''      <FormField label="Primary Transport" name={['settings', 'transport']}>''',
-    '''      {section === 'transport' && (\n        <>\n      <FormField label="Primary Transport" name={['settings', 'transport']}>''',
+    "      <FormField label=\"Primary Transport\" name={['settings', 'transport']}>\n",
+    "      {section === 'transport' && (\n        <>\n      <FormField label=\"Primary Transport\" name={['settings', 'transport']}>\n",
     "Mieru transport open",
 )
 text = replace_once(
     text,
-    '''      <MieruPortBindings />\n\n      <Divider orientation="start" plain>Server</Divider>''',
-    '''      <MieruPortBindings />\n        </>\n      )}\n\n      {section === 'protocol' && (\n        <>\n      <Divider orientation="start" plain>Server</Divider>''',
+    "      <MieruPortBindings />\n",
+    "      <MieruPortBindings />\n        </>\n      )}\n\n      {section === 'protocol' && (\n        <>\n",
     "Mieru transport/protocol boundary",
 )
 text = replace_once(
     text,
-    '''      <FormField label="Require User Hint" name={['settings', 'userHintIsMandatory']} valueProp="checked"><Switch /></FormField>\n\n      <MieruDNSFields />''',
-    '''      <FormField label="Require User Hint" name={['settings', 'userHintIsMandatory']} valueProp="checked"><Switch /></FormField>\n        </>\n      )}\n\n      {section === 'advanced' && (\n        <>\n      <MieruDNSFields />''',
+    "      <FormField label=\"Require User Hint\" name={['settings', 'userHintIsMandatory']} valueProp=\"checked\"><Switch /></FormField>\n",
+    "      <FormField label=\"Require User Hint\" name={['settings', 'userHintIsMandatory']} valueProp=\"checked\"><Switch /></FormField>\n        </>\n      )}\n\n      {section === 'advanced' && (\n        <>\n",
     "Mieru protocol/advanced boundary",
 )
-text = replace_once(
-    text,
-    '''      <FormField label="Client Traffic Pattern" name={['settings', 'clientTrafficPattern']}>\n        <Input placeholder="optional official encoded traffic-pattern value" />\n      </FormField>\n    </>\n  );\n}''',
-    '''      <FormField label="Client Traffic Pattern" name={['settings', 'clientTrafficPattern']}>\n        <Input placeholder="optional official encoded traffic-pattern value" />\n      </FormField>\n        </>\n      )}\n    </>\n  );\n}\n\nexport function MieruTransportFields() {\n  return <MieruFields section="transport" />;\n}\n\nexport function MieruAdvancedFields() {\n  return <MieruFields section="advanced" />;\n}''',
-    "Mieru advanced close",
-)
+# Close the advanced block directly after Client Traffic Pattern, without
+# depending on the exact final indentation of the whole component.
+needle = "      <FormField label=\"Client Traffic Pattern\" name={['settings', 'clientTrafficPattern']}>"
+pos = text.find(needle)
+if pos < 0:
+    raise SystemExit("v25 Mieru advanced close: client traffic field missing")
+close = text.find("      </FormField>", pos)
+if close < 0:
+    raise SystemExit("v25 Mieru advanced close: closing FormField missing")
+close += len("      </FormField>")
+text = text[:close] + "\n        </>\n      )}" + text[close:]
+
+if "export function MieruTransportFields()" in text:
+    raise SystemExit("v25 Mieru wrapper exports already exist")
+text = text.rstrip() + '''\n\nexport function MieruTransportFields() {\n  return <MieruFields section="transport" />;\n}\n\nexport function MieruAdvancedFields() {\n  return <MieruFields section="advanced" />;\n}\n'''
 
 text = replace_once(
     text,
@@ -87,35 +126,35 @@ text = replace_once(
     "{ value: '', label: 'Default (PREFER_IPv4)' },",
     "Mieru DNS label",
 )
-p.write_text(text, encoding="utf-8")
+path.write_text(text, encoding="utf-8")
 
-# Production backend already defaults empty DNS dual-stack to PREFER_IPv4 via
-# V18. Align the schema/default presentation so the UI cannot imply otherwise.
-p = path("frontend/src/schemas/protocols/inbound/singbox.ts")
-text = p.read_text(encoding="utf-8")
+# The runtime fallback is already PREFER_IPv4. Make form validation/defaults say
+# the same thing instead of presenting an empty value as USE_FIRST_IP.
+path = p("frontend/src/schemas/protocols/inbound/singbox.ts")
+text = path.read_text(encoding="utf-8")
 text = replace_once(
     text,
     "      .default(''),\n    dnsHosts: z.array(MieruDNSHostSchema).default([]),",
     "      .default('PREFER_IPv4'),\n    dnsHosts: z.array(MieruDNSHostSchema).default([]),",
     "Mieru DNS schema default",
 )
-p.write_text(text, encoding="utf-8")
+path.write_text(text, encoding="utf-8")
 
-# Export the semantic sub-forms.
-p = path("frontend/src/pages/inbounds/form/protocols/index.ts")
-text = p.read_text(encoding="utf-8")
+# Re-export semantic sections.
+path = p("frontend/src/pages/inbounds/form/protocols/index.ts")
+text = path.read_text(encoding="utf-8")
 text = replace_once(
     text,
     "export { AnyTlsFields, MieruFields, NaiveFields, ShadowTlsFields, ShadowTlsSecurityFields, SnellFields, TuicFields } from './singbox';",
     "export { AnyTlsFields, AnyTlsTransportFields, MieruFields, MieruTransportFields, MieruAdvancedFields, NaiveFields, NaiveTransportFields, ShadowTlsFields, ShadowTlsSecurityFields, SnellFields, SnellTransportFields, TuicFields } from './singbox';",
     "form exports",
 )
-p.write_text(text, encoding="utf-8")
+path.write_text(text, encoding="utf-8")
 
-# Native modal tabs: supplemental transport lives in the Stream tab slot, while
-# Mieru DNS/routing/traffic/share controls live in the existing Advanced tab.
-p = path("frontend/src/pages/inbounds/form/InboundFormModal.tsx")
-text = p.read_text(encoding="utf-8")
+# Native modal: supplemental transport reuses the Stream tab slot; Mieru
+# networking/egress/traffic/share knobs get a friendly page in Advanced.
+path = p("frontend/src/pages/inbounds/form/InboundFormModal.tsx")
+text = path.read_text(encoding="utf-8")
 for old, new, label in [
     ("  AnyTlsFields,\n", "  AnyTlsFields,\n  AnyTlsTransportFields,\n", "AnyTLS transport import"),
     ("  NaiveFields,\n", "  NaiveTransportFields,\n", "Naive transport import"),
@@ -165,6 +204,6 @@ text = replace_once(
     "",
     "remove empty Naive Protocol tab",
 )
-p.write_text(text, encoding="utf-8")
+path.write_text(text, encoding="utf-8")
 
 print("V25 supplemental form layout + Mieru default alignment applied.")
