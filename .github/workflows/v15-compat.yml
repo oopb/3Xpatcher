@@ -42,7 +42,11 @@ jobs:
           tar -xzf /tmp/3x-ui.tar.gz -C source --strip-components=1
 
       - name: Apply overlay
-        run: ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
+        run: |
+          ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
+          # Production overlay intentionally does not install test files. Inject
+          # the focused regression suite only into this ephemeral CI source tree.
+          cp overlay/internal/singbox/stats_test.go source/internal/singbox/stats_test.go
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -60,6 +64,11 @@ jobs:
           go test -run '^$' ./internal/sub
           go test -run '^$' ./internal/web/service
           go test -run '^$' ./internal/web/runtime
+
+      - name: Supplemental stats regression tests
+        working-directory: source
+        run: |
+          go test ./internal/singbox -run '^(TestLoadStatsListenAddress|TestApplyStatsSnapshot.*)$' -count=1 -v
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
