@@ -9,7 +9,8 @@ root = Path(sys.argv[1]).resolve()
 
 # TUIC now reuses the upstream frontend link generator for both server runtimes.
 # Runtime selection only chooses the server implementation; it must not create
-# a second client/share-link format in the browser.
+# a second client/share-link format in the browser. v21-run.py already owns the
+# native TUIC TLS badge and native certificate controls.
 path = root / "frontend/src/lib/xray/supplemental-links.ts"
 text = path.read_text(encoding="utf-8")
 old = '''    case 'tuic': {
@@ -33,29 +34,4 @@ if count != 1:
     raise SystemExit(f"v22 TUIC browser link ownership: expected one anchor, found {count}")
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-# Badge semantics are configuration-driven. Native-shaped TUIC stores TLS under
-# settings.server rather than streamSettings; legacy sing-box-shaped rows still
-# fall back to the old stream TLS hints until edited/migrated.
-path = root / "frontend/src/pages/inbounds/list/useInboundColumns.tsx"
-text = path.read_text(encoding="utf-8")
-old = '''          if (record.protocol === 'tuic') {
-            tags.push(<Tag key="n" color="green">UDP</Tag>);
-            pushSupplementalSecurity();
-          } else if (record.protocol === 'anytls') {'''
-new = '''          if (record.protocol === 'tuic') {
-            tags.push(<Tag key="n" color="green">UDP</Tag>);
-            const tuicServer = supplementalSettings.server as Record<string, unknown> | undefined;
-            if (tuicServer) {
-              const certificate = String(tuicServer.certificate || '').trim();
-              const privateKey = String(tuicServer.private_key || '').trim();
-              if (certificate && privateKey) tags.push(<Tag key="tls" color="blue">TLS</Tag>);
-            } else {
-              pushSupplementalSecurity();
-            }
-          } else if (record.protocol === 'anytls') {'''
-count = text.count(old)
-if count != 1:
-    raise SystemExit(f"v22 TUIC dynamic TLS badge: expected one anchor, found {count}")
-path.write_text(text.replace(old, new, 1), encoding="utf-8")
-
-print("V22 native TUIC browser/link + badge polish applied.")
+print("V22 native TUIC browser-link ownership polish applied.")
