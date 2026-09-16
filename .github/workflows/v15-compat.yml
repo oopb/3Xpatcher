@@ -44,19 +44,18 @@ jobs:
       - name: Apply overlay
         run: |
           ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
-          # Production overlay intentionally does not install test files. Inject
-          # the focused regression suite only into this ephemeral CI source tree.
           cp overlay/internal/singbox/stats_test.go source/internal/singbox/stats_test.go
 
-      - name: Assert native TUIC runtime isolation
+      - name: Assert selectable TUIC runtime isolation
         run: |
           set -euo pipefail
-          if grep -q 'job.NewTuicJob()' source/internal/web/web.go; then
-            echo 'native 3x-ui TUIC scheduler is still active and can steal the sing-box TUIC UDP port' >&2
-            exit 1
-          fi
-          grep -q 'IsSingboxProtocol' source/internal/web/runtime/local.go
-          echo 'native TUIC scheduler disabled; TUIC is owned by supplemental sing-box'
+          grep -q 'job.NewTuicJob()' source/internal/web/web.go
+          grep -q 'TUICRuntimeFromSettings(ib.Settings) == model.TUICRuntimeSingbox' source/internal/web/service/inbound_tuic.go
+          grep -q 'IsSingboxOwnedInbound' source/internal/web/runtime/local.go
+          grep -q "runtime: z.enum(\['native', 'singbox'\])" source/frontend/src/schemas/protocols/inbound/tuic.ts
+          grep -q "value: 'native'" source/frontend/src/pages/inbounds/form/protocols/tuic.tsx
+          grep -q "value: 'singbox'" source/frontend/src/pages/inbounds/form/protocols/tuic.tsx
+          echo 'TUIC native/sing-box ownership selector is wired end-to-end'
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -72,7 +71,6 @@ jobs:
           go test -run '^$' ./internal/singbox
           go test -run '^$' ./internal/mieru
           go test -run '^$' ./internal/sub
-          go test -run '^$' ./internal/web
           go test -run '^$' ./internal/web/service
           go test -run '^$' ./internal/web/runtime
 
@@ -94,3 +92,7 @@ jobs:
           npm ci --no-audit --no-fund
           npm run typecheck
           npm run build
+
+      - name: Compile panel web package after frontend build
+        working-directory: source
+        run: go test -run '^$' ./internal/web
