@@ -29,4 +29,14 @@ replace_once(
     "v3.8 native TUIC protocol validation",
 )
 
+# v3.8.x excludes native TUIC from Xray config generation explicitly. 3Xpatcher
+# owns TUIC through the supplemental protocol dispatcher, so fold the new
+# upstream TUIC branch into the same IsSingboxProtocol guard used by V2.
+replace_once(
+    "internal/web/service/xray.go",
+    "\t\tif inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC {\n\t\t\tcontinue\n\t\t}\n",
+    "\t\tif inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || model.IsSingboxProtocol(inbound.Protocol) {\n\t\t\tcontinue\n\t\t}\n",
+    "v3.8 native TUIC Xray exclusion",
+)
+
 print("V15 pre-compat normalization applied.")
