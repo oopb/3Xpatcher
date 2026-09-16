@@ -80,8 +80,12 @@ jobs:
           set -euo pipefail
           sudo groupadd --system mita 2>/dev/null || true
           id -u mita >/dev/null 2>&1 || sudo useradd --system --gid mita --home-dir /nonexistent --shell /usr/sbin/nologin mita
+          sudo mkdir -p /var/lib/mita
+          sudo chown -R mita:mita /var/lib/mita
+          sudo chmod 0775 /var/lib/mita
           getent passwd mita
           getent group mita
+          stat -c '%U:%G %a %n' /var/lib/mita
 
       - name: Download verified official Mieru mita
         id: mieru
