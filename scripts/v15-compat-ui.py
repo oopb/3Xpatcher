@@ -98,4 +98,13 @@ replace_once(
     "v3.8 inbound client roll-up protocols",
 )
 
+# v3.8's native share-link dispatcher gained its own TUIC case. 3Xpatcher TUIC
+# uses the sing-box settings shape, so remove only that dispatch arm and let
+# v11's supplemental fallback handle TUIC together with the other extra cores.
+remove_once(
+    "frontend/src/lib/xray/inbound-link.ts",
+    "    case 'tuic':\n      return genTuicLink({\n        inbound,\n        address,\n        port,\n        remark,\n        clientUuid: client.uuid ?? client.id ?? '',\n        clientPassword: client.password ?? '',\n        externalProxy,\n      });\n",
+    "native TUIC genLink dispatch",
+)
+
 print("V15 frontend compatibility normalization applied.")
