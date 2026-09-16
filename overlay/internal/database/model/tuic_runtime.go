@@ -31,6 +31,7 @@ func TUICRuntimeFromSettings(raw string) TUICRuntime {
 			if _, ok := settings[key]; ok {
 				return TUICRuntimeSingbox
 			}
+		}
 		if _, ok := settings["congestion_control"]; ok {
 			return TUICRuntimeNative
 		}
