@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+const mieruE2EUser = "mita"
+
 func TestMieruMihomoE2E(t *testing.T) {
 	mita := os.Getenv("MIERU_E2E_BINARY")
 	mihomo := os.Getenv("MIHOMO_E2E_BINARY")
@@ -50,21 +52,37 @@ func TestMieruMihomoE2E(t *testing.T) {
 	}
 
 	dir := t.TempDir()
+	// Go's TempDir is 0700 by default. The production service runs as the
+	// dedicated mita account, so make the test root traversable while keeping
+	// the config itself read-only to non-owner users.
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	serverConfig := filepath.Join(dir, "mita.json")
-	uds := filepath.Join(dir, "mita.sock")
-	if err := os.WriteFile(serverConfig, cfg, 0o600); err != nil {
+	if err := os.WriteFile(serverConfig, cfg, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
+	runtimeDir := filepath.Join(dir, "run")
+	if err := os.MkdirAll(runtimeDir, 0o775); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("sudo", "chown", mieruE2EUser+":"+mieruE2EUser, runtimeDir).CombinedOutput(); err != nil {
+		t.Fatalf("prepare Mieru runtime dir: %v: %s", err, strings.TrimSpace(string(out)))
+	}
+	uds := filepath.Join(runtimeDir, "mita.sock")
+
 	mitaLog := new(bytes.Buffer)
-	mitaCmd := exec.Command(mita, "run")
-	mitaCmd.Env = mitaEnv(serverConfig, uds)
+	mitaCmd := mitaExec(mita, serverConfig, uds, "run")
 	mitaCmd.Stdout = mitaLog
 	mitaCmd.Stderr = mitaLog
 	if err := mitaCmd.Start(); err != nil {
 		t.Fatalf("start mita: %v", err)
 	}
-	defer stopProcess(mitaCmd)
+	defer func() {
+		_, _ = mitaCommand(mita, serverConfig, uds, "stop")
+		_ = mitaCmd.Wait()
+	}()
 
 	deadline := time.Now().Add(15 * time.Second)
 	for {
@@ -112,9 +130,13 @@ rules:
 	if err := os.WriteFile(mihomoConfig, []byte(configText), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	mihomoHome := filepath.Join(dir, "mihomo")
+	if err := os.MkdirAll(mihomoHome, 0o700); err != nil {
+		t.Fatal(err)
+	}
 
 	mihomoLog := new(bytes.Buffer)
-	mihomoCmd := exec.Command(mihomo, "-d", filepath.Join(dir, "mihomo"), "-f", mihomoConfig)
+	mihomoCmd := exec.Command(mihomo, "-d", mihomoHome, "-f", mihomoConfig)
 	mihomoCmd.Stdout = mihomoLog
 	mihomoCmd.Stderr = mihomoLog
 	if err := mihomoCmd.Start(); err != nil {
@@ -157,18 +179,20 @@ rules:
 	}
 }
 
-func mitaEnv(config, uds string) []string {
-	return append(os.Environ(),
-		"MITA_CONFIG_JSON_FILE="+config,
-		"MITA_UDS_PATH="+uds,
+func mitaExec(binary, config, uds string, args ...string) *exec.Cmd {
+	envArgs := []string{
+		"-u", mieruE2EUser, "--", "env",
+		"MITA_CONFIG_JSON_FILE=" + config,
+		"MITA_UDS_PATH=" + uds,
 		"MITA_LOG_NO_TIMESTAMP=true",
-	)
+		binary,
+	}
+	envArgs = append(envArgs, args...)
+	return exec.Command("sudo", envArgs...)
 }
 
 func mitaCommand(binary, config, uds string, args ...string) (string, error) {
-	cmd := exec.Command(binary, args...)
-	cmd.Env = mitaEnv(config, uds)
-	out, err := cmd.CombinedOutput()
+	out, err := mitaExec(binary, config, uds, args...).CombinedOutput()
 	return string(out), err
 }
 
