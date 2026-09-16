@@ -71,6 +71,17 @@ replace_once(
     "v3.8 subscription TUIC protocol list",
 )
 
+# The upstream link dispatcher also gained a native TUIC renderer. 3Xpatcher's
+# TUIC settings are sing-box-shaped, so route TUIC together with the other
+# supplemental protocols through genSingboxLink rather than the native sidecar
+# renderer. The native genTuicLink implementation remains in the source tree.
+replace_once(
+    "internal/sub/service.go",
+    "\tcase \"amneziawg\":\n\t\treturn s.genAmneziaWGLink(inbound, email)\n\tcase \"tuic\":\n\t\treturn s.genTuicLink(inbound, email)\n\t}\n",
+    "\tcase \"amneziawg\":\n\t\treturn s.genAmneziaWGLink(inbound, email)\n\tcase \"tuic\", \"anytls\", \"shadowtls\", \"naive\":\n\t\treturn s.genSingboxLink(inbound, email)\n\t}\n",
+    "v3.8 native TUIC subscription renderer",
+)
+
 # Frontend protocol enum/map already contains TUIC in v3.8.x. Normalize directly
 # to the V2 final form so the legacy patch remains idempotent and only adds the
 # protocols that are still absent upstream.
