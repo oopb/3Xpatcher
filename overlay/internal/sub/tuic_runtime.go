@@ -46,8 +46,11 @@ func applyNativeTUICClashSettings(settings map[string]any, proxy map[string]any)
 	if cc, _ := server["congestion_control"].(string); strings.TrimSpace(cc) != "" {
 		proxy["congestion-controller"] = strings.TrimSpace(cc)
 	}
-	if zero, _ := server["zero_rtt_handshake"].(bool); zero {
-		proxy["reduce-rtt"] = true
+	if relay, _ := server["udp_relay_mode"].(string); strings.TrimSpace(relay) != "" {
+		proxy["udp-relay-mode"] = strings.TrimSpace(relay)
+	}
+	if zero, ok := server["zero_rtt_handshake"].(bool); ok {
+		proxy["reduce-rtt"] = zero
 	}
 	if raw, ok := server["alpn"].([]any); ok {
 		values := make([]string, 0, len(raw))
