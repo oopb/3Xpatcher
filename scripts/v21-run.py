@@ -9,9 +9,10 @@ if len(sys.argv) != 2:
 repo = Path(__file__).resolve().parent.parent
 target = Path(sys.argv[1]).resolve()
 
-# V15/V2 temporarily replaced the native TUIC settings factory/type with the
+# V15/V2/V11 temporarily replace the native TUIC settings factory/type with the
 # historical 3Xpatcher sing-box shape. Restore the upstream-native shape first;
-# V21 then adds only the runtime selector on top of it.
+# V21 then adds only the runtime selector on top of it. Match by function
+# boundaries instead of exact formatting because V11 expands the factory.
 defaults = target / "frontend/src/lib/xray/inbound-defaults.ts"
 text = defaults.read_text(encoding="utf-8")
 lines = []
@@ -27,10 +28,7 @@ if "import type { TuicInboundSettings } from '@/schemas/protocols/inbound/tuic';
     if marker not in text:
         raise SystemExit("v21-run: native TUIC client import anchor missing")
     text = text.replace(marker, marker + "import type { TuicInboundSettings } from '@/schemas/protocols/inbound/tuic';\n", 1)
-old_factory = """export function createDefaultTuicInboundSettings(): TuicInboundSettings {
-  return { clients: [], congestionControl: 'cubic', authTimeout: '3s', zeroRTTHandshake: false, heartbeat: '10s' };
-}
-"""
+
 native_factory = """export function createDefaultTuicInboundSettings(): TuicInboundSettings {
   return {
     server: {
@@ -49,10 +47,17 @@ native_factory = """export function createDefaultTuicInboundSettings(): TuicInbo
     clients: [],
   };
 }
+
 """
-if old_factory not in text:
-    raise SystemExit("v21-run: supplemental TUIC defaults factory anchor missing")
-text = text.replace(old_factory, native_factory, 1)
+start_marker = "export function createDefaultTuicInboundSettings(): TuicInboundSettings {"
+end_marker = "export function createDefaultAnyTlsInboundSettings(): AnyTlsInboundSettings {"
+start = text.find(start_marker)
+end = text.find(end_marker, start + 1) if start >= 0 else -1
+if start < 0 or end < 0:
+    raise SystemExit(
+        f"v21-run: TUIC defaults function boundary missing (start={start >= 0}, end={end >= 0})"
+    )
+text = text[:start] + native_factory + text[end:]
 defaults.write_text(text, encoding="utf-8")
 
 for src_rel, dst_rel in (
