@@ -1,6 +1,16 @@
 name: Validate 3x-ui v3.8.5 compatibility
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - UPSTREAM_COMPAT
+      - internal/**
+      - frontend/**
+      - overlay/**
+      - scripts/**
+      - tests/**
+      - .github/workflows/v15-compat.yml
   push:
     branches: [compat/3x-ui-v3.8.5]
   workflow_dispatch:
