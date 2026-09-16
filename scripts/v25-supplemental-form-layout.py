@@ -104,8 +104,6 @@ text = replace_once(
     "      <FormField label=\"Require User Hint\" name={['settings', 'userHintIsMandatory']} valueProp=\"checked\"><Switch /></FormField>\n        </>\n      )}\n\n      {section === 'advanced' && (\n        <>\n",
     "Mieru protocol/advanced boundary",
 )
-# Close the advanced block directly after Client Traffic Pattern, without
-# depending on the exact final indentation of the whole component.
 needle = "      <FormField label=\"Client Traffic Pattern\" name={['settings', 'clientTrafficPattern']}>"
 pos = text.find(needle)
 if pos < 0:
@@ -140,13 +138,14 @@ text = replace_once(
 )
 path.write_text(text, encoding="utf-8")
 
-# Re-export semantic sections.
+# V21 already restored native TUIC as its own export. Extend only the sing-box
+# supplemental export line and leave the native TuicFields export untouched.
 path = p("frontend/src/pages/inbounds/form/protocols/index.ts")
 text = path.read_text(encoding="utf-8")
 text = replace_once(
     text,
-    "export { AnyTlsFields, MieruFields, NaiveFields, ShadowTlsFields, ShadowTlsSecurityFields, SnellFields, TuicFields } from './singbox';",
-    "export { AnyTlsFields, AnyTlsTransportFields, MieruFields, MieruTransportFields, MieruAdvancedFields, NaiveFields, NaiveTransportFields, ShadowTlsFields, ShadowTlsSecurityFields, SnellFields, SnellTransportFields, TuicFields } from './singbox';",
+    "export { AnyTlsFields, MieruFields, NaiveFields, ShadowTlsFields, ShadowTlsSecurityFields, SnellFields } from './singbox';",
+    "export { AnyTlsFields, AnyTlsTransportFields, MieruFields, MieruTransportFields, MieruAdvancedFields, NaiveFields, NaiveTransportFields, ShadowTlsFields, ShadowTlsSecurityFields, SnellFields, SnellTransportFields } from './singbox';",
     "form exports",
 )
 path.write_text(text, encoding="utf-8")
