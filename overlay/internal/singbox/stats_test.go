@@ -63,6 +63,31 @@ func TestApplyStatsSnapshotDelta(t *testing.T) {
 	}
 }
 
+func TestApplyStatsSnapshotShadowTLSInnerFold(t *testing.T) {
+	resetStatsState()
+	base := []*statsService.Stat{
+		{Name: "inbound>>>in-32087-tcp-inner>>>traffic>>>uplink", Value: 1000},
+		{Name: "inbound>>>in-32087-tcp-inner>>>traffic>>>downlink", Value: 2000},
+	}
+	if ts, _, _, _, err := applyStatsSnapshot(base); err != nil || len(ts) != 0 {
+		t.Fatalf("baseline must not be billed: ts=%v err=%v", ts, err)
+	}
+	next := []*statsService.Stat{
+		{Name: "inbound>>>in-32087-tcp-inner>>>traffic>>>uplink", Value: 1123},
+		{Name: "inbound>>>in-32087-tcp-inner>>>traffic>>>downlink", Value: 2456},
+	}
+	ts, _, _, tags, err := applyStatsSnapshot(next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ts) != 1 || ts[0].Tag != "in-32087-tcp" || ts[0].Up != 123 || ts[0].Down != 456 {
+		t.Fatalf("ShadowTLS inner stats were not folded to parent: %#v", ts)
+	}
+	if len(tags) != 1 || tags[0] != "in-32087-tcp" {
+		t.Fatalf("ShadowTLS activity tag was not folded to parent: %#v", tags)
+	}
+}
+
 func TestApplyStatsSnapshotCoreRestart(t *testing.T) {
 	resetStatsState()
 	_, _, _, _, _ = applyStatsSnapshot([]*statsService.Stat{{Name: "user>>>u>>>traffic>>>uplink", Value: 100}})
