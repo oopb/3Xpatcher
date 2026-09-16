@@ -39,4 +39,17 @@ replace_once(
     "v3.8 native TUIC Xray exclusion",
 )
 
+# Local AddUser/RemoveUser also gained an explicit TUIC bypass. Supplemental
+# dispatch must run first so TUIC changes reconcile the sing-box runtime just
+# like AnyTLS/ShadowTLS/Naive instead of silently returning through the native
+# TUIC branch.
+for fn in ("AddUser", "RemoveUser"):
+    if fn == "AddUser":
+        sig = "func (l *Local) AddUser(_ context.Context, ib *model.Inbound, userMap map[string]any) error {\n"
+    else:
+        sig = "func (l *Local) RemoveUser(_ context.Context, ib *model.Inbound, email string) error {\n"
+    old = sig + "\tif ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC {\n"
+    new = sig + "\tif model.IsSingboxProtocol(ib.Protocol) {\n\t\treturn sbox.Reconcile()\n\t}\n\tif ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG {\n"
+    replace_once("internal/web/runtime/local.go", old, new, f"v3.8 native TUIC {fn} bypass")
+
 print("V15 pre-compat normalization applied.")
