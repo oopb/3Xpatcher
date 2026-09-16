@@ -23,16 +23,17 @@ rep(
     '''export function ShadowTlsSecurityFields() {\n  return (\n    <>\n      <FormField label="Handshake Server" name={['settings', 'handshakeServer']}><Input placeholder="www.cloudflare.com" /></FormField>\n      <FormField label="Handshake Port" name={['settings', 'handshakePort']}><InputNumber min={1} max={65535} style={{ width: '100%' }} /></FormField>\n      <FormField label="Handshake by SNI (JSON)" name={['settings', 'handshakeForServerNameJson']}>\n        <Input.TextArea autoSize={{ minRows: 3, maxRows: 8 }} placeholder={'{"example.com":{"server":"example.com","server_port":443}}'} />\n      </FormField>\n      <FormField label="Strict Mode" name={['settings', 'strictMode']} valueProp="checked"><Switch /></FormField>\n      <FormField label="Wildcard SNI" name={['settings', 'wildcardSNI']}><Select options={['off', 'authed', 'all'].map((value) => ({ value, label: value }))} /></FormField>\n    </>\n  );\n}\n\nexport function NaiveFields() {''',
 )
 
+# By V20, Mieru and Snell have already extended this export line.
 rep(
     'frontend/src/pages/inbounds/form/protocols/index.ts',
-    "export { AnyTlsFields, NaiveFields, ShadowTlsFields, TuicFields } from './singbox';",
-    "export { AnyTlsFields, NaiveFields, ShadowTlsFields, ShadowTlsSecurityFields, TuicFields } from './singbox';",
+    "export { AnyTlsFields, MieruFields, NaiveFields, ShadowTlsFields, SnellFields, TuicFields } from './singbox';",
+    "export { AnyTlsFields, MieruFields, NaiveFields, ShadowTlsFields, ShadowTlsSecurityFields, SnellFields, TuicFields } from './singbox';",
 )
 
 rep(
     'frontend/src/pages/inbounds/form/InboundFormModal.tsx',
-    '''  ShadowTlsFields,\n  NaiveFields,\n  VlessFields,''',
-    '''  ShadowTlsFields,\n  ShadowTlsSecurityFields,\n  NaiveFields,\n  VlessFields,''',
+    '''  ShadowTlsFields,\n  NaiveFields,''',
+    '''  ShadowTlsFields,\n  ShadowTlsSecurityFields,\n  NaiveFields,''',
 )
 
 # Validation failures for fields moved out of Protocol should open Security.
