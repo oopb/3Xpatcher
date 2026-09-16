@@ -9,6 +9,7 @@ if len(sys.argv) != 2:
 base = Path(__file__).resolve().parent
 target = sys.argv[1]
 for name in (
+    "v15-compat-pre.py",
     "v2-patch-backend.py",
     "v2-patch-subscription.py",
     "v2-patch-frontend.py",
