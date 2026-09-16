@@ -75,6 +75,31 @@ subprocess.run(
     check=True,
 )
 
+# The final unified schema must expose TUIC only from the native module. V2/V13
+# still leave TuicInboundSettings* exported from ./singbox for legacy patching;
+# avoid wildcard re-exporting those duplicate names while preserving every other
+# supplemental settings schema/type.
+index = target / "frontend/src/schemas/protocols/inbound/index.ts"
+text = index.read_text(encoding="utf-8")
+old = "export * from './singbox';"
+explicit = """export {
+  AnyTlsInboundSettingsSchema,
+  ShadowTlsInboundSettingsSchema,
+  NaiveInboundSettingsSchema,
+  SnellInboundSettingsSchema,
+  MieruInboundSettingsSchema,
+} from './singbox';
+export type {
+  AnyTlsInboundSettings,
+  ShadowTlsInboundSettings,
+  NaiveInboundSettings,
+  SnellInboundSettings,
+  MieruInboundSettings,
+} from './singbox';"""
+if old not in text:
+    raise SystemExit("v21-run: singbox wildcard export anchor missing")
+index.write_text(text.replace(old, explicit, 1), encoding="utf-8")
+
 # TUIC now owns certificate/SNI fields in its native protocol editor for both
 # runtimes; do not show the generic Xray TLS Security editor for TUIC.
 cap = target / "frontend/src/lib/xray/protocol-capabilities.ts"
