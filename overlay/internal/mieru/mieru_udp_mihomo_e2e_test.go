@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func TestMieruUDPMihomoE2E(t *testing.T) {
+func TestMieruUDPE2E(t *testing.T) {
 	mita := os.Getenv("MIERU_E2E_BINARY")
 	mihomo := os.Getenv("MIHOMO_E2E_BINARY")
 	if mita == "" || mihomo == "" {
