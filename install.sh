@@ -280,9 +280,27 @@ main() {
   fetch_patch_tree
   download_prebuilt_panel
   backup_current_install
-  install_singbox_core
-  install_mieru_core
-  activate_panel
+
+  # Existing patched installs may still have a pre-selector sing-box config
+  # containing TUIC while the currently running native TUIC service owns the
+  # same UDP port. Starting/health-checking sing-box before the new panel gets a
+  # chance to reconcile runtime ownership creates a deterministic EADDRINUSE
+  # failure. For upgrades, activate the new panel first so its startup reconcile
+  # rewrites the supplemental config with mutually-exclusive TUIC ownership.
+  if [[ "$SKIP_SINGBOX" != 1 ]] && { systemctl cat x-ui-singbox.service >/dev/null 2>&1 || [[ -e /usr/local/x-ui-singbox ]]; }; then
+    SINGBOX_WAS_PRESENT=1
+    info "Existing sing-box runtime detected; activating patched panel before runtime health check."
+    activate_panel
+    install_singbox_core
+    install_mieru_core
+  else
+    # Fresh installs need the runtime binary/unit in place before the panel's
+    # first reconcile; otherwise startup can only warn that sing-box is absent.
+    install_singbox_core
+    install_mieru_core
+    activate_panel
+  fi
+
   persist_state
   SUCCESS=1
   BINARY_SWAPPED=0
