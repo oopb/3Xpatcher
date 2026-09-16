@@ -56,6 +56,16 @@ var (
 	}{last: make(map[string]int64)}
 )
 
+func canonicalStatsTag(tag string) string {
+	// ShadowTLS v3 payload bytes are counted on the generated inner
+	// Shadowsocks transport. That tag has no native 3x-ui row, so fold it back
+	// into the parent ShadowTLS tag before AddTraffic and online-state updates.
+	if strings.HasSuffix(tag, "-inner") {
+		return strings.TrimSuffix(tag, "-inner")
+	}
+	return tag
+}
+
 // CollectTraffic returns byte deltas since the previous successful poll plus
 // the users/inbounds that moved traffic during this poll. The first successful
 // poll is baseline-only so a panel restart never re-adds counters already held
@@ -107,17 +117,18 @@ func applyStatsSnapshot(stats []*statsService.Stat) ([]*xray.Traffic, []*xray.Cl
 			continue
 		}
 		if m := statsTrafficRE.FindStringSubmatch(stat.Name); len(m) == 4 {
-			t := inboundMap[m[2]]
+			tag := canonicalStatsTag(m[2])
+			t := inboundMap[tag]
 			if t == nil {
-				t = &xray.Traffic{IsInbound: true, Tag: m[2]}
-				inboundMap[m[2]] = t
+				t = &xray.Traffic{IsInbound: true, Tag: tag}
+				inboundMap[tag] = t
 			}
 			if m[3] == "downlink" {
 				t.Down += delta
 			} else {
 				t.Up += delta
 			}
-			activeTags[m[2]] = struct{}{}
+			activeTags[tag] = struct{}{}
 			continue
 		}
 		if m := statsClientRE.FindStringSubmatch(stat.Name); len(m) == 3 {

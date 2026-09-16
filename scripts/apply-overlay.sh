@@ -25,6 +25,7 @@ modified=(
   internal/sub/json_service.go
   internal/sub/clash_service.go
   internal/sub/controller.go
+  frontend/src/schemas/forms/inbound-form.ts
   frontend/src/schemas/primitives/protocol.ts
   frontend/src/schemas/protocols/inbound/index.ts
   frontend/src/schemas/protocols/security/tls.ts
@@ -94,16 +95,18 @@ python3 "$ROOT/scripts/v11-final-patch.py" "$SRC"
 python3 "$ROOT/scripts/v12-patch.py" "$SRC"
 python3 "$ROOT/scripts/v13-patch.py" "$SRC"
 python3 "$ROOT/scripts/v14-patch.py" "$SRC"
+python3 "$ROOT/scripts/v16-hotfix.py" "$SRC"
+python3 "$ROOT/scripts/v17-shadowtls-stats.py" "$SRC"
 
 gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/model.go" "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/controller.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
 
-echo "3Xpatcher V14 Snell integrated overlay applied."
+echo "3Xpatcher V17 hotfix overlay applied."
 echo "Backup: $backup"
 echo "UI: native /panel/inbounds + full native client action, QR, raw and Clash subscription parity"
 echo "Security: native 3x-ui TLS and Reality UI reused by supported sing-box protocols"
-echo "Stats: Xray / sing-box / Mieru fold into native 3x-ui traffic + merged online state"
+echo "Stats: Xray / sing-box / Mieru fold into native 3x-ui traffic + merged online state; ShadowTLS payload stats fold from the inner transport"
 echo "SS2022: server/client keys auto-generate, heal legacy invalid rows, and Clash export is guarded"
 echo "Snell: v5 one-client compatibility mode; canonical client password is the PSK; Mihomo export includes UDP"
 echo "Mieru: complete v3.36 server config coverage including multi-bind, DNS, egress and subscription expansion"
-echo "Compatibility: Shadowrocket ShadowTLS descriptor + S-UI Naive http2; TUIC Clash keeps the pre-Mieru shape and always emits skip-cert-verify=true"
+echo "Compatibility: self-signed SNI bypasses native empty certificate-row validation; supplemental inbounds use native-style protocol badges"
 echo "Runtime: Xray / sing-box / official Mieru mita remain isolated"
