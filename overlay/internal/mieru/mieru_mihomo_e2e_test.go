@@ -51,10 +51,16 @@ func TestMieruMihomoE2E(t *testing.T) {
 		t.Fatalf("BuildServerConfig: %v", err)
 	}
 
-	dir := t.TempDir()
-	// Go's TempDir is 0700 by default. The production service runs as the
-	// dedicated mita account, so make the test root traversable while keeping
-	// the config itself read-only to non-owner users.
+	// Do not use testing.T.TempDir here. Go nests it under a private 0700
+	// parent that the production-style `mita` system account cannot traverse.
+	// A direct /tmp child mirrors systemd RuntimeDirectory semantics much more
+	// closely: the service account can traverse the parent and owns its socket
+	// directory.
+	dir, err := os.MkdirTemp("/tmp", "3xpatcher-mieru-e2e-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
 	if err := os.Chmod(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
