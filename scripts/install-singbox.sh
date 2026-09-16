@@ -23,7 +23,7 @@ trap err_report ERR
 for cmd in curl tar systemctl sha256sum python3; do
   command -v "$cmd" >/dev/null || { echo "Missing dependency: $cmd" >&2; exit 1; }
 done
-[[ -r "$ROOT/SINGBOX_VERSION" && -r "$ROOT/UPSTREAM_COMPAT" ]] || { echo "Missing pinned sing-box/upstream version metadata" >&2; exit 1; }
+[[ -r "$ROOT/SINGBOX_VERSION" ]] || { echo "Missing pinned sing-box version metadata" >&2; exit 1; }
 [[ "$PATCH_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "Invalid PATCH_REPO" >&2; exit 1; }
 
 mkdir -p "$BASE" "$CONF" "$BACKUP" "$STATE_DIR"
@@ -35,12 +35,37 @@ case "$(uname -m)" in
   *) echo "sing-box runtime installer supports Linux amd64/arm64 only." >&2; exit 1 ;;
 esac
 
+resolve_upstream() {
+  local panel_bin="${XUI_BINARY:-/usr/local/x-ui/x-ui}"
+  local raw=""
+
+  if [[ -n "${UPSTREAM_COMPAT_OVERRIDE:-}" ]]; then
+    printf '%s\n' "$UPSTREAM_COMPAT_OVERRIDE"
+    return 0
+  fi
+
+  # The release tag must follow the panel actually installed on this VPS.
+  # This keeps older supported panels (for example v3.7.0) pinned to their
+  # own prebuilt runtime even when main/UPSTREAM_COMPAT moves to v3.8.5+.
+  if [[ -x "$panel_bin" ]]; then
+    raw=$($panel_bin -v 2>/dev/null | tail -n1 | tr -d '\r' | xargs || true)
+    if [[ "$raw" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+      printf 'v%s\n' "${BASH_REMATCH[1]}"
+      return 0
+    fi
+  fi
+
+  [[ -r "$ROOT/UPSTREAM_COMPAT" ]] || { echo "Missing upstream compatibility metadata" >&2; return 1; }
+  tr -d '\r\n' < "$ROOT/UPSTREAM_COMPAT"
+}
+
 version=$(tr -d '\r\n' < "$ROOT/SINGBOX_VERSION")
-upstream=$(tr -d '\r\n' < "$ROOT/UPSTREAM_COMPAT")
+upstream=$(resolve_upstream)
 [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid SINGBOX_VERSION: $version" >&2; exit 1; }
-[[ "$upstream" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid UPSTREAM_COMPAT: $upstream" >&2; exit 1; }
+[[ "$upstream" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid upstream compatibility target: $upstream" >&2; exit 1; }
 asset="sing-box-stats-${version}-linux-${arch}.tar.gz"
 release_tag="prebuilt-${upstream}"
+echo "[3Xpatcher] Runtime compatibility target: $upstream"
 
 tmp=$(mktemp -d)
 cleanup_tmp() { rm -rf "$tmp"; }
