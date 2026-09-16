@@ -87,7 +87,13 @@ func TestMieruMihomoE2E(t *testing.T) {
 	}
 	defer func() {
 		_, _ = mitaCommand(mita, serverConfig, uds, "stop")
-		_ = mitaCmd.Wait()
+		// `mita stop` shuts down the daemon via RPC, but the sudo wrapper used by
+		// this test can remain blocked in Wait() even after the daemon is gone.
+		// Do not let successful protocol/metrics assertions turn into a 10-minute
+		// test timeout during cleanup.
+		if mitaCmd.Process != nil {
+			_ = mitaCmd.Process.Kill()
+		}
 	}()
 
 	deadline := time.Now().Add(15 * time.Second)
