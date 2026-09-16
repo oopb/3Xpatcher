@@ -1,11 +1,9 @@
 package model
 
 // Supplemental protocols are stored in the same inbounds table and share the
-// panel's ClientRecord/ClientInbound identity model. They are never rendered
-// into Xray configuration. 3x-ui v3.8+ defines TUIC ("tuic") natively;
-// 3Xpatcher reuses that canonical Protocol constant and routes it through
-// sing-box alongside the additional protocols declared here. Mieru uses
-// isolated official mita instances.
+// panel's ClientRecord/ClientInbound identity model. 3x-ui v3.8+ defines TUIC
+// natively; TUIC runtime ownership is selected per inbound in tuic_runtime.go.
+// Mieru uses isolated official mita instances.
 const (
 	AnyTLS    Protocol = "anytls"
 	ShadowTLS Protocol = "shadowtls"

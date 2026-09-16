@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from pathlib import Path
+import subprocess
 import sys
 from v2_patchlib import Patcher
 
@@ -63,3 +65,8 @@ rep(
 )
 
 print('V20 dynamic supplemental badges + ShadowTLS Security tab applied.')
+
+subprocess.run(
+    [sys.executable, str(Path(__file__).resolve().parent / 'v21-run.py'), sys.argv[1]],
+    check=True,
+)
