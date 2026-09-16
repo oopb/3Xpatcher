@@ -124,8 +124,6 @@ text = path.read_text(encoding="utf-8")
 text = text.replace("model.IsSingboxProtocol(ib.Protocol)", "model.IsSingboxOwnedInbound(ib)")
 text = text.replace("oldSingbox := model.IsSingboxProtocol(oldIb.Protocol)", "oldSingbox := model.IsSingboxOwnedInbound(oldIb)")
 text = text.replace("newSingbox := model.IsSingboxProtocol(newIb.Protocol)", "newSingbox := model.IsSingboxOwnedInbound(newIb)")
-# Native TUIC client mutations are applied by applyLocalTuic/manager; never send
-# them to Xray when TUIC is not sing-box-owned.
 needle = "\tif ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG {\n\t\treturn nil\n\t}\n"
 if text.count(needle) != 2:
     raise SystemExit(f"v21 native TUIC AddUser/RemoveUser guard expected 2 anchors, found {text.count(needle)}")
@@ -140,8 +138,6 @@ if anchor not in text:
     raise SystemExit("v21 native TUIC scheduler filter anchor missing")
 path.write_text(text.replace(anchor, replacement, 1), encoding="utf-8")
 
-# JSON subscriptions should keep using the upstream TUIC generator for Native,
-# while sing-box-owned TUIC remains excluded like other supplemental protocols.
 path = root / "internal/sub/json_service.go"
 text = path.read_text(encoding="utf-8")
 text = text.replace(
@@ -150,18 +146,16 @@ text = text.replace(
 )
 path.write_text(text, encoding="utf-8")
 
-# Raw URI dispatcher: Native uses upstream genTuicLink; sing-box uses the
-# supplemental renderer. Other supplemental protocols are unchanged.
+# By V13 the supplemental raw-link switch also contains Snell. Split TUIC out
+# while preserving Snell and all other supplemental renderers.
 path = root / "internal/sub/service.go"
 text = path.read_text(encoding="utf-8")
-old = 'case "tuic", "anytls", "shadowtls", "naive":\n\t\treturn s.genSingboxLink(inbound, email)'
-new = 'case "tuic":\n\t\tif model.TUICRuntimeFromSettings(inbound.Settings) == model.TUICRuntimeNative {\n\t\t\treturn s.genTuicLink(inbound, email)\n\t\t}\n\t\treturn s.genSingboxLink(inbound, email)\n\tcase "anytls", "shadowtls", "naive":\n\t\treturn s.genSingboxLink(inbound, email)'
+old = 'case "tuic", "anytls", "shadowtls", "naive", "snell":\n\t\treturn s.genSingboxLink(inbound, email)'
+new = 'case "tuic":\n\t\tif model.TUICRuntimeFromSettings(inbound.Settings) == model.TUICRuntimeNative {\n\t\t\treturn s.genTuicLink(inbound, email)\n\t\t}\n\t\treturn s.genSingboxLink(inbound, email)\n\tcase "anytls", "shadowtls", "naive", "snell":\n\t\treturn s.genSingboxLink(inbound, email)'
 if old not in text:
     raise SystemExit("v21 raw TUIC subscription dispatcher anchor missing")
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-# Clash dispatcher: Native returns to upstream buildTuicProxy; sing-box rows use
-# 3Xpatcher's renderer.
 path = root / "internal/sub/clash_service.go"
 text = path.read_text(encoding="utf-8")
 old = "\tif model.IsSingboxProtocol(inbound.Protocol) {\n\t\treturn s.buildSingboxProxy(subReq, inbound, client, stream, ep)\n\t}\n"
@@ -170,8 +164,6 @@ if old not in text:
     raise SystemExit("v21 Clash TUIC dispatcher anchor missing")
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-# sing-box share links/Clash should read the same native TUIC server fields when
-# runtime=singbox, so switching runtime does not force a second TUIC form shape.
 path = root / "internal/sub/singbox_links.go"
 text = path.read_text(encoding="utf-8")
 old = "\t\tif v, _ := settings[\"congestionControl\"].(string); v != \"\" {\n\t\t\tparams[\"congestion_control\"] = v\n\t\t}\n\t\tif v, _ := settings[\"zeroRTTHandshake\"].(bool); v {\n\t\t\tparams[\"zero_rtt_handshake\"] = \"1\"\n\t\t}\n"
@@ -188,7 +180,6 @@ if old not in text:
     raise SystemExit("v21 sing-box TUIC Clash settings anchor missing")
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-# Self-signed materialization applies only to rows actually owned by sing-box.
 path = root / "internal/web/service/supplemental_tls.go"
 text = path.read_text(encoding="utf-8")
 text = text.replace("!model.IsSingboxProtocol(inbound.Protocol)", "!model.IsSingboxOwnedInbound(inbound)")
