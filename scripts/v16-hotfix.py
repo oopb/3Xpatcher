@@ -47,8 +47,8 @@ const InboundTlsSettingsSchema = z.union([
 ]);''',
 )
 
-# Match 3x-ui's native protocol column style: base protocol plus meaningful
-# transport/security/version badges instead of a lone supplemental tag.
+# Match 3x-ui's native protocol column style with useful transport/security
+# badges, but do not add protocol-version badges (for example v3/v5).
 rep(
     'frontend/src/pages/inbounds/list/useInboundColumns.tsx',
     '''          if (record.isWireguard || record.isAmneziawg || record.isHysteria || record.isTuic) {
@@ -72,7 +72,6 @@ rep(
           } else if (record.protocol === 'shadowtls') {
             tags.push(
               <Tag key="n" color="green">TCP</Tag>,
-              <Tag key="v" color="cyan">v3</Tag>,
               <Tag key="tls" color="blue">TLS</Tag>,
             );
           } else if (record.protocol === 'naive') {
@@ -83,7 +82,6 @@ rep(
           } else if (record.protocol === 'snell') {
             tags.push(
               <Tag key="n" color="green">TCP</Tag>,
-              <Tag key="v" color="cyan">v5</Tag>,
             );
           } else if (record.protocol === 'mieru') {
             const transport = String(supplementalSettings.transport || 'TCP').toUpperCase();
