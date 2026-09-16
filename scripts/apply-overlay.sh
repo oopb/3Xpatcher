@@ -12,6 +12,7 @@ fi
 modified=(
   internal/database/model/model.go
   internal/web/service/inbound.go
+  internal/web/service/inbound_tuic.go
   internal/web/service/inbound_node.go
   internal/web/service/server.go
   internal/web/service/client_crud.go
@@ -28,12 +29,14 @@ modified=(
   frontend/src/schemas/forms/inbound-form.ts
   frontend/src/schemas/primitives/protocol.ts
   frontend/src/schemas/protocols/inbound/index.ts
+  frontend/src/schemas/protocols/inbound/tuic.ts
   frontend/src/schemas/protocols/security/tls.ts
   frontend/src/lib/xray/inbound-defaults.ts
   frontend/src/lib/xray/protocol-capabilities.ts
   frontend/src/lib/xray/inbound-link.ts
   frontend/src/pages/inbounds/InboundsPage.tsx
   frontend/src/pages/inbounds/form/protocols/index.ts
+  frontend/src/pages/inbounds/form/protocols/tuic.tsx
   frontend/src/pages/inbounds/form/InboundFormModal.tsx
   frontend/src/pages/inbounds/form/security/tls.tsx
   frontend/src/pages/inbounds/info/helpers.ts
@@ -65,6 +68,7 @@ cp "$ROOT/overlay/internal/singbox/reality.go" "$SRC/internal/singbox/reality.go
 cp "$ROOT/overlay/internal/singbox/selfsigned.go" "$SRC/internal/singbox/selfsigned.go"
 cp "$ROOT/overlay/internal/singbox/selfsigned_util.go" "$SRC/internal/singbox/selfsigned_util.go"
 cp "$ROOT/overlay/internal/singbox/stats.go" "$SRC/internal/singbox/stats.go"
+cp "$ROOT/overlay/internal/singbox/tuic_native.go" "$SRC/internal/singbox/tuic_native.go"
 cp "$ROOT/internal/mieru/config.go" "$SRC/internal/mieru/config.go"
 cp "$ROOT/internal/mieru/runtime.go" "$SRC/internal/mieru/runtime.go"
 cp "$ROOT/overlay/internal/mieru/integrated.go" "$SRC/internal/mieru/integrated.go"
@@ -73,6 +77,7 @@ cp "$ROOT/overlay/internal/database/model/singbox_protocols.go" "$SRC/internal/d
 cp "$ROOT/overlay/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links.go"
 cp "$ROOT/overlay/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_links_test.go"
 cp "$ROOT/overlay/internal/sub/singbox_clash.go" "$SRC/internal/sub/singbox_clash.go"
+cp "$ROOT/overlay/internal/sub/tuic_runtime.go" "$SRC/internal/sub/tuic_runtime.go"
 cp "$ROOT/overlay/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_links.go"
 cp "$ROOT/overlay/internal/sub/mieru_clash.go" "$SRC/internal/sub/mieru_clash.go"
 cp "$ROOT/overlay/internal/web/controller/singbox_cert.go" "$SRC/internal/web/controller/singbox_cert.go"
@@ -101,16 +106,18 @@ python3 "$ROOT/scripts/v17-shadowtls-stats.py" "$SRC"
 python3 "$ROOT/scripts/v18-tuic-cert-mieru.py" "$SRC"
 python3 "$ROOT/scripts/v19-tuic-native-cert-form.py" "$SRC"
 python3 "$ROOT/scripts/v20-dynamic-badges-security.py" "$SRC"
+python3 "$ROOT/scripts/v21-tuic-runtime-selector.py" "$SRC"
 
-gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/model.go" "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/supplemental_tls.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/controller.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
+gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model/singbox_protocols.go" "$SRC/internal/database/model/model.go" "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/supplemental_tls.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/inbound_tuic.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/controller.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/tuic_runtime.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
 
-echo "3Xpatcher V20 hotfix overlay applied."
+echo "3Xpatcher V21 overlay applied."
 echo "Backup: $backup"
-echo "UI: native /panel/inbounds + full native client action, QR, raw and Clash subscription parity"
-echo "Security: generated self-signed TLS is stored as native 3x-ui certificateFile/keyFile paths before save validation; ShadowTLS handshake controls use a dedicated Security tab"
+echo "UI: native /panel/inbounds + native TUIC form with per-inbound Native / sing-box runtime selector"
+echo "Security: generated self-signed TLS uses native 3x-ui certificateFile/keyFile paths; ShadowTLS handshake controls use a dedicated Security tab"
 echo "Stats: Xray / sing-box / Mieru fold into native 3x-ui traffic + merged online state; ShadowTLS payload stats fold from the inner transport"
+echo "TUIC: Native rows stay on upstream tuic-server; sing-box rows reuse the same native TUIC settings and are excluded from the native scheduler"
 echo "SS2022: server/client keys auto-generate, heal legacy invalid rows, and Clash export is guarded"
 echo "Snell: v5 one-client compatibility mode; canonical client password is the PSK; Mihomo export includes UDP"
 echo "Mieru: complete v3.36 server config coverage; default DNS dual-stack preference is PREFER_IPv4"
 echo "Compatibility: supplemental inbound badges are derived from stored transport/security configuration; no protocol-version badges"
-echo "Runtime: Xray / sing-box / official Mieru mita remain isolated"
+echo "Runtime: Xray / native TUIC / supplemental sing-box / official Mieru mita are isolated by ownership"
