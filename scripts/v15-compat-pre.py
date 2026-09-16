@@ -62,6 +62,27 @@ for fn in ("AddUser", "RemoveUser"):
     new = sig + "\tif model.IsSingboxProtocol(ib.Protocol) {\n\t\treturn sbox.Reconcile()\n\t}\n\tif ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG {\n"
     replace_once("internal/web/runtime/local.go", old, new, f"v3.8 native TUIC {fn} bypass")
 
+# The v3.8 service layer has dedicated native-TUIC switch arms. The V2 patch
+# installs equivalent TUIC handling together with the other supplemental
+# protocols; keeping both produces duplicate Go switch cases. Remove only the
+# native TUIC arms before V2 runs, preserving surrounding v3.8 behavior.
+remove_once(
+    "internal/web/service/client_crud.go",
+    "\tcase model.TUIC:\n\t\tif c.ID == \"\" {\n\t\t\tc.ID = uuid.NewString()\n\t\t}\n\t\tif c.Password == \"\" {\n\t\t\tc.Password = strings.ReplaceAll(uuid.NewString(), \"-\", \"\")\n\t\t}\n",
+    "native TUIC global client defaults",
+)
+for rel in ("internal/web/service/client_inbound_apply.go", "internal/web/service/inbound.go"):
+    remove_once(
+        rel,
+        "\t\tcase \"tuic\":\n\t\t\tif client.ID == \"\" {\n\t\t\t\treturn false, common.NewError(\"empty client ID\")\n\t\t\t}\n\t\t\tif client.Password == \"\" {\n\t\t\t\treturn false, common.NewError(\"tuic client requires a password\")\n\t\t\t}\n\t\t\tif client.Email == \"\" {\n\t\t\t\treturn false, common.NewError(\"empty client email\")\n\t\t\t}\n",
+        f"native TUIC validation in {rel}",
+    )
+remove_once(
+    "internal/web/service/inbound_clients.go",
+    "\tcase model.TUIC:\n\t\ttarget.ID = uuid.NewString()\n\t\ttarget.Password = s.generateRandomCredential(targetProtocol)\n",
+    "native TUIC copied-client credentials",
+)
+
 # Subscription SQL gained native TUIC in v3.8.x. Keep it and extend the same
 # relationship query with 3Xpatcher's additional sing-box protocols.
 replace_once(
