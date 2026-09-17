@@ -9,14 +9,14 @@ function mieruInbound(transport: 'TCP' | 'UDP'): Inbound {
     up: 0,
     down: 0,
     total: 0,
-    remark: 'mieru-primary-udp',
+    remark: `mieru-primary-${transport.toLowerCase()}`,
     enable: true,
     expiryTime: 0,
     listen: '0.0.0.0',
     port: 45678,
     protocol: 'mieru',
     settings: {
-      clients: [{ email: 'udp-user', password: 'udp-pass' }],
+      clients: [{ email: 'transport-user', password: 'transport-pass' }],
       transport,
       portRangeEnd: 0,
       additionalPortBindings: [],
@@ -30,20 +30,20 @@ function mieruInbound(transport: 'TCP' | 'UDP'): Inbound {
   } as unknown as Inbound;
 }
 
-describe('Mieru primary UDP browser export', () => {
-  it('exports protocol=UDP rather than silently falling back to TCP', () => {
-    const ib = mieruInbound('UDP');
+describe('Mieru primary transport browser export', () => {
+  it.each(['TCP', 'UDP'] as const)('exports protocol=%s from the stored transport', (transport) => {
+    const ib = mieruInbound(transport);
     const client = getSupplementalClients(ib)![0];
     const link = genSupplementalLinks({
       inbound: ib,
       address: 'mieru.example',
       port: 45678,
-      remark: 'Mieru UDP',
+      remark: `Mieru ${transport}`,
       client,
     })[0].link;
     const url = new URL(link);
     expect(url.protocol).toBe('mierus:');
     expect(url.searchParams.getAll('port')).toEqual(['45678']);
-    expect(url.searchParams.getAll('protocol')).toEqual(['UDP']);
+    expect(url.searchParams.getAll('protocol')).toEqual([transport]);
   });
 });
