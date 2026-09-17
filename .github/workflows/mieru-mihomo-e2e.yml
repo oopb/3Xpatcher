@@ -163,7 +163,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test ./internal/sub -run '^Test(BuildMieruSimpleLinkPrimaryTransport|MieruShareBindingsPrimaryTransportCaseInsensitive)$' -count=1 -v
+          go test ./internal/sub -run '^Test(BuildMieruSimpleLinkPrimaryTransport|MieruShareBindingsPrimaryTransportCaseInsensitive|BuildMieruClashProxyTransportFollowsBinding)$' -count=1 -v
 
       - name: Frontend Mieru transport link regression
         working-directory: source/frontend
