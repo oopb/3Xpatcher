@@ -64,3 +64,35 @@ func TestMieruShareBindingsPrimaryTransportCaseInsensitive(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildMieruClashProxyTransportFollowsBinding(t *testing.T) {
+	clash := NewSubClashService(false, "", NewSubService(""))
+	subReq := NewSubService("")
+	inbound := &model.Inbound{Port: 45678, Remark: "Mieru"}
+	client := model.Client{Email: "transport-user", Password: "transport-pass"}
+	settings := map[string]any{
+		"clientMultiplexing":  "MULTIPLEXING_LOW",
+		"clientHandshakeMode": "HANDSHAKE_STANDARD",
+	}
+	ep := map[string]any{"dest": "mieru.example", "port": float64(45678)}
+
+	for _, transport := range []string{"TCP", "UDP"} {
+		t.Run(transport, func(t *testing.T) {
+			proxy := clash.buildMieruProxyForBinding(
+				subReq,
+				inbound,
+				client,
+				ep,
+				settings,
+				mieruShareBinding{Port: 45678, Transport: transport},
+				false,
+			)
+			if got := proxy["transport"]; got != transport {
+				t.Fatalf("transport = %#v, want %s; proxy=%#v", got, transport, proxy)
+			}
+			if got := proxy["udp"]; got != true {
+				t.Fatalf("udp = %#v, want true (UDP Associate capability); proxy=%#v", got, proxy)
+			}
+		})
+	}
+}
