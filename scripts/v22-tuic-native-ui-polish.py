@@ -45,3 +45,7 @@ subprocess.run(
     [sys.executable, str(Path(__file__).resolve().parent / 'v25-supplemental-form-layout.py'), sys.argv[1]],
     check=True,
 )
+subprocess.run(
+    [sys.executable, str(Path(__file__).resolve().parent / 'v26-mieru-dynamic-transport.py'), sys.argv[1]],
+    check=True,
+)
