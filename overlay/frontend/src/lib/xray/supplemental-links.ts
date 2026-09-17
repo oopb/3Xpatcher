@@ -206,24 +206,42 @@ function buildMieruLink(input: GenSupplementalLinksInput): SupplementalLinkVaria
     asString(value).trim().toUpperCase() === 'UDP' ? 'UDP' : 'TCP';
 
   if (input.externalProxy) {
+    const transport = normalizedTransport(settings.transport);
     params.append('port', String(input.port));
-    params.append('protocol', normalizedTransport(settings.transport));
+    params.append('protocol', transport);
+    params.set('transport', transport.toLowerCase());
   } else {
+    const bindings: Array<{ port: number; end: number; transport: 'TCP' | 'UDP' }> = [];
     const primaryEnd = asNumber(settings.portRangeEnd, 0);
-    params.append(
-      'port',
-      primaryEnd > input.port ? `${input.port}-${primaryEnd}` : String(input.port),
-    );
-    params.append('protocol', normalizedTransport(settings.transport));
+    bindings.push({
+      port: input.port,
+      end: primaryEnd,
+      transport: normalizedTransport(settings.transport),
+    });
 
     const extra = Array.isArray(settings.additionalPortBindings) ? settings.additionalPortBindings : [];
     for (const raw of extra) {
       const binding = asRecord(raw);
       const port = asNumber(binding.port, 0);
       if (port < 1 || port > 65535) continue;
-      const end = asNumber(binding.portRangeEnd, 0);
-      params.append('port', end > port ? `${port}-${end}` : String(port));
-      params.append('protocol', normalizedTransport(binding.transport));
+      bindings.push({
+        port,
+        end: asNumber(binding.portRangeEnd, 0),
+        transport: normalizedTransport(binding.transport),
+      });
+    }
+
+    for (const binding of bindings) {
+      params.append(
+        'port',
+        binding.end > binding.port ? `${binding.port}-${binding.end}` : String(binding.port),
+      );
+      params.append('protocol', binding.transport);
+    }
+    if (bindings.length === 1) {
+      // Shadowrocket selects Mieru TCP/UDP from this non-standard lower-case
+      // query parameter. Keep protocol= above for canonical Mieru clients.
+      params.set('transport', bindings[0].transport.toLowerCase());
     }
   }
 
@@ -266,7 +284,7 @@ export function genSupplementalLinks(input: GenSupplementalLinksInput): Suppleme
     case 'anytls': {
       if (!client.password) return [];
       const params = new URLSearchParams();
-      applyTlsParams(inbound, externalProxy, params);
+      applyTlsParams(input.inbound, input.externalProxy, params);
       return [
         {
           link: buildLink(`anytls://${encodeUserinfo(client.password)}@${host}:${port}`, params, remark),
