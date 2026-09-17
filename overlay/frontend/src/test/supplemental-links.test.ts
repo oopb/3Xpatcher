@@ -162,6 +162,24 @@ describe('supplemental browser share links', () => {
     expect(url.protocol).toBe('mierus:');
     expect(url.searchParams.getAll('port')).toEqual(['443-445', '9000']);
     expect(url.searchParams.getAll('protocol')).toEqual(['TCP', 'UDP']);
+    expect(url.searchParams.get('transport')).toBeNull();
     expect(url.searchParams.get('mtu')).toBe('1400');
+  });
+
+  it('exports Shadowrocket-compatible transport for a single UDP Mieru binding', () => {
+    const ib = inbound('mieru', {
+      clients: [{ email: 'mieru-user', password: 'mieru-pass' }],
+      transport: 'UDP',
+      portRangeEnd: 0,
+      additionalPortBindings: [],
+      mtu: 1400,
+      clientMultiplexing: 'MULTIPLEXING_LOW',
+      clientHandshakeMode: 'HANDSHAKE_STANDARD',
+    });
+    const client = getSupplementalClients(ib)![0];
+    const link = genSupplementalLinks({ inbound: ib, address: '192.0.2.10', port: 20598, client })[0].link;
+    const url = new URL(link);
+    expect(url.searchParams.getAll('protocol')).toEqual(['UDP']);
+    expect(url.searchParams.get('transport')).toBe('udp');
   });
 });
