@@ -65,7 +65,8 @@ func (s *SubService) buildMieruSimpleLink(inbound *model.Inbound, client model.C
 	}
 
 	if ep == nil {
-		for _, binding := range mieruShareBindings(inbound, settings) {
+		bindings := mieruShareBindings(inbound, settings)
+		for _, binding := range bindings {
 			if binding.RangeEnd > binding.Port {
 				q.Add("port", strconv.Itoa(binding.Port)+"-"+strconv.Itoa(binding.RangeEnd))
 			} else {
@@ -73,10 +74,17 @@ func (s *SubService) buildMieruSimpleLink(inbound *model.Inbound, client model.C
 			}
 			q.Add("protocol", binding.Transport)
 		}
+		if len(bindings) == 1 {
+			// Shadowrocket's Mieru URL importer uses the non-standard lower-case
+			// transport query parameter to select TCP vs UDP. Keep Mieru's
+			// canonical protocol= field above for standards-compliant clients.
+			q.Set("transport", strings.ToLower(bindings[0].Transport))
+		}
 	} else {
 		transport := normalizedMieruTransport(settings["transport"])
 		q.Add("port", strconv.Itoa(port))
 		q.Add("protocol", transport)
+		q.Set("transport", strings.ToLower(transport))
 	}
 
 	urlHost := host
