@@ -158,14 +158,14 @@ jobs:
           /tmp/mihomo -v
           echo "binary=/tmp/mihomo" >> "$GITHUB_OUTPUT"
 
-      - name: Mieru primary UDP link regressions
+      - name: Mieru transport link regressions
         working-directory: source
         shell: bash
         run: |
           set -euo pipefail
-          go test ./internal/sub -run '^Test(BuildMieruSimpleLinkPrimaryUDP|MieruShareBindingsPrimaryTransportCaseInsensitive)$' -count=1 -v
+          go test ./internal/sub -run '^Test(BuildMieruSimpleLinkPrimaryTransport|MieruShareBindingsPrimaryTransportCaseInsensitive)$' -count=1 -v
 
-      - name: Frontend primary UDP link regression
+      - name: Frontend Mieru transport link regression
         working-directory: source/frontend
         shell: bash
         run: |
