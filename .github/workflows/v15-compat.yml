@@ -13,7 +13,8 @@ on:
       - tests/**
       - .github/workflows/v15-compat.yml
   push:
-    branches: [compat/3x-ui-v3.9.0]
+    branches:
+      - 'compat/3x-ui-v3.9.0'
   workflow_dispatch:
 
 permissions:
