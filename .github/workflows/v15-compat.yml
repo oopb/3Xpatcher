@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - UPSTREAM_COMPAT
+      - PREBUILT_COMPAT
       - install.sh
       - internal/**
       - frontend/**
