@@ -33,7 +33,19 @@ new = '''    case 'tuic':
 count = text.count(old)
 if count != 1:
     raise SystemExit(f"v22 TUIC browser link ownership: expected one anchor, found {count}")
-path.write_text(text.replace(old, new, 1), encoding="utf-8")
+text = text.replace(old, new, 1)
+
+# Once TUIC browser rendering is delegated to the upstream generator, the local
+# function no longer needs the TUIC-only destructured externalProxy/settings.
+old_locals = """  const { inbound, client, address, port, remark = '', externalProxy = null } = input;
+  const settings = asRecord(inbound.settings);
+"""
+new_locals = """  const { inbound, client, address, port, remark = '' } = input;
+"""
+if old_locals not in text:
+    raise SystemExit("v22 TUIC browser locals cleanup anchor missing")
+text = text.replace(old_locals, new_locals, 1)
+path.write_text(text, encoding="utf-8")
 
 print("V22 native TUIC browser-link ownership polish applied.")
 
