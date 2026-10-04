@@ -26,8 +26,8 @@ rep(
 # them. Standard Base64 is required by the 2022 key specification.
 rep(
     'internal/sub/clash_service.go',
-    '''import (\n\t"errors"''',
-    '''import (\n\t"encoding/base64"\n\t"errors"''',
+    '''import (\n''',
+    '''import (\n\t"encoding/base64"\n''',
 )
 rep(
     'internal/sub/clash_service.go',
