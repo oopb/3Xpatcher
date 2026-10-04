@@ -83,6 +83,7 @@ MIERU_INSTALL_STARTED=0
 PANEL_VERSION=""
 UPSTREAM_REF=""
 TARGET_VERSION=""
+TARGET_PATCH_VERSION=""
 
 cleanup() {
   local code=$?
@@ -208,6 +209,7 @@ PY
   [[ "${buildmeta[0]:-}" == "$expected_patch_version" ]] || die "Prebuilt patch version mismatch for $UPSTREAM_REF."
   [[ "${buildmeta[1]:-}" == "$UPSTREAM_REF" ]] || die "Prebuilt upstream version mismatch."
   [[ "${buildmeta[2]:-}" == "$ARCH" ]] || die "Prebuilt architecture mismatch."
+  TARGET_PATCH_VERSION="${buildmeta[0]}"
 
   install -m 0755 "$WORK/prebuilt/x-ui" "$WORK/x-ui-patched"
   TARGET_VERSION=$($WORK/x-ui-patched -v 2>/dev/null | tail -n1 | tr -d '\r' | xargs || true)
@@ -277,12 +279,14 @@ persist_state() {
   rm -rf /usr/local/share/3xpatcher/current
   mkdir -p /usr/local/share/3xpatcher/current
   tar -C "$PATCH_ROOT" --exclude=.git -cf - . | tar -C /usr/local/share/3xpatcher/current -xf -
-  local patch_version mieru_version
-  patch_version=$(tr -d '\r\n' < "$PATCH_ROOT/VERSION")
+  local patch_tree_version mieru_version
+  patch_tree_version=$(tr -d '\r\n' < "$PATCH_ROOT/VERSION")
   mieru_version=$(tr -d '\r\n' < "$PATCH_ROOT/MIERU_VERSION")
+  [[ -n "$TARGET_PATCH_VERSION" ]] || die "Missing verified target patch version."
   {
     printf 'PATCH_REF=%q\n' "$PATCH_REF"
-    printf 'PATCH_VERSION=%q\n' "$patch_version"
+    printf 'PATCH_VERSION=%q\n' "$TARGET_PATCH_VERSION"
+    printf 'PATCH_TREE_VERSION=%q\n' "$patch_tree_version"
     printf 'UPSTREAM_REF=%q\n' "$UPSTREAM_REF"
     printf 'MIERU_VERSION=%q\n' "$mieru_version"
     printf 'PANEL_VERSION_BEFORE=%q\n' "$PANEL_VERSION"
