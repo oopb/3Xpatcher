@@ -1,4 +1,4 @@
-name: Validate 3x-ui v3.8.5 compatibility
+name: Validate 3x-ui v3.9.0 compatibility
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ on:
       - tests/**
       - .github/workflows/v15-compat.yml
   push:
-    branches: [compat/3x-ui-v3.8.5]
+    branches: [compat/3x-ui-v3.9.0]
   workflow_dispatch:
 
 permissions:
@@ -92,7 +92,62 @@ jobs:
       - name: Compile affected Go packages
         working-directory: source
         run: |
-          go test -run '^$' ./internal/singbox
+          go test -run '^          go test -run '^$' ./internal/mieru
+          go test -run '^$' ./internal/sub
+          go test -run '^$' ./internal/web/service
+          go test -run '^$' ./internal/web/runtime
+
+      - name: Supplemental stats regression tests
+        working-directory: source
+        run: |
+          go test ./internal/singbox -run '^(TestLoadStatsListenAddress|TestApplyStatsSnapshot.*)$' -count=1 -v
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: source/.nvmrc
+          cache: npm
+          cache-dependency-path: source/frontend/package-lock.json
+
+      - name: Frontend typecheck and production build
+        working-directory: source/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run build
+
+      - name: Compile panel web package after frontend build
+        working-directory: source
+        run: go test -run '^$' ./internal/web
+ ./internal/tuic
+          go test -run '^          go test -run '^$' ./internal/mieru
+          go test -run '^$' ./internal/sub
+          go test -run '^$' ./internal/web/service
+          go test -run '^$' ./internal/web/runtime
+
+      - name: Supplemental stats regression tests
+        working-directory: source
+        run: |
+          go test ./internal/singbox -run '^(TestLoadStatsListenAddress|TestApplyStatsSnapshot.*)$' -count=1 -v
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: source/.nvmrc
+          cache: npm
+          cache-dependency-path: source/frontend/package-lock.json
+
+      - name: Frontend typecheck and production build
+        working-directory: source/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run build
+
+      - name: Compile panel web package after frontend build
+        working-directory: source
+        run: go test -run '^$' ./internal/web
+ ./internal/singbox
           go test -run '^$' ./internal/mieru
           go test -run '^$' ./internal/sub
           go test -run '^$' ./internal/web/service
