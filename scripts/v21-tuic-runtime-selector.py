@@ -28,12 +28,19 @@ def replace_once(rel, old, new, label):
 # ---------------------------------------------------------------------------
 # Native TUIC schema/UI is authoritative again. Add only a runtime selector.
 # ---------------------------------------------------------------------------
-replace_once(
-    "frontend/src/schemas/protocols/inbound/tuic.ts",
-    "export const TuicInboundSettingsSchema = z.object({\n",
-    "export const TuicInboundSettingsSchema = z.object({\n  runtime: z.enum(['native', 'singbox']).default('native'),\n",
-    "native TUIC runtime schema",
-)
+path = root / "frontend/src/schemas/protocols/inbound/tuic.ts"
+text = path.read_text(encoding="utf-8")
+runtime_field = "  runtime: z.enum(['native', 'singbox']).default('native'),\n"
+if runtime_field not in text:
+    legacy_anchor = "export const TuicInboundSettingsSchema = z.object({\n"
+    current_anchor = "const TuicSettingsObject = z.object({\n"
+    if legacy_anchor in text:
+        text = text.replace(legacy_anchor, legacy_anchor + runtime_field, 1)
+    elif current_anchor in text:
+        text = text.replace(current_anchor, current_anchor + runtime_field, 1)
+    else:
+        raise SystemExit("v21 native TUIC runtime schema: no supported anchor found")
+path.write_text(text, encoding="utf-8")
 replace_once(
     "frontend/src/lib/xray/inbound-defaults.ts",
     "export function createDefaultTuicInboundSettings(): TuicInboundSettings {\n  return {\n    server:",
@@ -45,11 +52,22 @@ path = root / "frontend/src/pages/inbounds/form/protocols/tuic.tsx"
 text = path.read_text(encoding="utf-8")
 if "Segmented," not in text:
     text = text.replace("  Select,\n", "  Select,\n  Segmented,\n", 1)
-anchor = "  return (\n    <>\n      <Form.Item label={t('pages.xray.tuic.sni')}>"
-insert = """  return (\n    <>\n      <FormField name={['settings', 'runtime']} label=\"Runtime\">\n        <Segmented\n          block\n          options={[\n            { label: 'Native', value: 'native' },\n            { label: 'sing-box', value: 'singbox' },\n          ]}\n        />\n      </FormField>\n\n      <Form.Item label={t('pages.xray.tuic.sni')}>"""
-if anchor not in text:
-    raise SystemExit("v21 native TUIC runtime control: render anchor not found")
-text = text.replace(anchor, insert, 1)
+runtime_control = """      <FormField name={['settings', 'runtime']} label="Runtime">
+        <Segmented
+          block
+          options={[
+            { label: 'Native', value: 'native' },
+            { label: 'sing-box', value: 'singbox' },
+          ]}
+        />
+      </FormField>
+
+"""
+render_prefix = "  return (\n    <>\n"
+if runtime_control not in text:
+    if render_prefix not in text:
+        raise SystemExit("v21 native TUIC runtime control: render prefix not found")
+    text = text.replace(render_prefix, render_prefix + runtime_control, 1)
 path.write_text(text, encoding="utf-8")
 
 # Reattach the native TUIC inbound schema to the unified union. Previous
@@ -98,7 +116,8 @@ if "export { default as TuicFields } from './tuic';" not in text:
 path.write_text(text, encoding="utf-8")
 
 # ---------------------------------------------------------------------------
-# Runtime ownership: native rows stay on 3x-ui's tuic-server; sing-box rows are
+# Runtime ownership: native rows stay on 3x-ui's native TUIC manager (external
+# sidecar on older upstreams, in-process Go server on v3.9+); sing-box rows are
 # owned by x-ui-singbox. Switching runtime tears down the previous owner first.
 # ---------------------------------------------------------------------------
 path = root / "internal/singbox/integrated.go"
@@ -132,11 +151,25 @@ path.write_text(text, encoding="utf-8")
 
 path = root / "internal/web/service/inbound_tuic.go"
 text = path.read_text(encoding="utf-8")
-anchor = "\tfor _, ib := range inbounds {\n\t\tinst, ok := tuic.InstanceFromInbound(ib)"
-replacement = "\tfor _, ib := range inbounds {\n\t\tif model.TUICRuntimeFromSettings(ib.Settings) == model.TUICRuntimeSingbox {\n\t\t\tcontinue\n\t\t}\n\t\tinst, ok := tuic.InstanceFromInbound(ib)"
-if anchor not in text:
-    raise SystemExit("v21 native TUIC scheduler filter anchor missing")
-path.write_text(text.replace(anchor, replacement, 1), encoding="utf-8")
+guard = "\t\tif model.TUICRuntimeFromSettings(ib.Settings) == model.TUICRuntimeSingbox {\n\t\t\tcontinue\n\t\t}\n"
+if guard not in text:
+    legacy_anchor = "\tfor _, ib := range inbounds {\n\t\tinst, ok := tuic.InstanceFromInbound(ib)"
+    current_anchor = "\tfor _, ib := range inbounds {\n\t\tbuilt, err := s.buildInboundForLocalRuntime(db, ib)"
+    if legacy_anchor in text:
+        text = text.replace(
+            legacy_anchor,
+            "\tfor _, ib := range inbounds {\n" + guard + "\t\tinst, ok := tuic.InstanceFromInbound(ib)",
+            1,
+        )
+    elif current_anchor in text:
+        text = text.replace(
+            current_anchor,
+            "\tfor _, ib := range inbounds {\n" + guard + "\t\tbuilt, err := s.buildInboundForLocalRuntime(db, ib)",
+            1,
+        )
+    else:
+        raise SystemExit("v21 native TUIC scheduler filter: no supported anchor found")
+path.write_text(text, encoding="utf-8")
 
 path = root / "internal/sub/json_service.go"
 text = path.read_text(encoding="utf-8")
