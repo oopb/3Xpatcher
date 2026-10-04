@@ -43,6 +43,11 @@ jobs:
           singbox_version=$(tr -d '\r\n' < SINGBOX_VERSION)
           [[ "$target" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ "$singbox_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          expected_patch_version=$(awk -F= -v target="$target" '$1 == target { print substr($0, index($0, "=") + 1) }' PREBUILT_COMPAT)
+          [[ -n "$expected_patch_version" && "$expected_patch_version" == "$patch_version" ]] || {
+            echo "PREBUILT_COMPAT mismatch for $target: expected '$expected_patch_version', VERSION is '$patch_version'" >&2
+            exit 1
+          }
           echo "upstream=$target" >> "$GITHUB_OUTPUT"
           echo "patch_version=$patch_version" >> "$GITHUB_OUTPUT"
           echo "singbox_version=$singbox_version" >> "$GITHUB_OUTPUT"
