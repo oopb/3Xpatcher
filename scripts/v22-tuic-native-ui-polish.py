@@ -41,6 +41,7 @@ old_locals = """  const { inbound, client, address, port, remark = '', externalP
   const settings = asRecord(inbound.settings);
 """
 new_locals = """  const { inbound, client, address, port, remark = '' } = input;
+  const settings = asRecord(inbound.settings);
 """
 if old_locals not in text:
     raise SystemExit("v22 TUIC browser locals cleanup anchor missing")
