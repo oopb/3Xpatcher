@@ -125,7 +125,7 @@ fetch_patch_tree() {
     -o "$WORK/patch.tar.gz"
   tar -xzf "$WORK/patch.tar.gz" -C "$PATCH_ROOT" --strip-components=1
   rm -f "$WORK/patch.tar.gz"
-  [[ -f "$PATCH_ROOT/VERSION" && -f "$PATCH_ROOT/scripts/install-singbox.sh" && -f "$PATCH_ROOT/scripts/install-mieru.sh" && -f "$PATCH_ROOT/MIERU_VERSION" ]] \
+  [[ -f "$PATCH_ROOT/VERSION" && -f "$PATCH_ROOT/PREBUILT_COMPAT" && -f "$PATCH_ROOT/scripts/install-singbox.sh" && -f "$PATCH_ROOT/scripts/install-mieru.sh" && -f "$PATCH_ROOT/MIERU_VERSION" ]] \
     || die "Downloaded patch tree is incomplete."
 }
 
@@ -178,9 +178,34 @@ for k in ('PATCH_VERSION','UPSTREAM_REF','ARCH'):
     print(vals.get(k,''))
 PY
   )
-  local patch_version
-  patch_version=$(tr -d '\r\n' < "$PATCH_ROOT/VERSION")
-  [[ "${buildmeta[0]:-}" == "$patch_version" ]] || die "Prebuilt patch version is stale; retry after the current Actions build finishes."
+  local expected_patch_version current_patch_version current_upstream
+  expected_patch_version=$(python3 - "$PATCH_ROOT/PREBUILT_COMPAT" "$UPSTREAM_REF" <<'PY'
+from pathlib import Path
+import sys
+path, upstream = sys.argv[1:]
+matches = []
+for raw in Path(path).read_text(encoding='utf-8').splitlines():
+    line = raw.strip()
+    if not line or line.startswith('#'):
+        continue
+    key, sep, value = line.partition('=')
+    if not sep:
+        raise SystemExit(2)
+    if key.strip() == upstream:
+        matches.append(value.strip())
+if len(matches) != 1 or not matches[0]:
+    raise SystemExit(3)
+print(matches[0])
+PY
+  ) || die "No pinned prebuilt patch version is registered for $UPSTREAM_REF."
+
+  current_patch_version=$(tr -d '\r\n' < "$PATCH_ROOT/VERSION")
+  current_upstream=$(tr -d '\r\n' < "$PATCH_ROOT/UPSTREAM_COMPAT")
+  if [[ "$UPSTREAM_REF" == "$current_upstream" && "$expected_patch_version" != "$current_patch_version" ]]; then
+    die "Current PREBUILT_COMPAT entry does not match VERSION; refusing an inconsistent release."
+  fi
+
+  [[ "${buildmeta[0]:-}" == "$expected_patch_version" ]] || die "Prebuilt patch version mismatch for $UPSTREAM_REF."
   [[ "${buildmeta[1]:-}" == "$UPSTREAM_REF" ]] || die "Prebuilt upstream version mismatch."
   [[ "${buildmeta[2]:-}" == "$ARCH" ]] || die "Prebuilt architecture mismatch."
 
