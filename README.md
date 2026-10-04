@@ -4,9 +4,9 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.12.0-integrated-alpha`
+当前版本：`0.13.0-integrated-alpha`
 
-当前兼容上游：`3x-ui v3.7.0`
+当前兼容上游：`3x-ui v3.9.0`
 
 固定补充运行时：
 
@@ -41,7 +41,7 @@
 | 协议 | 运行时 | 用户模型 | 原生 Traffic / Online | 主要客户端导出 |
 | --- | --- | --- | --- | --- |
 | 3x-ui 原生 Xray 协议 | Xray | 原生 | 原生 | 原生 |
-| TUIC | sing-box | 多用户 | Yes | Shadowrocket / Mihomo |
+| TUIC | Native / sing-box 可选 | 多用户 | Yes | Shadowrocket / Mihomo |
 | AnyTLS | sing-box | 多用户 | Yes | Shadowrocket / Mihomo |
 | ShadowTLS v3 | sing-box | 多用户 | Yes | Shadowrocket / Mihomo |
 | Naive TCP / HTTP2 | sing-box | 多用户 | Yes | Shadowrocket / native Naive |
@@ -81,7 +81,7 @@ Xray 配置生成时会过滤 supplemental protocols，它们不会被错误写�
 
 ### sing-box
 
-TUIC / AnyTLS / ShadowTLS / Naive / Snell 共用独立 sing-box sidecar：
+选择 `sing-box` runtime 的 TUIC 与 AnyTLS / ShadowTLS / Naive / Snell 共用独立 sing-box sidecar：
 
 ```text
 /usr/local/x-ui-singbox/bin/sing-box
@@ -111,7 +111,7 @@ Mieru 实例之间的配置、socket 与 metrics state 相互隔离。
 
 ### TUIC
 
-服务端由 sing-box 运行。
+TUIC 每个 inbound 可选择 3x-ui 原生 TUIC runtime 或 sing-box runtime；两者复用同一套客户端、证书与订阅数据。
 
 Dedicated Clash / Mihomo subscription 保留 TUIC UDP，并输出当前客户端兼容所需的 TLS 参数，包括：
 
