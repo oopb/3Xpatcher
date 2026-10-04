@@ -192,6 +192,38 @@ if grep -RniE --include='*.go' 'GenXrayInboundConfig\(' overlay/internal/singbox
 fi
 
 echo '[8/8] overlay contract'
+python3 - <<'PY'
+from pathlib import Path
+
+pairs = {}
+for raw in Path('PREBUILT_COMPAT').read_text(encoding='utf-8').splitlines():
+    line = raw.strip()
+    if not line or line.startswith('#'):
+        continue
+    upstream, sep, version = line.partition('=')
+    if not sep or not upstream or not version or upstream in pairs:
+        raise SystemExit(f'invalid PREBUILT_COMPAT row: {raw!r}')
+    pairs[upstream] = version
+
+required = {
+    'v3.7.0': '0.12.0-integrated-alpha',
+    'v3.8.5': '0.12.1-integrated-alpha',
+}
+for upstream, version in required.items():
+    if pairs.get(upstream) != version:
+        raise SystemExit(f'legacy prebuilt pin changed for {upstream}')
+
+current_upstream = Path('UPSTREAM_COMPAT').read_text().strip()
+current_version = Path('VERSION').read_text().strip()
+if pairs.get(current_upstream) != current_version:
+    raise SystemExit(
+        f'current prebuilt pin mismatch: {current_upstream} -> {pairs.get(current_upstream)!r}, VERSION={current_version!r}'
+    )
+print('prebuilt compatibility pins: OK')
+PY
+grep -q 'PREBUILT_COMPAT' install.sh
+grep -q 'expected_patch_version' install.sh
+grep -q 'PREBUILT_COMPAT mismatch' .github/workflows/prebuild.yml
 for f in \
   overlay/internal/singbox/integrated.go \
   overlay/internal/singbox/reality.go \
