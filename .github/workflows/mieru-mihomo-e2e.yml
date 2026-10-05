@@ -10,6 +10,7 @@ on:
       - internal/mieru/**
       - overlay/internal/mieru/**
       - overlay/internal/sub/mieru_*
+      - overlay/frontend/src/test/mieru-udp-links.test.ts
       - scripts/**
       - .github/workflows/mieru-mihomo-e2e.yml
   push:
@@ -20,6 +21,7 @@ on:
       - internal/mieru/**
       - overlay/internal/mieru/**
       - overlay/internal/sub/mieru_*
+      - overlay/frontend/src/test/mieru-udp-links.test.ts
       - scripts/**
       - .github/workflows/mieru-mihomo-e2e.yml
 
@@ -59,12 +61,15 @@ jobs:
             -o /tmp/3x-ui.tar.gz
           tar -xzf /tmp/3x-ui.tar.gz -C source --strip-components=1
 
-      - name: Apply production overlay and E2E test
+      - name: Apply production overlay and E2E tests
         shell: bash
         run: |
           set -euo pipefail
           ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
           cp overlay/internal/mieru/mieru_mihomo_e2e_test.go source/internal/mieru/mieru_mihomo_e2e_test.go
+          cp overlay/internal/mieru/mieru_udp_mihomo_e2e_test.go source/internal/mieru/mieru_udp_mihomo_e2e_test.go
+          cp overlay/internal/sub/mieru_links_test.go source/internal/sub/mieru_links_test.go
+          cp overlay/frontend/src/test/mieru-udp-links.test.ts source/frontend/src/test/mieru-udp-links.test.ts
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -138,7 +143,7 @@ jobs:
           release = json.load(open(path, encoding="utf-8"))
           asset = next((a for a in release.get("assets", []) if a.get("name") == name), None)
           if not asset:
-              raise SystemExit(f"missing Mihomo asset: {name}")
+            raise SystemExit(f"missing Mihomo asset: {name}")
           print(asset.get("browser_download_url", ""))
           print(asset.get("digest", "") or "")
           PY
@@ -153,7 +158,22 @@ jobs:
           /tmp/mihomo -v
           echo "binary=/tmp/mihomo" >> "$GITHUB_OUTPUT"
 
-      - name: Real Mieru through Mihomo plus traffic metrics
+      - name: Mieru transport link regressions
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./internal/sub -run '^Test(BuildMieruSimpleLinkPrimaryTransport|MieruShareBindingsPrimaryTransportCaseInsensitive|BuildMieruClashProxyTransportFollowsBinding)$' -count=1 -v
+
+      - name: Frontend Mieru transport link regression
+        working-directory: source/frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run test -- src/test/mieru-udp-links.test.ts
+
+      - name: Real Mieru TCP and UDP through Mihomo plus traffic metrics
         working-directory: source
         env:
           MIERU_E2E_BINARY: ${{ steps.mieru.outputs.binary }}
@@ -161,4 +181,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test ./internal/mieru -run '^TestMieruMihomoE2E$' -count=1 -v
+          go test ./internal/mieru -run '^TestMieru(Mihomo|UDP)E2E$' -count=1 -v
