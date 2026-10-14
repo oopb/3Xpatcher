@@ -45,11 +45,14 @@ modified=(
   frontend/src/pages/inbounds/list/RowActions.tsx
   frontend/src/pages/inbounds/list/types.ts
   frontend/src/pages/inbounds/list/useInboundColumns.tsx
-  frontend/src/pages/inbounds/qr/QrCodeModal.tsx
   frontend/src/pages/inbounds/useInbounds.ts
   frontend/src/pages/clients/ClientFormModal.tsx
   frontend/src/pages/clients/ClientBulkAddModal.tsx
 )
+# v3.10 removed the old standalone QR modal.
+if [[ -f "$SRC/frontend/src/pages/inbounds/qr/QrCodeModal.tsx" ]]; then
+  modified+=(frontend/src/pages/inbounds/qr/QrCodeModal.tsx)
+fi
 for f in "${modified[@]}"; do
   [[ -f "$SRC/$f" ]] || { echo "Refusing to patch: missing upstream file $f" >&2; exit 1; }
 done
@@ -87,6 +90,12 @@ cp "$ROOT/overlay/frontend/src/schemas/protocols/inbound/singbox.ts" "$SRC/front
 cp "$ROOT/overlay/frontend/src/pages/inbounds/form/protocols/singbox.tsx" "$SRC/frontend/src/pages/inbounds/form/protocols/singbox.tsx"
 cp "$ROOT/overlay/frontend/src/lib/xray/supplemental-links.ts" "$SRC/frontend/src/lib/xray/supplemental-links.ts"
 
+# v3.10 MASQUE migration shim (older upstream remains unchanged).
+is_310=0
+if grep -q 'amneziawg tuic masque' "$SRC/internal/database/model/model.go"; then
+  is_310=1
+  python3 "$ROOT/scripts/v24-310-compat.py" "$SRC" pre
+fi
 python3 "$ROOT/scripts/apply-v2.py" "$SRC"
 python3 "$ROOT/scripts/v3-patch.py" "$SRC"
 python3 "$ROOT/scripts/v5-patch.py" "$SRC"
@@ -106,6 +115,7 @@ python3 "$ROOT/scripts/v18-tuic-cert-mieru.py" "$SRC"
 python3 "$ROOT/scripts/v19-tuic-native-cert-form.py" "$SRC"
 python3 "$ROOT/scripts/v20-dynamic-badges-security.py" "$SRC"
 python3 "$ROOT/scripts/v22-tuic-native-ui-polish.py" "$SRC"
+if [[ "$is_310" == 1 ]]; then python3 "$ROOT/scripts/v24-310-compat.py" "$SRC" post; fi
 
 gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model"/*.go "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/supplemental_tls.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/inbound_tuic.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/controller.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/tuic_runtime.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
 

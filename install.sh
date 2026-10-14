@@ -298,6 +298,20 @@ persist_state() {
   chmod 600 /etc/3xpatcher/install.env
 }
 
+configure_supplemental_sandbox() {
+  # v3.10 uses ProtectSystem=full. The panel writes independent core configs.
+  [[ "$UPSTREAM_REF" == "v3.10.0" ]] || return 0
+  local confdir="/etc/systemd/system/$XUI_SERVICE.d"
+  mkdir -p /usr/local/x-ui-singbox/config /usr/local/x-ui-mieru/config /etc/3xpatcher
+  install -d -m 0755 "$confdir"
+  cat >"$confdir/20-3xpatcher.conf" <<'EOF'
+# Owned by 3Xpatcher; keep upstream 10-xui-sandbox.conf untouched.
+[Service]
+ReadWritePaths=/usr/local/x-ui-singbox/config /usr/local/x-ui-mieru/config /etc/3xpatcher
+EOF
+  systemctl daemon-reload || die "Could not reload supplemental systemd drop-in."
+}
+
 main() {
   echo "============================================================"
   echo "  3Xpatcher — fast prebuilt installer"
@@ -309,6 +323,7 @@ main() {
   fetch_patch_tree
   download_prebuilt_panel
   backup_current_install
+  configure_supplemental_sandbox
 
   # Existing patched installs may still have a pre-selector sing-box config
   # containing TUIC while the currently running native TUIC service owns the

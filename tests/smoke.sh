@@ -14,7 +14,8 @@ python3 -m py_compile \
   scripts/v8-patch.py scripts/v9-patch.py scripts/v10-patch.py scripts/v11-patch.py \
   scripts/v11-final-patch.py scripts/v12-patch.py scripts/v13-patch.py scripts/v14-patch.py \
   scripts/v15-compat-pre.py scripts/v15-compat-go.py scripts/v15-compat-ui.py \
-  scripts/v15-compat-tuic-frontend.py scripts/v16-hotfix.py scripts/v17-shadowtls-stats.py
+  scripts/v15-compat-tuic-frontend.py scripts/v16-hotfix.py scripts/v17-shadowtls-stats.py \
+  scripts/v24-310-compat.py
 
 echo '[3/8] integrated protocol surface'
 python3 - <<'PY'
