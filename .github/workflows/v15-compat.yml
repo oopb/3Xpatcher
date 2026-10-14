@@ -1,4 +1,4 @@
-name: Validate 3x-ui v3.9.0 compatibility
+name: Validate 3x-ui v3.10.0 compatibility
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ on:
       - tests/**
       - .github/workflows/v15-compat.yml
   push:
-    branches: [compat/3x-ui-v3.9.0]
+    branches: [compat/3x-ui-v3.9.0, compat/3x-ui-v3.10.0]
   workflow_dispatch:
 
 permissions:
