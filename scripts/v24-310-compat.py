@@ -38,6 +38,9 @@ if stage=="pre":
     edit("frontend/src/pages/inbounds/form/InboundFormModal.tsx",
          "import {\n  createHysteriaTlsSettingsWithDefaultCert,\n  createMasqueTlsSettingsWithDefaultCert,\n} from '@/lib/xray/inbound-tls-defaults';\n",
          "import { createHysteriaTlsSettingsWithDefaultCert } from '@/lib/xray/inbound-tls-defaults';\n")
+    edit("frontend/src/pages/inbounds/form/InboundFormModal.tsx",
+         "  const tlsOnly = protocol === Protocols.HYSTERIA || protocol === Protocols.MASQUE;",
+         "  const tlsOnly = protocol === Protocols.HYSTERIA;")
     flag.write_text("v3.10.0\n")
 elif stage=="post":
     if not flag.exists(): raise SystemExit("v24 post without pre")
@@ -80,6 +83,9 @@ elif stage=="post":
     edit("frontend/src/pages/inbounds/form/InboundFormModal.tsx",
          "import { createHysteriaTlsSettingsWithDefaultCert, createTlsSettingsWithDefaultCert } from '@/lib/xray/inbound-tls-defaults';\n",
          "import {\n  createHysteriaTlsSettingsWithDefaultCert,\n  createMasqueTlsSettingsWithDefaultCert,\n  createTlsSettingsWithDefaultCert,\n} from '@/lib/xray/inbound-tls-defaults';\n")
+    edit("frontend/src/pages/inbounds/form/InboundFormModal.tsx",
+         "  const tlsOnly = protocol === Protocols.HYSTERIA || SINGBOX_TLS_PROTOCOLS.includes(protocol);",
+         "  const tlsOnly = protocol === Protocols.HYSTERIA || protocol === Protocols.MASQUE || SINGBOX_TLS_PROTOCOLS.includes(protocol);")
     flag.unlink()
 else:
     raise SystemExit("usage: v24-310-compat.py SOURCE pre|post")
