@@ -32,7 +32,7 @@ if stage=="pre":
     edit("frontend/src/lib/xray/protocol-capabilities.ts",
          "if (values.protocol === 'hysteria' || values.protocol === 'masque') return true;",
          "if (values.protocol === 'hysteria') return true;")
-    flag.write_text("v3.10.0\n")
+    edit("internal/web/service/inbound.go",\n         "\t\tmodel.Tunnel:      true,\n\t\tmodel.MASQUE:      true,\n\t}",\n         "\t\tmodel.Tunnel:      true,\n\t}")\n    flag.write_text("v3.10.0\n")
 elif stage=="post":
     if not flag.exists(): raise SystemExit("v24 post without pre")
     edit("internal/database/model/model.go",
@@ -68,7 +68,7 @@ elif stage=="post":
     edit("frontend/src/lib/xray/protocol-capabilities.ts",
          "if (values.protocol === 'hysteria'",
          "if (values.protocol === 'hysteria' || values.protocol === 'masque'")
-    flag.unlink()
+    edit("internal/web/service/inbound.go",\n         "\t\tmodel.Tunnel:      true,\n\t\tmodel.TUIC:        true,",\n         "\t\tmodel.Tunnel:      true,\n\t\tmodel.MASQUE:      true,\n\t\tmodel.TUIC:        true,")\n    flag.unlink()
 else:
     raise SystemExit("usage: v24-310-compat.py SOURCE pre|post")
 print(f"3x-ui v3.10 MASQUE-native compatibility {stage}: OK")
