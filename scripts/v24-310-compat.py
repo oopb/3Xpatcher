@@ -35,6 +35,9 @@ if stage=="pre":
     edit("internal/web/service/inbound.go",
          "\t\tmodel.Tunnel:      true,\n\t\tmodel.MASQUE:      true,\n\t}",
          "\t\tmodel.Tunnel:      true,\n\t}")
+    edit("frontend/src/pages/inbounds/form/InboundFormModal.tsx",
+         "import {\n  createHysteriaTlsSettingsWithDefaultCert,\n  createMasqueTlsSettingsWithDefaultCert,\n} from '@/lib/xray/inbound-tls-defaults';\n",
+         "import { createHysteriaTlsSettingsWithDefaultCert } from '@/lib/xray/inbound-tls-defaults';\n")
     flag.write_text("v3.10.0\n")
 elif stage=="post":
     if not flag.exists(): raise SystemExit("v24 post without pre")
@@ -74,6 +77,9 @@ elif stage=="post":
     edit("internal/web/service/inbound.go",
          "\t\tmodel.Tunnel:      true,\n\t\tmodel.TUIC:        true,",
          "\t\tmodel.Tunnel:      true,\n\t\tmodel.MASQUE:      true,\n\t\tmodel.TUIC:        true,")
+    edit("frontend/src/pages/inbounds/form/InboundFormModal.tsx",
+         "import { createHysteriaTlsSettingsWithDefaultCert, createTlsSettingsWithDefaultCert } from '@/lib/xray/inbound-tls-defaults';\n",
+         "import {\n  createHysteriaTlsSettingsWithDefaultCert,\n  createMasqueTlsSettingsWithDefaultCert,\n  createTlsSettingsWithDefaultCert,\n} from '@/lib/xray/inbound-tls-defaults';\n")
     flag.unlink()
 else:
     raise SystemExit("usage: v24-310-compat.py SOURCE pre|post")
