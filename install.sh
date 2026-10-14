@@ -299,15 +299,17 @@ persist_state() {
 }
 
 configure_supplemental_sandbox() {
-  # v3.10 uses ProtectSystem=full. The panel writes independent core configs.
+  # v3.10 uses ProtectSystem=full. The panel writes independent core
+  # configs and generates SNI TLS certificates under x-ui-singbox/certs.
+  # Keep upstream's sandbox: only allow these dedicated writable directories.
   [[ "$UPSTREAM_REF" == "v3.10.0" ]] || return 0
   local confdir="/etc/systemd/system/$XUI_SERVICE.d"
-  mkdir -p /usr/local/x-ui-singbox/config /usr/local/x-ui-mieru/config /etc/3xpatcher
+  mkdir -p /usr/local/x-ui-singbox/config /usr/local/x-ui-singbox/certs /usr/local/x-ui-mieru/config /etc/3xpatcher
   install -d -m 0755 "$confdir"
   cat >"$confdir/20-3xpatcher.conf" <<'EOF'
 # Owned by 3Xpatcher; keep upstream 10-xui-sandbox.conf untouched.
 [Service]
-ReadWritePaths=/usr/local/x-ui-singbox/config /usr/local/x-ui-mieru/config /etc/3xpatcher
+ReadWritePaths=/usr/local/x-ui-singbox/config /usr/local/x-ui-singbox/certs /usr/local/x-ui-mieru/config /etc/3xpatcher
 EOF
   systemctl daemon-reload || die "Could not reload supplemental systemd drop-in."
 }

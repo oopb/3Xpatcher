@@ -224,6 +224,20 @@ print('prebuilt compatibility pins: OK')
 PY
 grep -q 'PREBUILT_COMPAT' install.sh
 grep -q 'expected_patch_version' install.sh
+# Upstream v3.10's ProtectSystem=full must permit panel-issued supplemental
+# self-signed TLS certificates (cert.pem.tmp) outside the config directory.
+python3 - <<'PY'
+from pathlib import Path
+script = Path('install.sh').read_text(encoding='utf-8')
+body = script.split('configure_supplemental_sandbox() {', 1)[1].split('\n}\n', 1)[0]
+certs = '/usr/local/x-ui-singbox/certs'
+if certs not in body.split('cat >', 1)[0]:
+    raise SystemExit('installer does not create supplemental TLS cert directory')
+if not any(line.startswith('ReadWritePaths=') and certs in line.split('=', 1)[1].split()
+           for line in body.splitlines()):
+    raise SystemExit('v3.10 sandbox does not permit supplemental TLS certificate writes')
+print('supplemental TLS cert sandbox permissions: OK')
+PY
 grep -q 'PREBUILT_COMPAT mismatch' .github/workflows/prebuild.yml
 for f in \
   overlay/internal/singbox/integrated.go \
