@@ -60,7 +60,26 @@ for fn in ("AddUser", "RemoveUser"):
         sig = "func (l *Local) RemoveUser(_ context.Context, ib *model.Inbound, email string) error {\n"
     old = sig + "\tif ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC {\n"
     new = sig + "\tif model.IsSingboxProtocol(ib.Protocol) {\n\t\treturn sbox.Reconcile()\n\t}\n\tif ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG {\n"
-    replace_once("internal/web/runtime/local.go", old, new, f"v3.8 native TUIC {fn} bypass")
+    # v3.11.0 moved native TUIC to an explicit reconciliation branch.
+    # Normalize it to the same baseline the existing supplemental patch expects.
+    modern = (
+        sig + "\tif ib.Protocol == model.TUIC {\n"
+        "\t\tif l.deps.RequestReconcile != nil {\n"
+        "\t\t\tl.deps.RequestReconcile()\n"
+        "\t\t}\n"
+        "\t\treturn nil\n"
+        "\t}\n"
+    )
+    body = (root / "internal/web/runtime/local.go").read_text(encoding="utf-8")
+    if modern in body:
+        replace_once(
+            "internal/web/runtime/local.go",
+            modern,
+            sig + "\tif model.IsSingboxProtocol(ib.Protocol) {\n\t\treturn sbox.Reconcile()\n\t}\n",
+            f"v3.11 native TUIC {fn} reconcile bypass",
+        )
+    else:
+        replace_once("internal/web/runtime/local.go", old, new, f"v3.8 native TUIC {fn} bypass")
 
 # The v3.8 service layer has dedicated native-TUIC switch arms. The V2 patch
 # installs equivalent TUIC handling together with the other supplemental
