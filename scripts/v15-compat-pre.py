@@ -90,6 +90,30 @@ remove_once(
     "\tcase model.TUIC:\n\t\tif c.ID == \"\" {\n\t\t\tc.ID = uuid.NewString()\n\t\t}\n\t\tif c.Password == \"\" {\n\t\t\tc.Password = strings.ReplaceAll(uuid.NewString(), \"-\", \"\")\n\t\t}\n",
     "native TUIC global client defaults",
 )
+# v3.11 added relay-email validation to the original TUIC defaults case.
+# Relocate that validation ahead of the switch, then let V2 insert the
+# canonical supplemental defaults (no duplicate TUIC case).
+modern_tuic_defaults = (
+    "\tcase model.TUIC:\n"
+    "\t\tif err := tuic.ValidateRelayEmail(c.Email); err != nil {\n"
+    "\t\t\treturn err\n"
+    "\t\t}\n"
+    "\t\tif c.ID == \"\" {\n"
+    "\t\t\tc.ID = uuid.NewString()\n"
+    "\t\t}\n"
+    "\t\tif c.Password == \"\" {\n"
+    "\t\t\tc.Password = strings.ReplaceAll(uuid.NewString(), \"-\", \"\")\n"
+    "\t\t}\n"
+)
+if modern_tuic_defaults in (root / "internal/web/service/client_crud.go").read_text(encoding="utf-8"):
+    remove_once("internal/web/service/client_crud.go", modern_tuic_defaults, "v3.11 TUIC defaults case")
+    replace_once(
+        "internal/web/service/client_crud.go",
+        "\t}\n\tswitch ib.Protocol {\n",
+        "\t}\n\tif ib.Protocol == model.TUIC {\n\t\tif err := tuic.ValidateRelayEmail(c.Email); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\tswitch ib.Protocol {\n",
+        "v3.11 preserve TUIC email validation",
+    )
+
 for rel in ("internal/web/service/client_inbound_apply.go", "internal/web/service/inbound.go"):
     remove_once(
         rel,
