@@ -114,7 +114,7 @@ anchor='''      )}
 assert raw.endswith(anchor), 'unexpected end of upstream xhttp form'
 extra='''      {protocol === 'vless' && (
         <>
-          <Divider orientation="start">Download Settings (XHTTP 上下行分离)</Divider>
+          <Divider>Download Settings (XHTTP 上下行分离)</Divider>
           <FormField
             name={['streamSettings', 'xhttpSettings', 'downloadSettings']}
             label="启用独立下行连接"
