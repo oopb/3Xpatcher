@@ -155,6 +155,7 @@ guard = "\t\tif model.TUICRuntimeFromSettings(ib.Settings) == model.TUICRuntimeS
 if guard not in text:
     legacy_anchor = "\tfor _, ib := range inbounds {\n\t\tinst, ok := tuic.InstanceFromInbound(ib)"
     current_anchor = "\tfor _, ib := range inbounds {\n\t\tbuilt, err := s.buildInboundForLocalRuntime(db, ib)"
+    current_311_anchor = "\tfor _, ib := range inbounds {\n\t\tif ib.Protocol != model.TUIC || !ib.Enable || ib.NodeID != nil {"
     if legacy_anchor in text:
         text = text.replace(
             legacy_anchor,
@@ -165,6 +166,12 @@ if guard not in text:
         text = text.replace(
             current_anchor,
             "\tfor _, ib := range inbounds {\n" + guard + "\t\tbuilt, err := s.buildInboundForLocalRuntime(db, ib)",
+            1,
+        )
+    elif current_311_anchor in text:
+        text = text.replace(
+            current_311_anchor,
+            "\tfor _, ib := range inbounds {\n" + guard + "\t\tif ib.Protocol != model.TUIC || !ib.Enable || ib.NodeID != nil {",
             1,
         )
     else:
