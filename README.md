@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.15.0-integrated-alpha`
+当前版本：`0.15.1-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -48,6 +48,17 @@
 | Naive UDP / QUIC | sing-box | 多用户 | Yes | Shadowrocket HTTP3 / native Naive QUIC |
 | Snell v5 | sing-box | 单活动客户端 | Yes | Shadowrocket / Mihomo |
 | Mieru | official `mita` | 多用户 | Yes | Mieru compatible clients |
+
+## 内置去广告（3x-ui v3.9.0 起）
+
+从 `0.15.1-integrated-alpha` 开始，新构建的 3Xpatcher 面板默认移除 3x-ui 自 v3.9.0 引入的 Sponsors 赞助商广告：Dashboard、登录页、旧版侧边栏广告位、Sponsors 导航页与命令面板入口均不再显示。
+
+补丁还让面板公开的赞助商 API 返回空列表、Logo API 返回 404，避免通过面板 HTTP 请求远程获取赞助商数据。**不修改 Xray、sing-box、Mieru、节点/用户配置，也不删除数据库记录。**
+
+- 在 v3.7.0 / v3.8.5 等未包含 Sponsors 模块的上游版本，构建脚本自动跳过。
+- 在 v3.9.0 / v3.10.0 / v3.11.0，构建脚本自动应用 `scripts/disable-sponsors.py`，无需在浏览器中单独安装去广告插件。
+- 已发布的 v3.9.0 / v3.10.0 旧预构建包**不会自动变成去广告版本**；需重新构建这些上游版本才能应用新补丁。当前更新发布主要针对 v3.11.0。
+- 本功能只对采用新补丁构建的 patched panel 生效；更新为官方原版 3x-ui 将恢复其原有显示行为.
 
 ## 3x-ui 原生集成
 

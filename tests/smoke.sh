@@ -15,7 +15,9 @@ python3 -m py_compile \
   scripts/v11-final-patch.py scripts/v12-patch.py scripts/v13-patch.py scripts/v14-patch.py \
   scripts/v15-compat-pre.py scripts/v15-compat-go.py scripts/v15-compat-ui.py \
   scripts/v15-compat-tuic-frontend.py scripts/v16-hotfix.py scripts/v17-shadowtls-stats.py \
-  scripts/v24-310-compat.py
+  scripts/v24-310-compat.py scripts/disable-sponsors.py tests/test_disable_sponsors.py
+
+python3 tests/test_disable_sponsors.py
 
 echo '[3/8] integrated protocol surface'
 python3 - <<'PY'
@@ -81,6 +83,7 @@ grep -q 'hasClients={clientTotal(record) > 0}' scripts/v11-patch.py
 # The v2ray stats API must monitor that inner tag and the collector must map it
 # back to the canonical native 3x-ui ShadowTLS inbound tag.
 grep -q 'scripts/v17-shadowtls-stats.py' scripts/apply-overlay.sh
+grep -q 'scripts/disable-sponsors.py' scripts/apply-overlay.sh
 grep -q 'ProtocolShadowTLS' scripts/v17-shadowtls-stats.py
 grep -q 'statsInbounds = append(statsInbounds, extraTags' scripts/v17-shadowtls-stats.py
 grep -q 'canonicalStatsTag' overlay/internal/singbox/stats.go

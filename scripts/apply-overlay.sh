@@ -49,6 +49,21 @@ modified=(
   frontend/src/pages/clients/ClientFormModal.tsx
   frontend/src/pages/clients/ClientBulkAddModal.tsx
 )
+# Sponsor UI/API changes must be included in the rollback snapshot on v3.9+.
+if [[ -f "$SRC/internal/web/service/panel/sponsor.go" ]]; then
+  modified+=(
+    internal/web/controller/index.go
+    frontend/src/pages/index/IndexPage.tsx
+    frontend/src/pages/login/LoginPage.tsx
+    frontend/src/layouts/AppSidebar.tsx
+    frontend/src/components/command-palette/CommandPalette.tsx
+    frontend/src/routes.tsx
+  )
+  if [[ -f "$SRC/frontend/src/routes/panelRoutes.tsx" ]]; then
+    modified+=(frontend/src/routes/panelRoutes.tsx)
+  fi
+fi
+
 # v3.10 removed the old standalone QR modal.
 if [[ -f "$SRC/frontend/src/pages/inbounds/qr/QrCodeModal.tsx" ]]; then
   modified+=(frontend/src/pages/inbounds/qr/QrCodeModal.tsx)
@@ -116,10 +131,11 @@ python3 "$ROOT/scripts/v19-tuic-native-cert-form.py" "$SRC"
 python3 "$ROOT/scripts/v20-dynamic-badges-security.py" "$SRC"
 python3 "$ROOT/scripts/v22-tuic-native-ui-polish.py" "$SRC"
 if [[ "$is_310" == 1 ]]; then python3 "$ROOT/scripts/v24-310-compat.py" "$SRC" post; fi
+python3 "$ROOT/scripts/disable-sponsors.py" "$SRC"
 
-gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model"/*.go "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/supplemental_tls.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/inbound_tuic.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/controller.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/tuic_runtime.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
+gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model"/*.go "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/index.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/supplemental_tls.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/inbound_tuic.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/controller.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/tuic_runtime.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
 
-echo "3Xpatcher V22 overlay applied."
+echo "3Xpatcher V25 overlay applied."
 echo "Backup: $backup"
 echo "UI: native /panel/inbounds + native TUIC form with per-inbound Native / sing-box runtime selector"
 echo "Security: generated self-signed TLS uses the same native TUIC certificate/private-key fields; ShadowTLS handshake controls use a dedicated Security tab"
@@ -130,3 +146,4 @@ echo "Snell: v5 one-client compatibility mode; canonical client password is the 
 echo "Mieru: complete v3.36 server config coverage; default DNS dual-stack preference is PREFER_IPv4"
 echo "Compatibility: supplemental inbound badges are derived from stored transport/security configuration; no protocol-version badges"
 echo "Runtime: Xray / native TUIC / supplemental sing-box / official Mieru mita are isolated by ownership"
+echo "Sponsors: dashboard/login/sidebar advertisements and remote sponsor API fetches disabled on v3.9+; earlier releases unchanged"
