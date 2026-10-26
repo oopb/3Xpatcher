@@ -70,11 +70,21 @@ rep(
     '''          setValue('settings.password', RandomUtil.randomShadowsocksPassword(v as string));''',
     '''          setValue('settings.password', RandomUtil.randomShadowsocksPassword(v as string), { shouldDirty: true, shouldTouch: true, shouldValidate: true });''',
 )
-rep(
-    'frontend/src/pages/inbounds/form/protocols/shadowsocks.tsx',
-    '''              <Input style={{ width: 'calc(100% - 32px)' }} />''',
-    '''              <Input autoComplete="new-password" data-lpignore="true" data-1p-ignore="true" style={{ width: 'calc(100% - 32px)' }} />''',
-)
+# 3x-ui v3.11 uses a stable, accessibility-safe id on the password field.
+# Retain that id while adding autofill guards.
+ss_file = __import__('pathlib').Path(sys.argv[1]) / 'frontend/src/pages/inbounds/form/protocols/shadowsocks.tsx'
+if """              <Input style={{ width: 'calc(100% - 32px)' }} />""" in ss_file.read_text(encoding='utf-8'):
+    rep(
+        'frontend/src/pages/inbounds/form/protocols/shadowsocks.tsx',
+        """              <Input style={{ width: 'calc(100% - 32px)' }} />""",
+        """              <Input autoComplete="new-password" data-lpignore="true" data-1p-ignore="true" style={{ width: 'calc(100% - 32px)' }} />""",
+    )
+else:
+    rep(
+        'frontend/src/pages/inbounds/form/protocols/shadowsocks.tsx',
+        """              <Input id={`${uid}-password`} style={{ width: 'calc(100% - 32px)' }} />""",
+        """              <Input id={`${uid}-password`} autoComplete="new-password" data-lpignore="true" data-1p-ignore="true" style={{ width: 'calc(100% - 32px)' }} />""",
+    )
 rep(
     'frontend/src/pages/inbounds/form/protocols/shadowsocks.tsx',
     '''            <Button\n              aria-label={t('regenerate')}''',
@@ -96,16 +106,33 @@ rep(
     '''      methods.setValue('password', RandomUtil.randomShadowsocksPassword(ss2022Method));''',
     '''      methods.setValue('password', RandomUtil.randomShadowsocksPassword(ss2022Method), { shouldDirty: true, shouldTouch: true, shouldValidate: true });''',
 )
-rep(
-    'frontend/src/pages/clients/ClientFormModal.tsx',
-    '''                          <Input\n                            value={password}\n                            style={{ flex: 1 }}''',
-    '''                          <Input\n                            value={password}\n                            autoComplete="new-password"\n                            data-lpignore="true"\n                            data-1p-ignore="true"\n                            style={{ flex: 1 }}''',
-)
-rep(
-    'frontend/src/pages/clients/ClientFormModal.tsx',
-    '''                          <Button\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined />}\n                            onClick={regeneratePassword}''',
-    '''                          <Button\n                            htmlType="button"\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined />}\n                            onClick={regeneratePassword}''',
-)
+# Upstream v3.11 sets an input id + aria-describedby for accessibility.
+client_form = __import__('pathlib').Path(sys.argv[1]) / 'frontend/src/pages/clients/ClientFormModal.tsx'
+if '                            aria-describedby={`${uid}-password-hint`}' in client_form.read_text(encoding='utf-8'):
+    rep(
+        'frontend/src/pages/clients/ClientFormModal.tsx',
+        '''                            value={password}\n                            style={{ flex: 1 }}''',
+        '''                            value={password}\n                            autoComplete="new-password"\n                            data-lpignore="true"\n                            data-1p-ignore="true"\n                            style={{ flex: 1 }}''',
+    )
+else:
+    rep(
+        'frontend/src/pages/clients/ClientFormModal.tsx',
+        '''                          <Input\n                            value={password}\n                            style={{ flex: 1 }}''',
+        '''                          <Input\n                            value={password}\n                            autoComplete="new-password"\n                            data-lpignore="true"\n                            data-1p-ignore="true"\n                            style={{ flex: 1 }}''',
+    )
+# v3.11 added aria-hidden to the icon; keep it for screen readers.
+if 'icon={<ReloadOutlined aria-hidden />}' in client_form.read_text(encoding='utf-8'):
+    rep(
+        'frontend/src/pages/clients/ClientFormModal.tsx',
+        '''                          <Button\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined aria-hidden />}\n                            onClick={regeneratePassword}''',
+        '''                          <Button\n                            htmlType="button"\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined aria-hidden />}\n                            onClick={regeneratePassword}''',
+    )
+else:
+    rep(
+        'frontend/src/pages/clients/ClientFormModal.tsx',
+        '''                          <Button\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined />}\n                            onClick={regeneratePassword}''',
+        '''                          <Button\n                            htmlType="button"\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined />}\n                            onClick={regeneratePassword}''',
+    )
 
 # ---------------------------------------------------------------------------
 # Schedule the supplemental collector independently of the Xray collector so

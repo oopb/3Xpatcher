@@ -146,7 +146,21 @@ text = text.replace("newSingbox := model.IsSingboxProtocol(newIb.Protocol)", "ne
 needle = "\tif ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG {\n\t\treturn nil\n\t}\n"
 if text.count(needle) != 2:
     raise SystemExit(f"v21 native TUIC AddUser/RemoveUser guard expected 2 anchors, found {text.count(needle)}")
-text = text.replace(needle, "\tif ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC {\n\t\treturn nil\n\t}\n")
+# v3.11 requires RequestReconcile for native TUIC user updates. The
+# sing-box-owned branch is already dispatched before this fallback.
+if "func configuredTuicInstances(" in read("internal/web/service/inbound_tuic.go"):
+    native_guard = (
+        "\tif ib.Protocol == model.TUIC {\n"
+        "\t\tif l.deps.RequestReconcile != nil {\n"
+        "\t\t\tl.deps.RequestReconcile()\n"
+        "\t\t}\n"
+        "\t\treturn nil\n"
+        "\t}\n"
+        + needle
+    )
+else:
+    native_guard = "\tif ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC {\n\t\treturn nil\n\t}\n"
+text = text.replace(needle, native_guard)
 path.write_text(text, encoding="utf-8")
 
 path = root / "internal/web/service/inbound_tuic.go"
@@ -155,6 +169,7 @@ guard = "\t\tif model.TUICRuntimeFromSettings(ib.Settings) == model.TUICRuntimeS
 if guard not in text:
     legacy_anchor = "\tfor _, ib := range inbounds {\n\t\tinst, ok := tuic.InstanceFromInbound(ib)"
     current_anchor = "\tfor _, ib := range inbounds {\n\t\tbuilt, err := s.buildInboundForLocalRuntime(db, ib)"
+    current_311_anchor = "\tfor _, ib := range inbounds {\n\t\tif ib.Protocol != model.TUIC || !ib.Enable || ib.NodeID != nil {"
     if legacy_anchor in text:
         text = text.replace(
             legacy_anchor,
@@ -165,6 +180,12 @@ if guard not in text:
         text = text.replace(
             current_anchor,
             "\tfor _, ib := range inbounds {\n" + guard + "\t\tbuilt, err := s.buildInboundForLocalRuntime(db, ib)",
+            1,
+        )
+    elif current_311_anchor in text:
+        text = text.replace(
+            current_311_anchor,
+            "\tfor _, ib := range inbounds {\n" + guard + "\t\tif ib.Protocol != model.TUIC || !ib.Enable || ib.NodeID != nil {",
             1,
         )
     else:

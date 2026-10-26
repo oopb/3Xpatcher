@@ -60,7 +60,26 @@ for fn in ("AddUser", "RemoveUser"):
         sig = "func (l *Local) RemoveUser(_ context.Context, ib *model.Inbound, email string) error {\n"
     old = sig + "\tif ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC {\n"
     new = sig + "\tif model.IsSingboxProtocol(ib.Protocol) {\n\t\treturn sbox.Reconcile()\n\t}\n\tif ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG {\n"
-    replace_once("internal/web/runtime/local.go", old, new, f"v3.8 native TUIC {fn} bypass")
+    # v3.11.0 moved native TUIC to an explicit reconciliation branch.
+    # Normalize it to the same baseline the existing supplemental patch expects.
+    modern = (
+        sig + "\tif ib.Protocol == model.TUIC {\n"
+        "\t\tif l.deps.RequestReconcile != nil {\n"
+        "\t\t\tl.deps.RequestReconcile()\n"
+        "\t\t}\n"
+        "\t\treturn nil\n"
+        "\t}\n"
+    )
+    body = (root / "internal/web/runtime/local.go").read_text(encoding="utf-8")
+    if modern in body:
+        replace_once(
+            "internal/web/runtime/local.go",
+            modern,
+            sig + "\tif model.IsSingboxProtocol(ib.Protocol) {\n\t\treturn sbox.Reconcile()\n\t}\n",
+            f"v3.11 native TUIC {fn} reconcile bypass",
+        )
+    else:
+        replace_once("internal/web/runtime/local.go", old, new, f"v3.8 native TUIC {fn} bypass")
 
 # The v3.8 service layer has dedicated native-TUIC switch arms. The V2 patch
 # installs equivalent TUIC handling together with the other supplemental
@@ -71,6 +90,30 @@ remove_once(
     "\tcase model.TUIC:\n\t\tif c.ID == \"\" {\n\t\t\tc.ID = uuid.NewString()\n\t\t}\n\t\tif c.Password == \"\" {\n\t\t\tc.Password = strings.ReplaceAll(uuid.NewString(), \"-\", \"\")\n\t\t}\n",
     "native TUIC global client defaults",
 )
+# v3.11 added relay-email validation to the original TUIC defaults case.
+# Relocate that validation ahead of the switch, then let V2 insert the
+# canonical supplemental defaults (no duplicate TUIC case).
+modern_tuic_defaults = (
+    "\tcase model.TUIC:\n"
+    "\t\tif err := tuic.ValidateRelayEmail(c.Email); err != nil {\n"
+    "\t\t\treturn err\n"
+    "\t\t}\n"
+    "\t\tif c.ID == \"\" {\n"
+    "\t\t\tc.ID = uuid.NewString()\n"
+    "\t\t}\n"
+    "\t\tif c.Password == \"\" {\n"
+    "\t\t\tc.Password = strings.ReplaceAll(uuid.NewString(), \"-\", \"\")\n"
+    "\t\t}\n"
+)
+if modern_tuic_defaults in (root / "internal/web/service/client_crud.go").read_text(encoding="utf-8"):
+    remove_once("internal/web/service/client_crud.go", modern_tuic_defaults, "v3.11 TUIC defaults case")
+    replace_once(
+        "internal/web/service/client_crud.go",
+        "\t}\n\tswitch ib.Protocol {\n",
+        "\t}\n\tif ib.Protocol == model.TUIC {\n\t\tif err := tuic.ValidateRelayEmail(c.Email); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\tswitch ib.Protocol {\n",
+        "v3.11 preserve TUIC email validation",
+    )
+
 for rel in ("internal/web/service/client_inbound_apply.go", "internal/web/service/inbound.go"):
     remove_once(
         rel,

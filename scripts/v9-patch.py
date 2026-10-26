@@ -10,12 +10,24 @@ rep = Patcher(sys.argv[1]).rep
 # getters used by /client/onlines and the dashboard used to return an empty set.
 # Merge the service-level supplemental cache with Xray/local-node state.
 # ---------------------------------------------------------------------------
-rep(
-    'internal/web/service/inbound_node.go',
-    '''func (s *InboundService) GetOnlineClients() []string {\n\tprocess := currentXrayProcess()\n\tif process == nil {\n\t\treturn []string{}\n\t}\n\treturn process.GetOnlineClients()\n}''',
-    '''func (s *InboundService) GetOnlineClients() []string {\n\tsupplemental, _ := supplementalOnlineSnapshot()\n\tprocess := currentXrayProcess()\n\tif process == nil {\n\t\treturn supplemental\n\t}\n\treturn mergeEmails(process.GetOnlineClients(), supplemental)\n}''',
-)
-
+# v3.11 merges kernel AmneziaWG online emails inside this getter. Keep that
+# upstream signal and merge supplemental activity before deduplication.
+node_file = __import__('pathlib').Path(sys.argv[1]) / 'internal/web/service/inbound_node.go'
+if 'kernelOnline := amneziawgkern.GetCollector().OnlineEmails(time.Now())' in node_file.read_text(encoding='utf-8'):
+    rep(
+        'internal/web/service/inbound_node.go',
+        '''\tkernelOnline := amneziawgkern.GetCollector().OnlineEmails(time.Now())''',
+        '''\tkernelOnline := amneziawgkern.GetCollector().OnlineEmails(time.Now())
+\tsupplemental, _ := supplementalOnlineSnapshot()
+\tkernelOnline = mergeEmails(kernelOnline, supplemental)''',
+    )
+else:
+    rep(
+        'internal/web/service/inbound_node.go',
+        '''func (s *InboundService) GetOnlineClients() []string {\n\tprocess := currentXrayProcess()\n\tif process == nil {\n\t\treturn []string{}\n\t}\n\treturn process.GetOnlineClients()\n}''',
+        '''func (s *InboundService) GetOnlineClients() []string {\n\tsupplemental, _ := supplementalOnlineSnapshot()\n\tprocess := currentXrayProcess()\n\tif process == nil {\n\t\treturn supplemental\n\t}\n\treturn mergeEmails(process.GetOnlineClients(), supplemental)\n}''',
+    )
+    
 rep(
     'internal/web/service/inbound_node.go',
     '''func (s *InboundService) GetOnlineClientsByGuid() map[string][]string {\n\tprocess := currentXrayProcess()\n\tif process == nil {\n\t\treturn map[string][]string{}\n\t}\n\tout := process.GetMergedNodeTrees()\n\tif local := process.GetLocalOnlineClients(); len(local) > 0 {\n\t\tif guid := s.panelGuid(); guid != "" {\n\t\t\tout[guid] = mergeEmails(out[guid], local)\n\t\t}\n\t}\n\treturn out\n}''',
