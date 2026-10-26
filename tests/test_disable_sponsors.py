@@ -21,6 +21,7 @@ def read(root: Path, rel: str) -> str:
 
 def fixture(root: Path, layout: str) -> None:
     write(root, "internal/web/service/panel/sponsor.go", "package panel\n")
+    write(root, "frontend/src/components/sponsor/SponsorSlot.tsx", "export default function SponsorSlot() { return null; }\n")
     write(
         root,
         "internal/web/controller/index.go",
