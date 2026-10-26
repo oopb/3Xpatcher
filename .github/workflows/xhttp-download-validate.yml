@@ -1,0 +1,57 @@
+name: Validate XHTTP download split
+
+on:
+  push:
+    branches: [feat/xhttp-download-settings]
+  pull_request:
+    paths:
+      - scripts/v26-xhttp-download-settings.py
+      - overlay/internal/sub/xhttp_download*.go
+      - scripts/apply-overlay.sh
+      - .github/workflows/xhttp-download-validate.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  xhttp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download pinned upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir source
+          version=$(cat UPSTREAM_COMPAT)
+          curl -fsSL --retry 5 --retry-all-errors "https://codeload.github.com/MHSanaei/3x-ui/tar.gz/$version" -o /tmp/upstream.tar.gz
+          tar -xzf /tmp/upstream.tar.gz -C source --strip-components=1
+      - name: Apply overlay and XHTTP split patch
+        run: |
+          python3 -m py_compile scripts/v26-xhttp-download-settings.py
+          ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
+          cp overlay/internal/sub/xhttp_download_test.go source/internal/sub/xhttp_download_test.go
+          grep -q "downloadSettings" source/frontend/src/pages/inbounds/form/transport/xhttp.tsx
+          grep -q "xhttpClientDownload" source/internal/sub/clash_service.go
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: source/go.mod
+          cache: true
+          cache-dependency-path: source/go.sum
+      - name: Test XHTTP exports and compile dependent packages
+        working-directory: source
+        run: |
+          go test ./internal/sub -run '^TestXhttpDownload' -count=1
+          go test ./internal/web/service -run '^$'
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: source/.nvmrc
+          cache: npm
+          cache-dependency-path: source/frontend/package-lock.json
+      - name: Typecheck and build native frontend
+        working-directory: source/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run build
