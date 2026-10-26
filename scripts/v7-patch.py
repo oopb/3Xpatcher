@@ -106,11 +106,20 @@ rep(
     '''      methods.setValue('password', RandomUtil.randomShadowsocksPassword(ss2022Method));''',
     '''      methods.setValue('password', RandomUtil.randomShadowsocksPassword(ss2022Method), { shouldDirty: true, shouldTouch: true, shouldValidate: true });''',
 )
-rep(
-    'frontend/src/pages/clients/ClientFormModal.tsx',
-    '''                          <Input\n                            value={password}\n                            style={{ flex: 1 }}''',
-    '''                          <Input\n                            value={password}\n                            autoComplete="new-password"\n                            data-lpignore="true"\n                            data-1p-ignore="true"\n                            style={{ flex: 1 }}''',
-)
+# Upstream v3.11 sets an input id + aria-describedby for accessibility.
+client_form = __import__('pathlib').Path(sys.argv[1]) / 'frontend/src/pages/clients/ClientFormModal.tsx'
+if '                            aria-describedby={`${uid}-password-hint`}' in client_form.read_text(encoding='utf-8'):
+    rep(
+        'frontend/src/pages/clients/ClientFormModal.tsx',
+        '''                            value={password}\n                            style={{ flex: 1 }}''',
+        '''                            value={password}\n                            autoComplete="new-password"\n                            data-lpignore="true"\n                            data-1p-ignore="true"\n                            style={{ flex: 1 }}''',
+    )
+else:
+    rep(
+        'frontend/src/pages/clients/ClientFormModal.tsx',
+        '''                          <Input\n                            value={password}\n                            style={{ flex: 1 }}''',
+        '''                          <Input\n                            value={password}\n                            autoComplete="new-password"\n                            data-lpignore="true"\n                            data-1p-ignore="true"\n                            style={{ flex: 1 }}''',
+    )
 rep(
     'frontend/src/pages/clients/ClientFormModal.tsx',
     '''                          <Button\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined />}\n                            onClick={regeneratePassword}''',
