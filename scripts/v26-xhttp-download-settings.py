@@ -237,7 +237,7 @@ extra=extra.replace("""          <FormField
             />
           </FormField>""", """          <div style={{ marginBottom: 12 }}>
             <span style={{ marginRight: 12 }}>启用独立下行连接</span>
-            <Switch checked={!!clientDownload} onChange={onDownloadToggle} />
+            <Switch aria-label="启用独立下行连接" checked={clientDownload} onChange={onDownloadToggle} />
           </div>""")
 (root/ui).write_text(raw[:-len(anchor)] + '''      )}
 ''' + extra + '''    </>
