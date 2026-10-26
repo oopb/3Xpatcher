@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.16.1-integrated-alpha`
+当前版本：`0.17.0-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -229,6 +229,14 @@ Mieru 使用 official `mita`，支持当前集成字段，包括：
 - multiplexing
 - traffic pattern
 - handshake mode
+
+## XHTTP 自动 REALITY 下行入口（0.17.0 实验性）
+
+在 VLESS + XHTTP + TLS 入站的 **Streaming → Download Settings** 中，将下行安全类型设为 REALITY 后，可选择 **自动创建 REALITY 入口**。面板通过原生密钥生成 API 创建 REALITY X25519 密钥对，可填写独立下行监听 IP/端口、Target、SNI 列表及 Short ID；客户端公钥与服务端私钥分离保存。建议使用独立端口（默认候选 9443），不要与原 TLS 上行端口抢占。端口必须自行在防火墙开放。
+
+启用后运行配置将原 TLS/XHTTP 入口替换为 TLS/RAW 回落前端，并添加 REALITY/RAW 回落前端，两者回落到**同一个内部 Unix 抽象套接字 XHTTP 入站**；原用户、Path 和入站流量统计保留在内部共享入站。关闭时恢复原始 TLS/XHTTP 入站结构。配置生成阶段会拒绝重复端口、缺失密钥、SNI/Short ID 不一致。
+
+**实验性注意：** 这是运行配置拓扑变更，首次启用时可能重启 Xray。建议先在测试 VPS 或非主力入站测试，并备份面板配置。静态测试不能替代真实 TLS/REALITY 握手和 CDN 兼容性测试。现阶段自动监听针对 **TLS 上行 + REALITY 下行**；其他模式仍为客户端订阅导出，不会自动启动相应服务端入口。TLS 证书仍复用原入站的 TLS 设置，尚未实现完整的独立证书向导。Shadowrocket 可能在 URI 导入时丢弃 downloadSettings，不能保证自动识别。
 
 ## XHTTP 上下行分离（3x-ui 3.11.0）
 

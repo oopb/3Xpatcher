@@ -2,6 +2,7 @@ package sub
 
 import (
   "encoding/json"
+  "strings"
   "testing"
 )
 
@@ -136,4 +137,43 @@ func TestXhttpDownloadDisabledBackwardsCompatibility(t *testing.T) {
 	if _, ok := buildXhttpClashOpts(x)["download-settings"]; ok {
 		t.Fatal("disabled XHTTP split must not produce a Mihomo download-settings")
 	}
+}
+
+
+func TestXhttpManagedRealityDoesNotLeakPrivateKey(t *testing.T) {
+    x := map[string]any{
+        "path":"/common",
+        "downloadSettings":map[string]any{
+            "address":"198.51.100.10",
+            "port":float64(9443),
+            "security":"reality",
+            "realitySettings":map[string]any{
+                "serverName":"www.example.com",
+                "publicKey":"client-public",
+                "shortId":"ab12",
+            },
+            "managedListener":map[string]any{
+                "enabled":true,
+                "realitySettings":map[string]any{
+                    "privateKey":"SERVER_PRIVATE_NEVER_SUBSCRIBE",
+                    "publicKey":"client-public",
+                    "serverNames":[]any{"www.example.com"},
+                    "target":"www.example.com:443",
+                },
+            },
+        },
+    }
+    d:=xhttpClientDownload(x)
+    if d==nil {t.Fatal("Xray client REALITY parameters absent")}
+    b,err:=json.Marshal(d)
+    if err!=nil {t.Fatal(err)}
+    if strings.Contains(string(b),"SERVER_PRIVATE_NEVER_SUBSCRIBE") || strings.Contains(string(b),"managedListener") {
+       t.Fatalf("server-side REALITY data leaked into Xray JSON: %s",string(b))
+    }
+    m:=xhttpDownloadMihomo(d)
+    b,err=json.Marshal(m)
+    if err!=nil {t.Fatal(err)}
+    if strings.Contains(string(b),"SERVER_PRIVATE_NEVER_SUBSCRIBE") {
+       t.Fatal("server-side REALITY private key leaked into Mihomo YAML")
+    }
 }
