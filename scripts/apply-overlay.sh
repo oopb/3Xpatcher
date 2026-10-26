@@ -107,7 +107,7 @@ cp "$ROOT/overlay/internal/sub/singbox_clash.go" "$SRC/internal/sub/singbox_clas
 cp "$ROOT/overlay/internal/sub/tuic_runtime.go" "$SRC/internal/sub/tuic_runtime.go"
 cp "$ROOT/overlay/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_links.go"
 cp "$ROOT/overlay/internal/sub/mieru_clash.go" "$SRC/internal/sub/mieru_clash.go"
-cp "$ROOT/overlay/internal/sub/xhttp_download.go" "$SRC/internal/sub/xhttp_download.go" "$SRC/internal/web/service/xhttp_managed_gateway.go"
+cp "$ROOT/overlay/internal/sub/xhttp_download.go" "$SRC/internal/sub/xhttp_download.go"
 cp "$ROOT/overlay/internal/web/service/xhttp_managed_gateway.go" "$SRC/internal/web/service/xhttp_managed_gateway.go"
 cp "$ROOT/overlay/internal/web/controller/singbox_cert.go" "$SRC/internal/web/controller/singbox_cert.go"
 cp "$ROOT/overlay/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/job/supplemental_traffic_job.go"
