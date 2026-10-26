@@ -70,11 +70,21 @@ rep(
     '''          setValue('settings.password', RandomUtil.randomShadowsocksPassword(v as string));''',
     '''          setValue('settings.password', RandomUtil.randomShadowsocksPassword(v as string), { shouldDirty: true, shouldTouch: true, shouldValidate: true });''',
 )
-rep(
-    'frontend/src/pages/inbounds/form/protocols/shadowsocks.tsx',
-    '''              <Input style={{ width: 'calc(100% - 32px)' }} />''',
-    '''              <Input autoComplete="new-password" data-lpignore="true" data-1p-ignore="true" style={{ width: 'calc(100% - 32px)' }} />''',
-)
+# 3x-ui v3.11 uses a stable, accessibility-safe id on the password field.
+# Retain that id while adding autofill guards.
+ss_file = __import__('pathlib').Path(sys.argv[1]) / 'frontend/src/pages/inbounds/form/protocols/shadowsocks.tsx'
+if """              <Input style={{ width: 'calc(100% - 32px)' }} />""" in ss_file.read_text(encoding='utf-8'):
+    rep(
+        'frontend/src/pages/inbounds/form/protocols/shadowsocks.tsx',
+        """              <Input style={{ width: 'calc(100% - 32px)' }} />""",
+        """              <Input autoComplete="new-password" data-lpignore="true" data-1p-ignore="true" style={{ width: 'calc(100% - 32px)' }} />""",
+    )
+else:
+    rep(
+        'frontend/src/pages/inbounds/form/protocols/shadowsocks.tsx',
+        """              <Input id={`${uid}-password`} style={{ width: 'calc(100% - 32px)' }} />""",
+        """              <Input id={`${uid}-password`} autoComplete="new-password" data-lpignore="true" data-1p-ignore="true" style={{ width: 'calc(100% - 32px)' }} />""",
+    )
 rep(
     'frontend/src/pages/inbounds/form/protocols/shadowsocks.tsx',
     '''            <Button\n              aria-label={t('regenerate')}''',
