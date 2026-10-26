@@ -76,26 +76,26 @@ patch(p,
   }
   function enableManagedReality(enabled: boolean) {
     const base = 'streamSettings.xhttpSettings.downloadSettings';
-    setValue(\`\${base}.managedListener.enabled\`, enabled, { shouldDirty: true });
+    setValue(`${base}.managedListener.enabled`, enabled, { shouldDirty: true });
     if (!enabled) return;
-    const existing = getValues(\`\${base}.managedListener\`);
-    setValue(\`\${base}.managedListener.listen\`,
+    const existing = getValues(`${base}.managedListener`);
+    setValue(`${base}.managedListener.listen`,
       existing?.listen || '0.0.0.0', { shouldDirty: true });
-    const currentPort = Number(getValues(\`\${base}.port\`));
+    const currentPort = Number(getValues(`${base}.port`));
     const uplinkPort = Number(getValues('port'));
     if (!currentPort || currentPort === uplinkPort) {
       // An additional listener cannot bind to an occupied TLS port.
-      setValue(\`\${base}.port\`, 9443, { shouldDirty: true });
+      setValue(`${base}.port`, 9443, { shouldDirty: true });
     }
-    const reality = getValues(\`\${base}.realitySettings\`) ?? {};
-    const names = getValues(\`\${base}.managedListener.realitySettings.serverNames\`) ?? [];
+    const reality = getValues(`${base}.realitySettings`) ?? {};
+    const names = getValues(`${base}.managedListener.realitySettings.serverNames`) ?? [];
     if (!names.length && reality.serverName) {
-      setValue(\`\${base}.managedListener.realitySettings.serverNames\`,
+      setValue(`${base}.managedListener.realitySettings.serverNames`,
         [reality.serverName], { shouldDirty: true });
     }
-    const shorts = getValues(\`\${base}.managedListener.realitySettings.shortIds\`) ?? [];
+    const shorts = getValues(`${base}.managedListener.realitySettings.shortIds`) ?? [];
     if (!shorts.length) {
-      setValue(\`\${base}.managedListener.realitySettings.shortIds\`,
+      setValue(`${base}.managedListener.realitySettings.shortIds`,
         [reality.shortId || ''], { shouldDirty: true });
     }
   }""")
