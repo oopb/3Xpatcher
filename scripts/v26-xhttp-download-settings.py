@@ -48,7 +48,18 @@ export const XHttpStreamSettingsSchema = z.preprocess(''')
 patch(schema,
     '    enableXmux: z.boolean().default(false),',
     '''    enableXmux: z.boolean().default(false),
+    // UI-only switch: do not infer its state from nested Controller fields.
+    enableDownloadSettings: z.boolean().default(false),
     downloadSettings: XHttpDownloadSettingsSchema.optional(),''')
+
+# The enable flag is UI-only. Removing a disabled subobject before validation
+# makes it possible to switch OFF even after entering invalid download fields.
+patch(schema,
+    '  delete o.sessionKey;\n  return o;',
+    '''  delete o.sessionKey;
+  if (o.enableDownloadSettings === false) delete o.downloadSettings;
+  return o;''')
+
 ui = 'frontend/src/pages/inbounds/form/transport/xhttp.tsx'
 patch(ui,
     "import { AutoComplete, Input, InputNumber, Select, Switch } from 'antd';",
@@ -60,7 +71,11 @@ import { UTLS_FINGERPRINT } from '@/schemas/primitives';""")
 patch(ui,
     "  const enableXmux = !!useWatch({ control, name: 'streamSettings.xhttpSettings.enableXmux' });",
     """  const enableXmux = !!useWatch({ control, name: 'streamSettings.xhttpSettings.enableXmux' });
-  const clientDownload = useWatch({ control, name: 'streamSettings.xhttpSettings.downloadSettings' });
+  // A separate flag prevents still-mounted child FormField controllers from
+  // resurrecting the downloadSettings object immediately after switch-off.
+  const clientDownload = !!useWatch({
+    control, name: 'streamSettings.xhttpSettings.enableDownloadSettings',
+  });
   const downloadSecurity = useWatch({
     control, name: 'streamSettings.xhttpSettings.downloadSettings.security',
   });
@@ -68,10 +83,14 @@ patch(ui,
 
   function onDownloadToggle(checked: boolean) {
     const base = 'streamSettings.xhttpSettings.downloadSettings';
-    if (!checked) {
-      setValue(base, undefined, { shouldDirty: true });
-      return;
-    }
+    setValue('streamSettings.xhttpSettings.enableDownloadSettings', checked, {
+      shouldDirty: true,
+      shouldTouch: true,
+    });
+    // Keep the nested data temporarily so React Hook Form can unmount the
+    // child controllers cleanly. The schema/wire serializer deletes it when
+    // the switch is off, including any malformed unsaved values.
+    if (!checked) return;
     if (getValues(base)) return;
     const primarySecurity = getValues('streamSettings.security');
     const primaryReality = getValues('streamSettings.realitySettings') ?? {};
@@ -262,6 +281,25 @@ patch(link,
   }
   return Object.keys(extra).length > 0 ? extra : null;
 }''')
+
+
+# The edit modal loads a saved inbound without a UI-only flag. Restore it
+# from the persisted client download configuration rather than default false.
+patch('frontend/src/lib/xray/inbound-form-adapter.ts',
+    '      streamRecord.xhttpSettings = xhttp;\n      const xmux = xhttp.xmux;',
+    '''      streamRecord.xhttpSettings = xhttp;
+      xhttp.enableDownloadSettings = !!xhttp.downloadSettings;
+      const xmux = xhttp.xmux;''')
+
+# On every save, omit the UI-only switch. A disabled switch removes even a
+# stale subtree resurrected by an unmounted child Controller.
+patch('frontend/src/lib/xray/stream-wire-normalize.ts',
+    '  const enableXmux = out.enableXmux === true;\n  delete out.enableXmux;',
+    '''  const enableXmux = out.enableXmux === true;
+  delete out.enableXmux;
+  const enableDownloadSettings = out.enableDownloadSettings === true;
+  delete out.enableDownloadSettings;
+  if (side === 'inbound' && !enableDownloadSettings) delete out.downloadSettings;''')
 
 # A downloadSettings field on the DB row must never become server listener
 # configuration. The existing JSON subscription path will rehydrate it.
