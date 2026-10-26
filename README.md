@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.16.0-integrated-alpha`
+当前版本：`0.16.1-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -231,6 +231,9 @@ Mieru 使用 official `mita`，支持当前集成字段，包括：
 - handshake mode
 
 ## XHTTP 上下行分离（3x-ui 3.11.0）
+
+> 0.16.1 修复「启用独立下行连接」打开后无法关闭的问题：开关状态独立管理，关闭后保存会删除下载配置且重新编辑保持关闭，原有启用节点仍能正确加载。
+
 
 原生 **Inbounds → Streaming → XHTTP → Download Settings** 可为 VLESS/XHTTP 节点增加一个客户端专用的下行连接地址。UI 使用原来的 `FormField`、uTLS 指纹选项和 TLS/REALITY 语义；打开开关时预填现有入站端口、地址、SNI、Reality 公钥与 Short ID，未设置前不会改变任何节点。客户端仍可根据需要修改下行地址、端口、TLS/REALITY SNI、指纹与 Host。
 
