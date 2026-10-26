@@ -1,0 +1,112 @@
+import { useState } from 'react';
+import { Form } from 'antd';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { FormProvider, useForm } from 'react-hook-form';
+import { describe, expect, it } from 'vitest';
+
+import XhttpForm from '@/pages/inbounds/form/transport/xhttp';
+import { rawInboundToFormValues } from '@/lib/xray/inbound-form-adapter';
+import { normalizeXhttpForWire } from '@/lib/xray/stream-wire-normalize';
+import { XHttpStreamSettingsSchema } from '@/schemas/protocols/stream/xhttp';
+
+const validDownload = {
+  address: 'cdn.example.com',
+  port: 443,
+  security: 'tls',
+  network: 'xhttp',
+  xhttpSettings: { host: 'cdn.example.com' },
+  tlsSettings: {
+    serverName: 'cdn.example.com',
+    fingerprint: 'chrome',
+    alpn: ['h2'],
+  },
+  realitySettings: {
+    serverName: '', publicKey: '', shortId: '', fingerprint: 'chrome',
+  },
+};
+
+function editValues() {
+  return rawInboundToFormValues({
+    protocol: 'vless',
+    port: 443,
+    listen: '0.0.0.0',
+    settings: { clients: [], decryption: 'none', encryption: 'none' },
+    streamSettings: {
+      network: 'xhttp',
+      security: 'none',
+      xhttpSettings: {
+        path: '/shared',
+        mode: 'auto',
+        downloadSettings: validDownload,
+      },
+    },
+  });
+}
+
+function Harness({ values }: { values: Record<string, unknown> }) {
+  const methods = useForm<Record<string, unknown>>({ defaultValues: values });
+  const [wire, setWire] = useState<Record<string, unknown> | null>(null);
+
+  return (
+    <FormProvider {...methods}>
+      <Form layout="vertical">
+        <XhttpForm />
+        <button type="button" onClick={() => {
+          const xhttp = methods.getValues('streamSettings.xhttpSettings');
+          const parsed = XHttpStreamSettingsSchema.parse(xhttp);
+          setWire(normalizeXhttpForWire(parsed, 'inbound'));
+        }}>Serialize inbound</button>
+        <pre data-testid="wire">{JSON.stringify(wire)}</pre>
+      </Form>
+    </FormProvider>
+  );
+}
+
+function output(): Record<string, unknown> {
+  return JSON.parse(screen.getByTestId('wire').textContent || '{}') as Record<string, unknown>;
+}
+
+describe('VLESS XHTTP download switch', () => {
+  it('can switch off a saved configuration without nested fields turning it back on', async () => {
+    const values = editValues() as unknown as Record<string, unknown>;
+    render(<Harness values={values} />);
+    const toggle = screen.getByRole('switch', { name: '启用独立下行连接' });
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('false'));
+    await waitFor(() => expect(screen.queryByText('下行连接地址 (IP / 域名)')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Serialize inbound' }));
+    expect(output()).not.toHaveProperty('downloadSettings');
+    expect(output()).not.toHaveProperty('enableDownloadSettings');
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+    fireEvent.click(screen.getByRole('button', { name: 'Serialize inbound' }));
+    expect(output()).toHaveProperty('downloadSettings');
+  });
+
+  it('defaults to disabled for a new inbound and discards invalid fields when disabled', async () => {
+    const values = {
+      protocol: 'vless',
+      port: 443,
+      listen: '0.0.0.0',
+      streamSettings: {
+        network: 'xhttp',
+        security: 'none',
+        xhttpSettings: XHttpStreamSettingsSchema.parse({ path: '/new' }),
+      },
+    };
+    render(<Harness values={values} />);
+    const toggle = screen.getByRole('switch', { name: '启用独立下行连接' });
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('false'));
+    fireEvent.click(screen.getByRole('button', { name: 'Serialize inbound' }));
+    expect(output()).not.toHaveProperty('downloadSettings');
+  });
+});
