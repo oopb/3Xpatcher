@@ -34,13 +34,13 @@ export const XHttpDownloadSettingsSchema = z.object({
     serverName: z.string().default(''),
     fingerprint: z.string().default('chrome'),
     alpn: z.array(z.string()).default(['h2']),
-  }).default({}),
+  }).default({ serverName: '', fingerprint: 'chrome', alpn: ['h2'] }),
   realitySettings: z.object({
     serverName: z.string().default(''),
     fingerprint: z.string().default('chrome'),
     publicKey: z.string().default(''),
     shortId: z.string().default(''),
-  }).default({}),
+  }).default({ serverName: '', fingerprint: 'chrome', publicKey: '', shortId: '' }),
 });
 export type XHttpDownloadSettings = z.infer<typeof XHttpDownloadSettingsSchema>;
 
@@ -114,7 +114,7 @@ anchor='''      )}
 assert raw.endswith(anchor), 'unexpected end of upstream xhttp form'
 extra='''      {protocol === 'vless' && (
         <>
-          <Divider orientation="left">Download Settings (XHTTP 上下行分离)</Divider>
+          <Divider orientation="start">Download Settings (XHTTP 上下行分离)</Divider>
           <FormField
             name={['streamSettings', 'xhttpSettings', 'downloadSettings']}
             label="启用独立下行连接"
