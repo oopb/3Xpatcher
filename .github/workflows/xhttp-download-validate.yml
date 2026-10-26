@@ -2,11 +2,13 @@ name: Validate XHTTP download split
 
 on:
   push:
-    branches: [feat/xhttp-download-settings, fix/xhttp-download-toggle]
+    branches: [feat/xhttp-download-settings, fix/xhttp-download-toggle, feat/xhttp-managed-reality-gateway]
   pull_request:
     paths:
       - scripts/v26-xhttp-download-settings.py
+      - scripts/v27-xhttp-managed-gateway.py
       - overlay/internal/sub/xhttp_download*.go
+      - overlay/internal/web/service/xhttp_managed_gateway*.go
       - overlay/frontend/src/test/xhttp-download*.test.*
       - scripts/apply-overlay.sh
       - .github/workflows/xhttp-download-validate.yml
@@ -33,6 +35,7 @@ jobs:
           python3 -m py_compile scripts/v26-xhttp-download-settings.py
           ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
           cp overlay/internal/sub/xhttp_download_test.go source/internal/sub/xhttp_download_test.go
+          cp overlay/internal/web/service/xhttp_managed_gateway_test.go source/internal/web/service/xhttp_managed_gateway_test.go
           cp overlay/frontend/src/test/xhttp-download-toggle.test.tsx source/frontend/src/test/xhttp-download-toggle.test.tsx
           cp overlay/frontend/src/test/xhttp-download-wire.test.ts source/frontend/src/test/xhttp-download-wire.test.ts
           grep -q "downloadSettings" source/frontend/src/pages/inbounds/form/transport/xhttp.tsx
@@ -46,7 +49,7 @@ jobs:
         working-directory: source
         run: |
           go test ./internal/sub -run '^TestXhttpDownload' -count=1
-          go test ./internal/web/service -run '^$'
+          go test ./internal/web/service -run '^TestXHTTPManagedGateway' -count=1
       - uses: actions/setup-node@v7
         with:
           node-version-file: source/.nvmrc
