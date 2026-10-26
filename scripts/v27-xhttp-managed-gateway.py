@@ -42,7 +42,7 @@ export type XHttpDownloadSettings""",
       shortIds: z.array(z.string()).default([]),
       privateKey: z.string().default(''),
       publicKey: z.string().default(''),
-    }).default({}),
+    }).default({ target: '', serverNames: [], shortIds: [], privateKey: '', publicKey: '' }),
   }).optional(),
 });
 export type XHttpDownloadSettings""")
