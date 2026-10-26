@@ -137,12 +137,37 @@ append=anchor+"""              {downloadSecurity === 'reality' && (
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'serverNames']}
                         label="REALITY serverNames (SNI)"
                         rules={{required:'至少一个 REALITY SNI'}}
+                        onAfterChange={(value) => {
+                          const names = Array.isArray(value) ? value as string[] : [];
+                          const current = getValues('streamSettings.xhttpSettings.downloadSettings.realitySettings.serverName');
+                          if (!names.includes(current)) {
+                            setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.serverName',
+                              names[0] || '', { shouldDirty: true });
+                          }
+                        }}
                       ><Select mode="tags" tokenSeparators={[',']} placeholder="例如 www.example.com" /></FormField>
                       <FormField
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'shortIds']}
                         label="REALITY shortIds"
                         rules={{required:'至少一个 shortId'}}
-                      ><Select mode="tags" tokenSeparators={[',']} placeholder="十六进制字符串或留空字符串" /></FormField>
+                        onAfterChange={(value) => {
+                          const shorts = Array.isArray(value) ? value as string[] : [];
+                          const current = getValues('streamSettings.xhttpSettings.downloadSettings.realitySettings.shortId');
+                          if (!shorts.includes(current)) {
+                            setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.shortId',
+                              shorts[0] || '', { shouldDirty: true });
+                          }
+                        }}
+                      ><Select mode="tags" tokenSeparators={[',']} placeholder="十六进制字符串" /></FormField>
+                      <Button onClick={() => {
+                        const bytes = new Uint8Array(8);
+                        crypto.getRandomValues(bytes);
+                        const shortId = Array.from(bytes).map(v => v.toString(16).padStart(2, '0')).join('');
+                        setValue('streamSettings.xhttpSettings.downloadSettings.managedListener.realitySettings.shortIds',
+                          [shortId], { shouldDirty: true });
+                        setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.shortId',
+                          shortId, { shouldDirty: true });
+                      }}>生成 Short ID</Button>
                       <FormField
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'privateKey']}
                         label="REALITY 私钥（仅服务端保存）"
