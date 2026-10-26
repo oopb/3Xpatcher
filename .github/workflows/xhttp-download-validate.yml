@@ -2,11 +2,12 @@ name: Validate XHTTP download split
 
 on:
   push:
-    branches: [feat/xhttp-download-settings]
+    branches: [feat/xhttp-download-settings, fix/xhttp-download-toggle]
   pull_request:
     paths:
       - scripts/v26-xhttp-download-settings.py
       - overlay/internal/sub/xhttp_download*.go
+      - overlay/frontend/src/test/xhttp-download*.test.*
       - scripts/apply-overlay.sh
       - .github/workflows/xhttp-download-validate.yml
   workflow_dispatch:
@@ -32,6 +33,8 @@ jobs:
           python3 -m py_compile scripts/v26-xhttp-download-settings.py
           ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
           cp overlay/internal/sub/xhttp_download_test.go source/internal/sub/xhttp_download_test.go
+          cp overlay/frontend/src/test/xhttp-download-toggle.test.tsx source/frontend/src/test/xhttp-download-toggle.test.tsx
+          cp overlay/frontend/src/test/xhttp-download-wire.test.ts source/frontend/src/test/xhttp-download-wire.test.ts
           grep -q "downloadSettings" source/frontend/src/pages/inbounds/form/transport/xhttp.tsx
           grep -q "xhttpClientDownload" source/internal/sub/clash_service.go
       - uses: actions/setup-go@v7
@@ -54,4 +57,5 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm run typecheck
+          npm run test -- src/test/xhttp-download-toggle.test.tsx src/test/xhttp-download-wire.test.ts
           npm run build

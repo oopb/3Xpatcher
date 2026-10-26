@@ -33,6 +33,8 @@ modified=(
   internal/web/service/xray.go
   frontend/src/schemas/protocols/stream/xhttp.ts
   frontend/src/pages/inbounds/form/transport/xhttp.tsx
+  frontend/src/lib/xray/inbound-form-adapter.ts
+  frontend/src/lib/xray/stream-wire-normalize.ts
   frontend/src/lib/xray/inbound-link.ts
   frontend/src/schemas/forms/inbound-form.ts
   frontend/src/schemas/primitives/protocol.ts
