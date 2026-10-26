@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.15.1-integrated-alpha`
+当前版本：`0.16.0-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -229,6 +229,21 @@ Mieru 使用 official `mita`，支持当前集成字段，包括：
 - multiplexing
 - traffic pattern
 - handshake mode
+
+## XHTTP 上下行分离（3x-ui 3.11.0）
+
+原生 **Inbounds → Streaming → XHTTP → Download Settings** 可为 VLESS/XHTTP 节点增加一个客户端专用的下行连接地址。UI 使用原来的 `FormField`、uTLS 指纹选项和 TLS/REALITY 语义；打开开关时预填现有入站端口、地址、SNI、Reality 公钥与 Short ID，未设置前不会改变任何节点。客户端仍可根据需要修改下行地址、端口、TLS/REALITY SNI、指纹与 Host。
+
+- 数据保存在入站的 `streamSettings.xhttpSettings.downloadSettings`，**Xray 服务端配置生成时剔除**；3x-ui 不会把客户端出站选项交给服务器监听器。
+- Xray JSON subscription 与 VLESS share-link 的 `extra.downloadSettings` 使用 Xray 的嵌套 `address/port/network/security/{tlsSettings|realitySettings}/xhttpSettings` 格式；模式和 path 继承上行，避免因路径不匹配而断连。
+- Dedicated Mihomo/Clash subscription 使用 `xhttp-opts.download-settings` 的扁平 `server/port/tls/servername/client-fingerprint/reality-opts` 格式，并在下行 TLS 上清空上行 REALITY public key，避免意外携带 REALITY 握手。
+- 不完整的下行地址、端口或必需 SNI/Reality 公钥不会被导出；不启用时，旧版节点的输出不变。
+- **服务端前提：** CDN/TLS 与 REALITY 两个入口必须汇聚到**同一 XHTTP 服务端实例和相同 path**。本功能不自动配置 Caddy、Nginx、CDN 或防火墙，也不能使已封锁的源站直连下行恢复。
+- **兼容性：** Mihomo 文档警告其 Reality 与较新 Xray-core 存在协议差异。启用混合 TLS/REALITY 后，请先针对实际客户端版本进行导入与握手测试；对于无法表达该组合的客户端，优先使用原生 Xray JSON 配置。
+
+依据：[Xray 五合一参考](https://github.com/XTLS/Xray-core/discussions/4118)、
+[Mihomo XHTTP 参数](https://wiki.metacubex.one/config/proxies/transport/)、
+[Mihomo TLS/Reality](https://wiki.metacubex.one/config/proxies/tls/)。
 
 ## Subscription / QR / Export
 

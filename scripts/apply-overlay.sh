@@ -23,9 +23,17 @@ modified=(
   internal/web/controller/server.go
   internal/web/runtime/local.go
   internal/sub/service.go
+  internal/sub/host_sub.go
   internal/sub/json_service.go
   internal/sub/clash_service.go
   internal/sub/controller.go
+  internal/sub/json_service.go
+  internal/sub/clash_service.go
+  internal/sub/service.go
+  internal/web/service/xray.go
+  frontend/src/schemas/protocols/stream/xhttp.ts
+  frontend/src/pages/inbounds/form/transport/xhttp.tsx
+  frontend/src/lib/xray/inbound-link.ts
   frontend/src/schemas/forms/inbound-form.ts
   frontend/src/schemas/primitives/protocol.ts
   frontend/src/schemas/protocols/inbound/index.ts
@@ -97,6 +105,7 @@ cp "$ROOT/overlay/internal/sub/singbox_clash.go" "$SRC/internal/sub/singbox_clas
 cp "$ROOT/overlay/internal/sub/tuic_runtime.go" "$SRC/internal/sub/tuic_runtime.go"
 cp "$ROOT/overlay/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_links.go"
 cp "$ROOT/overlay/internal/sub/mieru_clash.go" "$SRC/internal/sub/mieru_clash.go"
+cp "$ROOT/overlay/internal/sub/xhttp_download.go" "$SRC/internal/sub/xhttp_download.go"
 cp "$ROOT/overlay/internal/web/controller/singbox_cert.go" "$SRC/internal/web/controller/singbox_cert.go"
 cp "$ROOT/overlay/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/job/supplemental_traffic_job.go"
 cp "$ROOT/overlay/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/supplemental_online.go"
@@ -132,10 +141,11 @@ python3 "$ROOT/scripts/v20-dynamic-badges-security.py" "$SRC"
 python3 "$ROOT/scripts/v22-tuic-native-ui-polish.py" "$SRC"
 if [[ "$is_310" == 1 ]]; then python3 "$ROOT/scripts/v24-310-compat.py" "$SRC" post; fi
 python3 "$ROOT/scripts/disable-sponsors.py" "$SRC"
+python3 "$ROOT/scripts/v26-xhttp-download-settings.py" "$SRC"
 
-gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model"/*.go "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/index.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/supplemental_tls.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/inbound_tuic.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/controller.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/tuic_runtime.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go"
+gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model"/*.go "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/index.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/supplemental_tls.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/inbound_tuic.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/host_sub.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/controller.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/tuic_runtime.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go" "$SRC/internal/sub/xhttp_download.go"
 
-echo "3Xpatcher V25 overlay applied."
+echo "3Xpatcher V26 overlay applied."
 echo "Backup: $backup"
 echo "UI: native /panel/inbounds + native TUIC form with per-inbound Native / sing-box runtime selector"
 echo "Security: generated self-signed TLS uses the same native TUIC certificate/private-key fields; ShadowTLS handshake controls use a dedicated Security tab"
