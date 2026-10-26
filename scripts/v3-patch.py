@@ -39,11 +39,21 @@ rep(
     """import { useTranslation } from 'react-i18next';""",
     """import { useEffect, useState } from 'react';\nimport { useTranslation } from 'react-i18next';""",
 )
-rep(
-    'frontend/src/pages/inbounds/form/security/tls.tsx',
-    """import { Button, Form, Input, InputNumber, Radio, Select, Space, Switch } from 'antd';""",
-    """import { Alert, Button, Divider, Form, Input, InputNumber, Radio, Select, Space, Switch } from 'antd';""",
-)
+# v3.11 already imports Alert from a multiline antd import. Preserve
+# upstream Typography, rather than replacing the whole import declaration.
+tls_path = __import__('pathlib').Path(sys.argv[1]) / 'frontend/src/pages/inbounds/form/security/tls.tsx'
+if "import { Button, Form, Input, InputNumber, Radio, Select, Space, Switch } from 'antd';" in tls_path.read_text(encoding='utf-8'):
+    rep(
+        'frontend/src/pages/inbounds/form/security/tls.tsx',
+        """import { Button, Form, Input, InputNumber, Radio, Select, Space, Switch } from 'antd';""",
+        """import { Alert, Button, Divider, Form, Input, InputNumber, Radio, Select, Space, Switch } from 'antd';""",
+    )
+else:
+    rep(
+        'frontend/src/pages/inbounds/form/security/tls.tsx',
+        """  Alert,\n  Button,\n  Form,""",
+        """  Alert,\n  Button,\n  Divider,\n  Form,""",
+    )
 rep(
     'frontend/src/pages/inbounds/form/security/tls.tsx',
     """import { FormField } from '@/components/form/rhf';""",
