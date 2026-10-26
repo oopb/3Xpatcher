@@ -120,11 +120,19 @@ else:
         '''                          <Input\n                            value={password}\n                            style={{ flex: 1 }}''',
         '''                          <Input\n                            value={password}\n                            autoComplete="new-password"\n                            data-lpignore="true"\n                            data-1p-ignore="true"\n                            style={{ flex: 1 }}''',
     )
-rep(
-    'frontend/src/pages/clients/ClientFormModal.tsx',
-    '''                          <Button\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined />}\n                            onClick={regeneratePassword}''',
-    '''                          <Button\n                            htmlType="button"\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined />}\n                            onClick={regeneratePassword}''',
-)
+# v3.11 added aria-hidden to the icon; keep it for screen readers.
+if 'icon={<ReloadOutlined aria-hidden />}' in client_form.read_text(encoding='utf-8'):
+    rep(
+        'frontend/src/pages/clients/ClientFormModal.tsx',
+        '''                          <Button\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined aria-hidden />}\n                            onClick={regeneratePassword}''',
+        '''                          <Button\n                            htmlType="button"\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined aria-hidden />}\n                            onClick={regeneratePassword}''',
+    )
+else:
+    rep(
+        'frontend/src/pages/clients/ClientFormModal.tsx',
+        '''                          <Button\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined />}\n                            onClick={regeneratePassword}''',
+        '''                          <Button\n                            htmlType="button"\n                            aria-label={t('regenerate')}\n                            icon={<ReloadOutlined />}\n                            onClick={regeneratePassword}''',
+    )
 
 # ---------------------------------------------------------------------------
 # Schedule the supplemental collector independently of the Xray collector so
