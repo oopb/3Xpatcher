@@ -309,4 +309,61 @@ patch(clash,
 \t// Direct fields: path, mode
 \tif v, ok := xhttp["path"].(string); ok && v != "" {''')
 
+
+# Hosts may override the uplink path per endpoint. Keep the nested download path
+# in sync for both raw URI exports and Xray JSON. The XHTTP session will fail
+# if the two HTTP connections do not target the same listener path.
+hostsub='internal/sub/host_sub.go'
+patch(hostsub,
+    '''\tif p, ok := e.ep["path"].(string); ok && p != "" {
+\t\tif _, exists := params["path"]; exists {
+\t\t\tparams["path"] = p
+\t\t}
+\t}
+}''',
+    '''\tif p, ok := e.ep["path"].(string); ok && p != "" {
+\t\tif _, exists := params["path"]; exists {
+\t\t\tparams["path"] = p
+\t\t}
+\t\t// Raw VLESS extra embeds the XHTTP download transport's path.
+\t\tif original := params["extra"]; original != "" {
+\t\t\tvar extra map[string]any
+\t\t\tif json.Unmarshal([]byte(original), &extra) == nil {
+\t\t\t\tif download, ok := extra["downloadSettings"].(map[string]any); ok {
+\t\t\t\t\tif settings, ok := download["xhttpSettings"].(map[string]any); ok {
+\t\t\t\t\t\tsettings["path"] = p
+\t\t\t\t\t\tif updated, err := json.Marshal(extra); err == nil {
+\t\t\t\t\t\t\tparams["extra"] = string(updated)
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t}
+\t}
+}''')
+patch(hostsub,
+    '''\tif p, ok := ep["path"].(string); ok && p != "" {
+\t\tfor _, key := range []string{"wsSettings", "httpupgradeSettings", "xhttpSettings"} {
+\t\t\tif ts, ok := stream[key].(map[string]any); ok && ts != nil {
+\t\t\t\tts["path"] = p
+\t\t\t}
+\t\t}
+\t}''',
+    '''\tif p, ok := ep["path"].(string); ok && p != "" {
+\t\tfor _, key := range []string{"wsSettings", "httpupgradeSettings", "xhttpSettings"} {
+\t\t\tif ts, ok := stream[key].(map[string]any); ok && ts != nil {
+\t\t\t\tts["path"] = p
+\t\t\t\tif key == "xhttpSettings" {
+\t\t\t\t\tif extra, ok := ts["extra"].(map[string]any); ok {
+\t\t\t\t\t\tif download, ok := extra["downloadSettings"].(map[string]any); ok {
+\t\t\t\t\t\t\tif downXhttp, ok := download["xhttpSettings"].(map[string]any); ok {
+\t\t\t\t\t\t\t\tdownXhttp["path"] = p
+\t\t\t\t\t\t\t}
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t}
+\t}''')
+
 print("XHTTP client download settings patch applied")
