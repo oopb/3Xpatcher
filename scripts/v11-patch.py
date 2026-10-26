@@ -4,6 +4,17 @@ from v2_patchlib import Patcher
 
 rep = Patcher(sys.argv[1]).rep
 
+_original_rep = rep
+def rep(rel, old, new, count=1):
+    # v3.11 added aria-hidden to subscription copy icons.
+    if rel == 'frontend/src/pages/inbounds/info/InboundInfoModal.tsx' and "subSettings?.subJsonEnable && subJsonLink" in old:
+        current = Patcher(sys.argv[1]).read(rel)
+        if 'icon={<CopyOutlined aria-hidden />}' in current:
+            old = old.replace('icon={<CopyOutlined />}', 'icon={<CopyOutlined aria-hidden />}')
+            new = new.replace('icon={<CopyOutlined />}', 'icon={<CopyOutlined aria-hidden />}')
+    return _original_rep(rel, old, new, count)
+
+
 # ---------------------------------------------------------------------------
 # Native inbound list parity: every supplemental multi-user protocol must
 # participate in the same client rollup used by the upstream row-action menu.
