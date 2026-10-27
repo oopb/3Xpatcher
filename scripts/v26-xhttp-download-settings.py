@@ -419,3 +419,25 @@ patch(hostsub,
 \t}''')
 
 print("XHTTP client download settings patch applied")
+
+
+# Standard Xray extra remains intact; Shadowrocket also consumes its native
+# XHTTP obfsParam mapping, which has different field names.
+patch('internal/sub/service.go',
+    '''\tif extra != nil {
+\t\tif b, err := json.Marshal(extra); err == nil {
+\t\t\tparams["extra"] = string(b)
+\t\t}
+\t}
+}
+
+var kcpMaskToHeaderType''',
+    '''\tif extra != nil {
+\t\tif b, err := json.Marshal(extra); err == nil {
+\t\t\tparams["extra"] = string(b)
+\t\t}
+\t}
+\tshadowrocketXHTTPDownloadParams(xhttp, params)
+}
+
+var kcpMaskToHeaderType''')
