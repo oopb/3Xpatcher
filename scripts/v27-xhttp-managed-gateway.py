@@ -189,8 +189,8 @@ patch(p,
     }
   }""")
 
-// Put the exact upstream RealityTargetScannerModal next to the REALITY SNI,
-// not inside a second advanced-settings editor.
+# Put the exact upstream RealityTargetScannerModal next to the REALITY SNI,
+# not inside a second advanced-settings editor.
 patch(p,
 """                   <FormField
                      name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'serverName']}
