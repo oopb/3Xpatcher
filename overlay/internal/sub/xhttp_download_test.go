@@ -286,7 +286,13 @@ func TestXhttpDownloadShadowrocketNativeRealityKeysPreserveXrayURI(t *testing.T)
   b,err:=json.Marshal(extra);if err!=nil {t.Fatal(err)}
   params["extra"]=string(b)
   shadowrocketXHTTPDownloadParams(x,params)
+  shadowrocketXHTTPMarkNativeTransport(params)
   shadowrocketXHTTPDownloadRealityQueryParams(x,params)
+  // Native Shadowrocket requires this selector before it can unpack
+  // the JSON obfsParam. Otherwise the entire JSON becomes HTTP Host.
+  if params["obfs"]!="xhttp" || params["host"]!="cdn03.ijj.kdns.fr" {
+    t.Fatalf("JSON obfsParam may replace host without matching xhttp selector: %#v",params)
+  }
   const key="7_B0g4hZQ9Kxw6TicXrAIvHxvek3vbfZQmUpko1RBls"
   if params["pbk"]!=key || params["sid"]!="b926c80a0e3759" {
     t.Fatalf("Shadowrocket downlink REALITY credentials missing: %#v",params)
@@ -350,9 +356,45 @@ func TestXhttpDownloadShadowrocketKeyIsolation(t *testing.T) {
  params:=map[string]string{"security":"tls","encryption":"none"}
  shadowrocketXHTTPDownloadRealityQueryParams(tls,params)
  shadowrocketXHTTPDownloadParams(tls,params)
+ // As long as a native split obfsParam exists, also mark the XHTTP
+ // transport; otherwise a generic VLESS decoder may treat it as Host.
+ params["type"]="xhttp"
+ params["host"]="cdn.example.org"
+ shadowrocketXHTTPMarkNativeTransport(params)
+ if params["obfs"]!="xhttp" || params["host"]!="cdn.example.org" {t.Fatal("TLS/TLS native import Host regression")}
  if _,has:=params["pbk"];has {t.Fatal("TLS/TLS must not inject REALITY pbk")}
  if _,has:=params["sid"];has {t.Fatal("TLS/TLS must not inject REALITY sid")}
  var obfs map[string]any
  if err:=json.Unmarshal([]byte(params["obfsParam"]),&obfs);err!=nil {t.Fatal(err)}
  if _,has:=obfs[""].(map[string]any)["downloadPath"];has {t.Fatal("redundant path in TLS/TLS obfs")}
+}
+
+
+func TestXhttpDownloadShadowrocketHostMarkerScope(t *testing.T) {
+  // Ordinary VLESS XHTTP and other transports must retain their original
+  // Xray URI without any Shadowrocket-only obfs alias.
+  for _,tc:=range []struct{
+    name string
+    params map[string]string
+    mark bool
+  }{
+    {"regular-XHTTP",map[string]string{"type":"xhttp","host":"origin.example.com"},false},
+    {"websocket",map[string]string{"type":"ws","host":"origin.example.com","obfsParam":"not JSON"},false},
+    {"split-XHTTP",map[string]string{
+      "type":"xhttp","host":"cdn.example.com","security":"tls",
+      "obfsParam":`{"":{"downloadTargetHost":"203.0.113.8"},"Host":"cdn.example.com"}`,
+    },true},
+  }{
+    t.Run(tc.name,func(t *testing.T){
+      beforeHost:=tc.params["host"]
+      beforeObfsParam:=tc.params["obfsParam"]
+      shadowrocketXHTTPMarkNativeTransport(tc.params)
+      if (tc.params["obfs"]=="xhttp")!=tc.mark{
+        t.Fatalf("invalid Shadowrocket XHTTP marker: %#v",tc.params)
+      }
+      if tc.params["host"]!=beforeHost || tc.params["obfsParam"]!=beforeObfsParam {
+        t.Fatalf("standard Host or Shadowrocket JSON unexpectedly changed: %#v",tc.params)
+      }
+    })
+  }
 }
