@@ -95,7 +95,9 @@ func xhttpClientDownload(xhttp map[string]any) map[string]any {
 		}
 		down["realitySettings"] = reality
 	}
-	// Reality's Host can be blank, particularly when uplink uses TLS/CDN.
+	// Both transports must reach the same XHTTP listener. When the downstream
+	// Host is not specified, retain the upstream Host used by that listener.
+	if host == "" { host, _ = xhttp["host"].(string) }
 	xhttpDown["host"] = host
 	down["xhttpSettings"] = xhttpDown
 	return down
