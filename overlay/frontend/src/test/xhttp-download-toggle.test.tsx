@@ -77,14 +77,11 @@ function Harness({ values }: { values: Record<string, unknown> }) {
           setWire(normalizeXhttpForWire(parsed, 'inbound'));
         }}>Serialize inbound</button>
         <button type="button" onClick={() => {
-          setWire(methods.getValues('streamSettings.xhttpSettings') as unknown as Record<string, unknown>);
+          // RHF returns a stable nested object reference; snapshot its contents
+          // so repeated inspections always re-render after individual edits.
+          const current = methods.getValues('streamSettings.xhttpSettings');
+          setWire(JSON.parse(JSON.stringify(current)) as Record<string, unknown>);
         }}>Inspect XHTTP form</button>
-        <button type="button" onClick={() => {
-          const base = 'streamSettings.xhttpSettings.downloadSettings';
-          methods.setValue(base + '.realitySettings.publicKey', 'custom-pk', { shouldDirty: true });
-          methods.setValue(base + '.realitySettings.shortId', 'aa12', { shouldDirty: true });
-          methods.setValue(base + '.managedListener.realitySettings.privateKey', 'custom-private', { shouldDirty: true });
-        }}>Set editable REALITY values</button>
         <pre data-testid="wire">{JSON.stringify(wire)}</pre>
       </Form>
     </FormProvider>
@@ -248,11 +245,9 @@ describe('VLESS XHTTP download switch', () => {
     expect(editablePublic.readOnly).toBe(false);
     expect(editableShort.readOnly).toBe(false);
     expect(editablePrivate.readOnly).toBe(false);
-    // Use RHF's setter to verify the full save/edit path and dependent sync.
-    // Synthetic input events on Ant Design nested Form.Item inputs can mutate
-    // JSDOM input.value without invoking the real controlled onChange callback.
-    fireEvent.click(screen.getByRole('button', { name: 'Set editable REALITY values' }));
-    await waitFor(() => expect(editablePublic.value).toBe('custom-pk'));
+    fireEvent.change(editablePublic, { target: { value: 'custom-pk' } });
+    fireEvent.change(editableShort, { target: { value: 'aa12' } });
+    fireEvent.change(editablePrivate, { target: { value: 'custom-private' } });
     fireEvent.click(screen.getByRole('button', { name: 'Inspect XHTTP form' }));
     const edited = output().downloadSettings as Record<string, any>;
     expect(edited.realitySettings.publicKey).toBe('custom-pk');
