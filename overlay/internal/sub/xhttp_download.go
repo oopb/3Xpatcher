@@ -5,8 +5,6 @@ package sub
 // endpoints must both reach the same XHTTP inbound/path; these helpers only
 // describe client connections, never deploy a CDN, reverse proxy, or fallback.
 import (
-	"encoding/json"
-	"fmt"
 	"strings"
 )
 
@@ -154,91 +152,4 @@ func xhttpDownloadMihomo(download map[string]any, upstreamSecurity ...string) ma
 		}
 	}
 	return out
-}
-
-
-// shadowrocketXHTTPDownloadParams adds Shadowrocket's separately exported
-// xhttp obfsParam keys while retaining Xray's full extra.downloadSettings.
-// Shadowrocket's native key names are established by exported node samples.
-// Reality download credentials are still carried in the standard Xray extra;
-// no undocumented Shadowrocket-specific credential names are fabricated.
-func shadowrocketXHTTPDownloadParams(xhttp map[string]any, params map[string]string) {
-	down := xhttpClientDownload(xhttp)
-	if down == nil || params == nil { return }
-	settings, _ := down["xhttpSettings"].(map[string]any)
-	primaryHost, _ := xhttp["host"].(string)
-	nested := map[string]any{
-		"downloadTargetHost": down["address"],
-		"downloadTargetPort": fmt.Sprint(down["port"]),
-	}
-// The two XHTTP legs deliberately share the top-level URI path. Native
-	// Shadowrocket exports do not add downloadPath in obfsParam; keeping a
-	// duplicate here can cause the app to choose the wrong path parser.
-	if host, _ := settings["host"].(string); host != "" {
-		nested["downloadHTTPHost"] = host
-	}
-	var serverName string
-	if down["security"] == "reality" {
-		reality, _ := down["realitySettings"].(map[string]any)
-		serverName, _ = reality["serverName"].(string)
-	} else {
-		tls, _ := down["tlsSettings"].(map[string]any)
-		serverName, _ = tls["serverName"].(string)
-	}
-	if serverName != "" { nested["downloadServerName"] = serverName }
-	if padding, _ := xhttp["xPaddingBytes"].(string); padding != "" {
-		nested["xPaddingBytes"] = padding
-	}
-	obj := map[string]any{"": nested}
-	if primaryHost != "" { obj["Host"] = primaryHost }
-	if raw, err := json.Marshal(obj); err == nil { params["obfsParam"] = string(raw) }
-}
-
-// shadowrocketXHTTPDownloadRealityQueryParams supplies the two fields a
-// *native* Shadowrocket export carries at URI query level (pbk/sid) when a
-// TLS uplink has a separate REALITY downlink. The canonical Xray
-// extra.downloadSettings is retained unchanged. In particular, never
-// overwrite pbk/sid for an upstream that itself uses REALITY, because
-// those keys belong to the uplink in Xray/V2Ray's standard URI syntax.
-//
-// Call this only for VLESS after the upstream security options are emitted.
-func shadowrocketXHTTPDownloadRealityQueryParams(xhttp map[string]any, params map[string]string) {
-	if params == nil || params["security"] != "tls" {
-		return
-	}
-	down := xhttpClientDownload(xhttp)
-	if down == nil || down["security"] != "reality" {
-		return
-	}
-	real, _ := down["realitySettings"].(map[string]any)
-	key, _ := real["publicKey"].(string)
-	if key == "" {
-		return
-	}
-	if _, exists := params["pbk"]; !exists {
-		params["pbk"] = key
-	}
-	if short, _ := real["shortId"].(string); short != "" {
-		if _, exists := params["sid"]; !exists {
-			params["sid"] = short
-		}
-	}
-}
-
-// shadowrocketXHTTPMarkNativeTransport is limited to VLESS URI generation.
-// Without obfs=xhttp, Shadowrocket can interpret the JSON obfsParam using
-// its legacy generic Host mapping, showing the *whole JSON* as HTTP Host.
-// Xray-native type=xhttp, host=domain, and extra.downloadSettings are all
-// left intact; Xray clients ignore this extra client-specific query option.
-//
-// Only enable the Shadowrocket alias if a valid split-downlink obfsParam was
-// actually emitted. Plain XHTTP nodes keep their original canonical URI.
-func shadowrocketXHTTPMarkNativeTransport(params map[string]string) {
-	if params == nil || params["type"] != "xhttp" {
-		return
-	}
-	if _, exists := params["obfsParam"]; !exists {
-		return
-	}
-	params["obfs"] = "xhttp"
 }
