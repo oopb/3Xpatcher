@@ -188,7 +188,7 @@ append=anchor+"""              {downloadSecurity === 'reality' && (
                       <FormField
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'minClientVer']}
                         label="REALITY 最低客户端版本 (minClientVer)"
-                        rules={{ pattern: { value: /^[0-9]+\\.[0-9]+\\.[0-9]+$/, message: '版本格式应为 x.y.z，例如 1.8.2' } }}
+                        rules={{ pattern: { value: /^[0-9]+\.[0-9]+\.[0-9]+$/, message: '版本格式应为 x.y.z，例如 1.8.2' } }}
                       ><Input placeholder="1.8.2 (兼容 Mihomo)" /></FormField>
                       <FormField
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'privateKey']}
