@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.17.8-integrated-alpha`
+当前版本：`0.17.9-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -505,3 +505,10 @@ Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN
 - Mihomo 的 `xhttp-opts.download-settings` 根据上下行**实际安全类型**生成：TLS → TLS 不再生成 `reality-opts`；REALITY → TLS 仍可在下行清除继承的 REALITY 公钥；TLS → REALITY 保持公钥、Short ID 等设置。不使用最终 YAML 空字段清理或文本替换。
 - 原有 3x-ui v3.7–v3.10 兼容映射保持原样；新增端口事务检查只适配提供 `internal/web/service/port_conflict.go` 的新版上游。
 - 端口可用性预检查不是系统级原子锁：极短竞态仍须由最终 Xray bind 决定。升级不会改动现有节点端口，请自行核对实际监听和防火墙。
+
+## XHTTP 三入站生命周期自动收敛（0.17.9）
+
+- 修复修改 XHTTP 上行或托管 REALITY 下行端口后旧监听残留。源头是上游普通入站单 Tag 的 gRPC DelInbound/AddInbound 与 3Xpatcher 的 `共享 XHTTP + TLS 上行 + REALITY 下行` 三入站生成拓扑不匹配。
+- 3x-ui 原生 `GetXrayConfig → RestartXray → ComputeHotDiff / stop-restart` 已能移除旧监听、接管新端口；现在对开启过托管的入站统一走这一机制，不再直接对单个数据库入站 Tag 做增删。
+- 覆盖新建、编辑（包括上下行端口变化、切换托管开关）、启用/停用和删除。普通非托管 XHTTP 仍走原生快速单入站操作。更新时保留正常用户统计和共享会话拓扑。
+- 测试覆盖：修改 REALITY 端口后新配置不再有旧端口，Xray 原生热更新规则会为 REALITY 端口变更触发完整重启，以及托管开启/关闭/删除状态过渡。
