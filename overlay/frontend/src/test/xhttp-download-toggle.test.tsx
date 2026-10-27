@@ -79,6 +79,12 @@ function Harness({ values }: { values: Record<string, unknown> }) {
         <button type="button" onClick={() => {
           setWire(methods.getValues('streamSettings.xhttpSettings') as unknown as Record<string, unknown>);
         }}>Inspect XHTTP form</button>
+        <button type="button" onClick={() => {
+          const base = 'streamSettings.xhttpSettings.downloadSettings';
+          methods.setValue(base + '.realitySettings.publicKey', 'custom-pk', { shouldDirty: true });
+          methods.setValue(base + '.realitySettings.shortId', 'aa12', { shouldDirty: true });
+          methods.setValue(base + '.managedListener.realitySettings.privateKey', 'custom-private', { shouldDirty: true });
+        }}>Set editable REALITY values</button>
         <pre data-testid="wire">{JSON.stringify(wire)}</pre>
       </Form>
     </FormProvider>
@@ -236,22 +242,17 @@ describe('VLESS XHTTP download switch', () => {
     const down = output().downloadSettings as Record<string, any>;
     expect(down.realitySettings.serverName).toBe('new.example.com');
     expect(down.managedListener.realitySettings.serverNames).toEqual(['www.amd.com', 'new.example.com']);
-    fireEvent.input(screen.getByPlaceholderText('自动生成，也可手动输入对应公钥'), {
-      target: { value: 'custom-pk' },
-    });
-    await waitFor(() => {
-      expect((screen.getByPlaceholderText('自动生成，也可手动输入对应公钥') as HTMLInputElement).value)
-        .toBe('custom-pk');
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Inspect XHTTP form' }));
-    expect((output().downloadSettings as Record<string, any>).realitySettings.publicKey)
-      .toBe('custom-pk');
-    fireEvent.input(screen.getByPlaceholderText('自动生成，也可手动输入十六进制 Short ID'), {
-      target: { value: 'aa12' },
-    });
-    fireEvent.input(screen.getByPlaceholderText('自动生成，也可输入与公钥匹配的私钥'), {
-      target: { value: 'custom-private' },
-    });
+    const editablePublic = screen.getByPlaceholderText('自动生成，也可手动输入对应公钥') as HTMLInputElement;
+    const editableShort = screen.getByPlaceholderText('自动生成，也可手动输入十六进制 Short ID') as HTMLInputElement;
+    const editablePrivate = screen.getByPlaceholderText('自动生成，也可输入与公钥匹配的私钥') as HTMLInputElement;
+    expect(editablePublic.readOnly).toBe(false);
+    expect(editableShort.readOnly).toBe(false);
+    expect(editablePrivate.readOnly).toBe(false);
+    // Use RHF's setter to verify the full save/edit path and dependent sync.
+    // Synthetic input events on Ant Design nested Form.Item inputs can mutate
+    // JSDOM input.value without invoking the real controlled onChange callback.
+    fireEvent.click(screen.getByRole('button', { name: 'Set editable REALITY values' }));
+    await waitFor(() => expect(editablePublic.value).toBe('custom-pk'));
     fireEvent.click(screen.getByRole('button', { name: 'Inspect XHTTP form' }));
     const edited = output().downloadSettings as Record<string, any>;
     expect(edited.realitySettings.publicKey).toBe('custom-pk');
