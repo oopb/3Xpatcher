@@ -2,11 +2,12 @@ name: XHTTP managed gateway real network E2E
 
 on:
   push:
-    branches: [fix/xhttp-mihomo-downlink-host]
+    branches: [fix/xhttp-reality-mihomo-min-client-ver]
   pull_request:
     paths:
       - 'tests/xhttp_gateway_real_e2e.sh'
       - 'overlay/internal/sub/xhttp_download.go'
+      - 'overlay/internal/web/service/xhttp_managed_gateway.go'
       - '.github/workflows/xhttp-gateway-real-e2e.yml'
   workflow_dispatch:
 
@@ -30,9 +31,16 @@ jobs:
           go-version-file: source/go.mod
           cache: true
           cache-dependency-path: source/go.sum
-      - name: Build pinned official Xray-core executable
-        working-directory: source
-        run: go build -o /tmp/xray-e2e github.com/xtls/xray-core/main
+      - name: Fetch exact official Xray-core v26.7.28 executable
+        run: |
+          curl -fL --retry 5 --retry-all-errors \
+            'https://github.com/XTLS/Xray-core/releases/download/v26.7.28/Xray-linux-64.zip' \
+            -o /tmp/xray-26728.zip
+          mkdir -p /tmp/xray-26728
+          unzip -q /tmp/xray-26728.zip -d /tmp/xray-26728
+          cp /tmp/xray-26728/xray /tmp/xray-e2e
+          chmod +x /tmp/xray-e2e
+          /tmp/xray-e2e version
       - name: Download pinned official Mihomo v1.19.33
         run: |
           curl -fL --retry 5 --retry-all-errors \

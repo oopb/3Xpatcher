@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.17.2-integrated-alpha`
+当前版本：`0.17.3-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -446,14 +446,22 @@ x-ui-mieru@*.service
 
 使用时请同时遵守各上游项目的许可证与使用条款。
 
-## Clash Verge / Mihomo 与 XHTTP REALITY 分离的兼容性（0.17.2）
+## Clash Verge / Mihomo 与 REALITY 分离兼容性（0.17.3）
 
-官方 Mihomo 明确不支持 Xray-core v26.7.11+ 的 REALITY 变化。已使用**官方 Xray-core 26.10.21 + Mihomo 1.19.33**进行真实双入口测试：Xray 客户端 **TLS 上行 + REALITY 下行**成功，配合 native ML-KEM-768 和 Vision 也成功；同一服务端、相同下行公钥/SNI/Short ID，在 Mihomo 上报 `REALITY authentication failed`。因此这是实际协议兼容性，不是端口未开或没有保存分享参数。
+**已找到并在 Xray 26.7.28 上复现、验证真正原因：REALITY `minClientVer` 默认限制。** Xray-core 自 v26.7.11 起，在省略 `minClientVer` 时默认使用 `26.3.27`；而 Mihomo v1.19.x 的 REALITY ClientHello 携带的版本为 `1.8.2`，导致 REALITY 下行握手返回 `authentication failed`。原补丁把所有 v26.7.11+ 标记为完全不能兼容，这是不准确的。
 
-建议 Clash Verge 使用 **TLS 上行（CDN）+ TLS 下行（VPS IP 直连）**，下行端口填原 TLS 入站端口，TLS SNI/证书与上行一致、HTTP Host 与上行匹配、ALPN = h2；该组合连同 native ML-KEM-768 和 Vision 已在官方 Mihomo v1.19.33 实测通过。原单一 TLS/XHTTP 入站即可共享会话，通常**无需**自动 REALITY 监听。面板切换下行安全为 TLS 时会自动关闭先前启用的 REALITY 托管监听。
+启用 **Download Settings → REALITY → 自动创建 REALITY 入口** 后，3Xpatcher 只在新生成的托管下行 REALITY 入站添加：
 
-另外，Mihomo 的 `xhttp-opts.download-settings` 未设置字段会继承上行，因此在 REALITY 下行导出中显式输出 `host: ""`（不能丢掉空值）与 `alpn: [h2]`。这修正了一个独立的导出隐患，但不会恢复 Mihomo 与新版 Xray REALITY 的协议兼容性。
+```json
+"minClientVer": "1.8.2"
+```
 
-Shadowrocket 已加入 XHTTP 异步下载支持，不过尚未确认其 VLESS URI 能正确解析 `extra.downloadSettings`。此前用户导出的 Shadowrocket JSON 缺少下行地址与 REALITY 字段，不能宣称 URI 订阅已经成功导入下行设置，也不能凭空构造所谓兼容 URL。
+不会修改原 TLS 上行、普通 REALITY 入站或原 VLESS ML-KEM/ Vision 配置。用户仍使用 **TLS/CDN 上行 + REALITY/VPS IP 直连下行**；二者回落到同一个 XHTTP 后端和共享 Path/用户。
 
-参考：[Mihomo TLS/REALITY 兼容性说明](https://wiki.metacubex.one/config/proxies/tls/) · [Xray XHTTP 下行参数](https://xtls.github.io/config/transports/xhttp.html)。
+**真实网络测试**：官方 Xray-core `v26.7.28` + 官方 Mihomo `v1.19.33`，TLS 上行/REALITY 下行、内部 UDS XHTTP、VLESS native ML-KEM-768 Encryption 和 `xtls-rprx-vision`，通过实际 HTTPS 代理请求。证据：[工作流记录](https://github.com/oopb/3Xpatcher/actions/runs/40467983997)。兼容性参数放宽了 REALITY 所接受的最低客户端版本，可能降低使用版本约束进行异常客户端过滤的能力；目前只作用于主动开启的托管入口。
+
+Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN 上行 Host/ALPN。官方 Mihomo 对新版本 Xray REALITY 的其他变动不承诺持续支持；本测试精确针对 Xray `26.7.28`，不代表后续所有 Xray 版本必然兼容。
+
+**Shadowrocket 仍是独立问题**：已有 VLESS 分享链接内 `extra.downloadSettings` 存在，但其导出 JSON 未出现独立下行内容；缺乏官方确认的 Shadowrocket 分享链接扩展格式，故不臆造转换或声称小火箭已修复。
+
+资料：[MetaCubeX/Mihomo #3132](https://github.com/MetaCubeX/mihomo/issues/3132) · [Xray-core #6477](https://github.com/XTLS/Xray-core/issues/6477) · [Mihomo TLS 配置](https://wiki.metacubex.one/config/proxies/tls/)。

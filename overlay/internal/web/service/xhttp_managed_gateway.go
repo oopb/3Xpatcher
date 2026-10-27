@@ -114,6 +114,12 @@ func xhttpGatewayConfig(
       "serverNames":names,
       "privateKey":privateKey,
       "shortIds":shortIDs,
+      // Xray 26.7.11+ defaults minClientVer to 26.3.27. Mihomo reports
+      // REALITY client version 1.8.2, so the implicit threshold rejects
+      // its handshake before XHTTP sessions are reached.
+      // Scope this explicit compatibility setting to the opt-in generated
+      // REALITY downlink; do not change unrelated inbounds.
+      "minClientVer":"1.8.2",
     },
   })
   if err!=nil{return nil,err}

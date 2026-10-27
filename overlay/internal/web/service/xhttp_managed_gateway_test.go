@@ -50,6 +50,10 @@ func TestXHTTPManagedGatewaySharedFallback(t *testing.T) {
  realStream:=xhttpMap(reality.StreamSettings)
  if tlsStream["network"]!="raw" || tlsStream["security"]!="tls" {t.Fatalf("incorrect TLS front %#v",tlsStream)}
  if realStream["network"]!="raw" || realStream["security"]!="reality" {t.Fatalf("incorrect REALITY front %#v",realStream)}
+ realityParams,ok:=realStream["realitySettings"].(map[string]any)
+ if !ok || realityParams["minClientVer"]!="1.8.2" {
+   t.Fatalf("managed REALITY listener must permit Mihomo's 1.8.2 handshake: %#v",realStream)
+ }
  for _,front:=range gateways[1:] {
   settings:=xhttpMap(front.Settings)
   if len(settings["clients"].([]any))!=0 {t.Fatal("gateway must not duplicate XHTTP users")}
