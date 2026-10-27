@@ -51,10 +51,10 @@ export type XHttpDownloadSettings""")
 p="frontend/src/pages/inbounds/form/transport/xhttp.tsx"
 patch(p,
 "import { Alert, AutoComplete, Divider, Input, InputNumber, Select, Switch } from 'antd';",
-"import { Alert, AutoComplete, Button, Divider, Input, InputNumber, Select, Switch, message } from 'antd';")
+"import { Alert, AutoComplete, Button, Divider, Form, Input, InputNumber, Select, Space, Switch, message } from 'antd';")
 patch(p,
 "import { UTLS_FINGERPRINT } from '@/schemas/primitives';",
-"import { UTLS_FINGERPRINT } from '@/schemas/primitives';\nimport { HttpUtil, RandomUtil } from '@/utils';\nimport { useState } from 'react';\nimport type { RealityScanResult } from '@/generated/types';\nimport { validateRealityTarget } from '@/lib/xray/stream-wire-normalize';\nimport RealityTargetScannerModal from '../security/RealityTargetScannerModal';")
+"import { UTLS_FINGERPRINT } from '@/schemas/primitives';\nimport { HttpUtil, RandomUtil } from '@/utils';\nimport { useState } from 'react';\nimport { SearchOutlined } from '@ant-design/icons';\nimport type { RealityScanResult } from '@/generated/types';\nimport { validateRealityTarget } from '@/lib/xray/stream-wire-normalize';\nimport RealityTargetScannerModal from '../security/RealityTargetScannerModal';")
 patch(p,
 "  const protocol = useWatch({ control, name: 'protocol' });",
 """  const protocol = useWatch({ control, name: 'protocol' });
@@ -71,18 +71,35 @@ patch(p,
     }
     return response.obj;
   }
+
   function applyManagedRealityScanResult(result: RealityScanResult) {
-    // Reuse the upstream Reality picker: the chosen target carries its own
-    // remote port, independent of the VPS download listen port.
+    // Mirror 3x-ui's native onPick logic: a new target replaces its allowed SNI
+    // list. Never keep an SNI from an unrelated previous camouflage target.
     const base = 'streamSettings.xhttpSettings.downloadSettings';
-    setValue(`${base}.managedListener.realitySettings.target`, result.target, { shouldDirty: true });
-    const names = (result.serverNames ?? []).filter((name) => typeof name === 'string' && name.trim() !== '');
-    setValue(`${base}.managedListener.realitySettings.serverNames`, names, { shouldDirty: true });
-    const current = getValues(`${base}.realitySettings.serverName`);
-    if (names.length > 0 && !names.includes(current)) {
-      setValue(`${base}.realitySettings.serverName`, names[0], { shouldDirty: true });
+    const names = (result.serverNames ?? []).filter(
+      (name): name is string => typeof name === 'string' && name.trim() !== '',
+    );
+    setValue(base + '.managedListener.realitySettings.target', result.target, { shouldDirty: true });
+    setValue(base + '.managedListener.realitySettings.serverNames', names, { shouldDirty: true });
+    const current = getValues(base + '.realitySettings.serverName');
+    const preferred = names.includes(current) ? current
+      : names.includes(result.host) ? result.host : (names[0] || '');
+    setValue(base + '.realitySettings.serverName', preferred, { shouldDirty: true });
+    if (!result.feasible) {
+      message.warning(result.reason || '该 REALITY 目标未通过可用性检查，请确认后再使用');
     }
-    if (names.length === 0) message.warning('该目标没有可用 SNI，请手动配置后再保存');
+    if (!names.length) message.warning('扫描结果没有可用 SNI，请更换目标');
+  }
+  function syncManagedRealitySNI(value: unknown) {
+    const base = 'streamSettings.xhttpSettings.downloadSettings';
+    const sni = typeof value === 'string' ? value.trim() : '';
+    const names = getValues(base + '.managedListener.realitySettings.serverNames') ?? [];
+    if (!sni) {
+      setValue(base + '.managedListener.realitySettings.serverNames', [], { shouldDirty: true });
+    } else if (!Array.isArray(names) || !names.includes(sni)) {
+      // A manual SNI edit must not leave a disabled client/server SNI pair.
+      setValue(base + '.managedListener.realitySettings.serverNames', [sni], { shouldDirty: true });
+    }
   }
   const autoReality = !!useWatch({
     control,
@@ -108,54 +125,113 @@ patch(p,
     setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.publicKey',
       publicKey, { shouldDirty: true });
   }
+
   async function enableManagedReality(enabled: boolean) {
     const base = 'streamSettings.xhttpSettings.downloadSettings';
     if (!enabled) {
-      setValue(`${base}.managedListener.enabled`, false, { shouldDirty: true });
+      setValue(base + '.managedListener.enabled', false, { shouldDirty: true });
       return;
     }
-    const currentPort = Number(getValues(`${base}.port`));
+    if (!managedSecurityAllowed || getValues(base + '.security') !== 'reality') {
+      message.warning('服务端自动监听仅支持 VLESS + XHTTP + TLS 上行 / REALITY 下行');
+      return;
+    }
+    const portValue = getValues(base + '.port');
+    const currentPort = portValue == null || portValue === '' ? NaN : Number(portValue);
     const uplinkPort = Number(getValues('port'));
     if (!Number.isInteger(currentPort) || currentPort < 1 || currentPort > 65535) {
-      message.warning('请先填写有效的下行监听端口（1–65535）；不会自动指定端口');
+      message.warning('请先明确填写有效的下行监听端口（1–65535）');
       return;
     }
     if (currentPort === uplinkPort) {
-      message.warning('REALITY 下行监听端口不能与原 TLS 上行端口相同');
+      message.warning('下行 REALITY 端口不能与上行 TLS 端口相同');
       return;
     }
-    // The REALITY Target is a separate remote camouflage endpoint, not
-    // the VPS listener. Never fabricate host:443 from the download SNI.
-    const reality = getValues(`${base}.realitySettings`) ?? {};
-    const shorts = getValues(`${base}.managedListener.realitySettings.shortIds`) ?? [];
-    if (!shorts.length) {
-      const shortId = reality.shortId || RandomUtil.randomShortIds().split(',').map((id) => id.trim()).find(Boolean) || '';
-      setValue(`${base}.managedListener.realitySettings.shortIds`,
-        [shortId], { shouldDirty: true });
-      if (!reality.shortId) {
-        setValue(`${base}.realitySettings.shortId`, shortId, { shouldDirty: true });
-      }
+    const sni = String(getValues(base + '.realitySettings.serverName') || '').trim();
+    if (!sni) {
+      message.warning('请先填写 REALITY SNI，或通过右侧原生选择器自动填充');
+      return;
     }
-    const privateKey = getValues(`${base}.managedListener.realitySettings.privateKey`);
-    const publicKey = getValues(`${base}.managedListener.realitySettings.publicKey`);
-    if (!privateKey && !publicKey) {
+    syncManagedRealitySNI(sni);
+    const reality = getValues(base + '.realitySettings') ?? {};
+    const shorts = getValues(base + '.managedListener.realitySettings.shortIds') ?? [];
+    let shortId = typeof reality.shortId === 'string' ? reality.shortId.trim() : '';
+    if (!shortId && Array.isArray(shorts)) {
+      shortId = shorts.find((id: unknown) => typeof id === 'string' && id !== '') || '';
+    }
+    if (!shortId) {
+      shortId = RandomUtil.randomShortIds().split(',').map((id) => id.trim()).find(Boolean) || '';
+    }
+    if (!Array.isArray(shorts) || !shorts.includes(shortId)) {
+      setValue(base + '.managedListener.realitySettings.shortIds', [shortId], { shouldDirty: true });
+    }
+    if (shortId !== reality.shortId) {
+      setValue(base + '.realitySettings.shortId', shortId, { shouldDirty: true });
+    }
+    const privateKey = getValues(base + '.managedListener.realitySettings.privateKey');
+    const publicKey = getValues(base + '.managedListener.realitySettings.publicKey');
+    if (!privateKey || !publicKey) {
+      // Incomplete/empty key material cannot be used. Explicit opt-in repairs
+      // it atomically using 3x-ui's native X25519 certificate endpoint.
       await genManagedRealityKeypair();
-      if (!getValues(`${base}.managedListener.realitySettings.privateKey`) ||
-          !getValues(`${base}.managedListener.realitySettings.publicKey`)) return;
-    } else if (!privateKey || !publicKey) {
-      message.warning('已有 REALITY 密钥对不完整，请手动重新生成；不会覆盖现有密钥');
-      return;
-    } else if (!reality.publicKey) {
-      setValue(`${base}.realitySettings.publicKey`, publicKey, { shouldDirty: true });
+      if (!getValues(base + '.managedListener.realitySettings.privateKey') ||
+          !getValues(base + '.managedListener.realitySettings.publicKey')) return;
     } else if (reality.publicKey !== publicKey) {
-      message.warning('客户端 REALITY 公钥与托管入口不一致，请核对后启用');
-      return;
+      setValue(base + '.realitySettings.publicKey', publicKey, { shouldDirty: true });
     }
-    if (!getValues(`${base}.managedListener.realitySettings.minClientVer`)) {
-      setValue(`${base}.managedListener.realitySettings.minClientVer`, '1.8.2', { shouldDirty: true });
+    if (!getValues(base + '.managedListener.realitySettings.minClientVer')) {
+      setValue(base + '.managedListener.realitySettings.minClientVer', '1.8.2', { shouldDirty: true });
     }
-    setValue(`${base}.managedListener.enabled`, true, { shouldDirty: true });
+    setValue(base + '.managedListener.enabled', true, { shouldDirty: true });
+    const target = getValues(base + '.managedListener.realitySettings.target');
+    if (!target) {
+      message.info('请在下方填写 REALITY Target，或使用 SNI 旁的目标选择器自动填充');
+    }
   }""")
+
+// Put the exact upstream RealityTargetScannerModal next to the REALITY SNI,
+// not inside a second advanced-settings editor.
+patch(p,
+"""                   <FormField
+                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'serverName']}
+                     label="REALITY SNI"
+                     rules={{ required: 'REALITY 需要 SNI' }}
+                   ><Input placeholder="reality.example.com" /></FormField>""",
+"""                   <Form.Item label="REALITY SNI">
+                     <Space.Compact block style={{ display: 'flex' }}>
+                       <FormField
+                         noStyle
+                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'serverName']}
+                         rules={{ required: 'REALITY 需要 SNI' }}
+                         onAfterChange={syncManagedRealitySNI}
+                       ><Input style={{ flex: 1 }} placeholder="选择或输入 REALITY SNI" /></FormField>
+                       <Button
+                         icon={<SearchOutlined aria-hidden />}
+                         aria-label="选择 REALITY 伪装目标"
+                         onClick={() => setScannerOpen(true)}
+                       >选取目标</Button>
+                     </Space.Compact>
+                   </Form.Item>
+                   <RealityTargetScannerModal
+                     open={scannerOpen}
+                     onClose={() => setScannerOpen(false)}
+                     scanRealityCandidates={scanManagedRealityCandidates}
+                     onPick={applyManagedRealityScanResult}
+                   />""")
+# Hide automatically managed key material, but retain editable fields for
+# client-only download to an independently configured REALITY server.
+patch(p,
+"""                   <FormField
+                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'publicKey']}""",
+"""                   {!autoReality && (<>
+                   <FormField
+                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'publicKey']}""")
+patch(p,
+"""                   <FormField
+                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'fingerprint']}""",
+"""                   </>)}
+                   <FormField
+                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'fingerprint']}""")
 anchor="""              <FormField
                 name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'xhttpSettings', 'host']}
                 label="下行 HTTP Host（可留空）"
@@ -163,11 +239,10 @@ anchor="""              <FormField
 """
 append=anchor.replace('留空时按 SNI 自动填充，REALITY 下行可留空', '留空时继承上行 XHTTP Host（与服务端匹配）')+r"""              {downloadSecurity === 'reality' && (
                 <>
-                  <Divider>REALITY 服务端自动监听（可选）</Divider>
                   <div style={{ marginBottom: 12 }}>
-                    <span style={{ marginRight: 12 }}>自动创建 REALITY 入口并与 TLS 上行共用 XHTTP 会话</span>
+                    <span style={{ marginRight: 12 }}>REALITY 服务端自动监听</span>
                     <Switch
-                      aria-label="自动创建 REALITY 入口"
+                      aria-label="REALITY 服务端自动监听"
                       checked={autoReality}
                       disabled={!managedSecurityAllowed}
                       onChange={(enabled) => void enableManagedReality(enabled)}
@@ -176,88 +251,19 @@ append=anchor.replace('留空时按 SNI 自动填充，REALITY 下行可留空',
                   {autoReality && (
                     <>
                       <Alert
-                        type="warning"
+                        type="info"
                         showIcon
-                        message="托管入口将原 TLS/XHTTP 变为 TLS/RAW 回落，并新建独立 REALITY 端口；请先在上方填写可用的下行监听端口并开放防火墙。REALITY Target 是独立的远端伪装目标，必须手动输入或从扫描结果中选择，不会根据下行端口自动生成。"
+                        message="自动生成监听、密钥、Short ID 和 SNI 列表。下行端口请在上方填写；Target 可由 SNI 旁的原生扫描器选取。"
                         style={{ marginBottom: 12 }}
                       />
-                      <details>
-                        <summary style={{ cursor: 'pointer', marginBottom: 12 }}>高级设置（通常无需修改）</summary>
-                      <FormField
-                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'listen']}
-                        label="REALITY 监听 IP"
-                      ><Input placeholder="0.0.0.0" /></FormField>
                       <FormField
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'target']}
-                        label="REALITY Target（远端伪装目标，与下行监听端口无关）"
+                        label="REALITY Target（远端伪装目标）"
                         rules={{
-                          required: '请选择或填写 REALITY Target',
+                          required: '请先选取或填写 REALITY Target',
                           validate: (value) => validateRealityTarget(typeof value === 'string' ? value : '') ?? true,
                         }}
-                      ><Input placeholder="域名:远端端口（请扫描选择或手动填写）" /></FormField>
-                      <Button onClick={() => setScannerOpen(true)}>
-                        选择 REALITY 伪装目标 / 自动填充 SNI
-                      </Button>
-                      <RealityTargetScannerModal
-                        open={scannerOpen}
-                        onClose={() => setScannerOpen(false)}
-                        scanRealityCandidates={scanManagedRealityCandidates}
-                        onPick={applyManagedRealityScanResult}
-                      />
-                      <FormField
-                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'serverNames']}
-                        label="REALITY serverNames (SNI)"
-                        rules={{required:'至少一个 REALITY SNI'}}
-                        onAfterChange={(value) => {
-                          const names = Array.isArray(value) ? value as string[] : [];
-                          const current = getValues('streamSettings.xhttpSettings.downloadSettings.realitySettings.serverName');
-                          if (!names.includes(current)) {
-                            setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.serverName',
-                              names[0] || '', { shouldDirty: true });
-                          }
-                        }}
-                      ><Select mode="tags" tokenSeparators={[',']} placeholder="例如 www.example.com" /></FormField>
-                      <FormField
-                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'shortIds']}
-                        label="REALITY shortIds"
-                        rules={{required:'至少一个 shortId'}}
-                        onAfterChange={(value) => {
-                          const shorts = Array.isArray(value) ? value as string[] : [];
-                          const current = getValues('streamSettings.xhttpSettings.downloadSettings.realitySettings.shortId');
-                          if (!shorts.includes(current)) {
-                            setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.shortId',
-                              shorts[0] || '', { shouldDirty: true });
-                          }
-                        }}
-                      ><Select mode="tags" tokenSeparators={[',']} placeholder="十六进制字符串" /></FormField>
-                      <Button onClick={() => {
-                        const bytes = new Uint8Array(8);
-                        crypto.getRandomValues(bytes);
-                        const shortId = Array.from(bytes).map(v => v.toString(16).padStart(2, '0')).join('');
-                        setValue('streamSettings.xhttpSettings.downloadSettings.managedListener.realitySettings.shortIds',
-                          [shortId], { shouldDirty: true });
-                        setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.shortId',
-                          shortId, { shouldDirty: true });
-                      }}>生成 Short ID</Button>
-                      <FormField
-                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'minClientVer']}
-                        label="REALITY 最低客户端版本 (minClientVer)"
-                        rules={{ pattern: { value: /^[0-9]+\.[0-9]+\.[0-9]+$/, message: '版本格式应为 x.y.z，例如 1.8.2' } }}
-                      ><Input placeholder="1.8.2 (兼容 Mihomo)" /></FormField>
-                      <FormField
-                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'privateKey']}
-                        label="REALITY 私钥（仅服务端保存）"
-                        rules={{required:'必须生成 REALITY 私钥'}}
-                      ><Input.Password autoComplete="off" /></FormField>
-                      <FormField
-                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'publicKey']}
-                        label="REALITY 公钥（自动同步到客户端下载设置）"
-                        rules={{required:'必须生成 REALITY 公钥'}}
-                      ><Input readOnly /></FormField>
-                      <Button onClick={() => void genManagedRealityKeypair()}>
-                        重新生成 REALITY 密钥对（会同步更新客户端公钥）
-                      </Button>
-                      </details>
+                      ><Input placeholder="通过 SNI 旁的选取目标自动填充，或手动填写 host:port" /></FormField>
                     </>
                   )}
                 </>
