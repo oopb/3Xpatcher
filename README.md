@@ -519,3 +519,10 @@ Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN
 - 依据 Shadowrocket 原生导出的 XHTTP 链接，保留其 `obfsParam` 下行目标地址/端口/SNI/HTTP Host；TLS 上行 + REALITY 下行场景增加 Shadowrocket 读取的顶层 `pbk` 和 `sid`。上行 REALITY 时绝不覆盖现有上行 `pbk`/`sid`，TLS→TLS 不注入 REALITY 选项。
 - `obfsParam` 不再附加与主链接 `path` 重复、原生样本没有的 `downloadPath`；标准 `extra.downloadSettings.xhttpSettings.path` 仍原样导出。面板分享/二维码与订阅使用同样规则。
 - 回归测试检查 TLS→REALITY、TLS→TLS、REALITY 上行密钥隔离和 Xray 标准字段不回退。
+
+## Shadowrocket XHTTP Host 错误修复（0.17.11）
+
+- 修复独立下行 VLESS/XHTTP 节点中 JSON `obfsParam` 被 Shadowrocket 错当作 HTTP Host 的问题。对于确实存在下行 `obfsParam` 的节点，额外添加小火箭原生传输标记 `obfs=xhttp`，同时保留 Xray 的 `type=xhttp`、`host=<domain>` 以及完整的 `extra.downloadSettings`。
+- 不改变 VLESS UUID、顶层 `encryption=`、TLS/REALITY 上行参数、Vision、下行 REALITY 的 `pbk`/`sid` 或 Mihomo 输出；没有独立下行的普通 XHTTP 节点不添加 `obfs`。
+- 同时修复订阅链接和面板复制/二维码导出。新增 Go 与真实前端链接生成回归测试，验证 Host 始终是纯域名，JSON 只在 `obfsParam` 中。
+- 运行时连接行为仍需 Shadowrocket 真机导入验证；自动化测试不等同于小火箭解析器测试。
