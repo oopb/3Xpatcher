@@ -167,3 +167,24 @@ func injectManagedXHTTPGateways(cfg *xray.Config, inbounds []*model.Inbound, dow
   cfg.InboundConfigs=next
   return nil
 }
+
+/*
+managedXHTTPNeedsReconcile marks an inbound whose runtime shape is generated
+from multiple synthetic listeners. The native single-tag DelInbound/AddInbound
+path cannot remove -tls-up / -reality-down or the internal UDS and will leave
+old port sockets open. Changes must go through native RestartXray's full
+desired-config reconciliation, which removes obsolete listeners first.
+*/
+func managedXHTTPNeedsReconcile(previous, next *model.Inbound) bool {
+  return managedXHTTPActive(previous) || managedXHTTPActive(next)
+}
+
+func managedXHTTPActive(row *model.Inbound) bool {
+  if row == nil || row.NodeID != nil || row.Protocol != model.VLESS {return false}
+  stream:=xhttpMap([]byte(row.StreamSettings))
+  if stream["network"]!="xhttp" || stream["security"]!="tls" {return false}
+  xhttp,_:=stream["xhttpSettings"].(map[string]any)
+  down,_:=xhttp["downloadSettings"].(map[string]any)
+  managed,_:=down["managedListener"].(map[string]any)
+  return managed["enabled"]==true
+}
