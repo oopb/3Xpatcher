@@ -13,6 +13,7 @@ cleanup() {
 trap cleanup EXIT
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$dir/tls.key" -out "$dir/tls.pem" \
   -days 1 -subj '/CN=cdn.example.com' >/dev/null 2>&1
+cert_sha="$(openssl x509 -in "$dir/tls.pem" -noout -fingerprint -sha256 | cut -d= -f2 | tr -d ':')"
 printf 'XHTTP_GATEWAY_REAL_E2E_OK\n' > "$dir/index.html"
 python3 -m http.server 18080 --bind 127.0.0.1 --directory "$dir" >"$dir/http.log" 2>&1 &
 PY_PID=$!
@@ -43,7 +44,7 @@ cat >"$dir/client.json" <<EOF
     {
       "tag":"proxy","protocol":"vless",
       "settings":{"vnext":[{"address":"127.0.0.1","port":19043,"users":[{"id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","encryption":"none"}]}]},
-      "streamSettings":{"network":"xhttp","security":"tls","tlsSettings":{"serverName":"cdn.example.com","allowInsecure":true,"alpn":["h2"],"fingerprint":"chrome"},"xhttpSettings":{"host":"cdn.example.com","path":"/test_shared","mode":"auto"}}
+      "streamSettings":{"network":"xhttp","security":"tls","tlsSettings":{"serverName":"cdn.example.com","pinnedPeerCertSha256":"$cert_sha","alpn":["h2"],"fingerprint":"chrome"},"xhttpSettings":{"host":"cdn.example.com","path":"/test_shared","mode":"auto"}}
     }
   ]
 }
