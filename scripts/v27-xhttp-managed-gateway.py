@@ -51,7 +51,7 @@ export type XHttpDownloadSettings""")
 p="frontend/src/pages/inbounds/form/transport/xhttp.tsx"
 patch(p,
 "import { Alert, AutoComplete, Divider, Input, InputNumber, Select, Switch } from 'antd';",
-"import { Alert, AutoComplete, Button, Divider, Input, InputNumber, Select, Switch, Space, message } from 'antd';")
+"import { Alert, AutoComplete, Button, Divider, Input, InputNumber, Select, Switch, message } from 'antd';")
 patch(p,
 "import { UTLS_FINGERPRINT } from '@/schemas/primitives';",
 "import { UTLS_FINGERPRINT } from '@/schemas/primitives';\nimport { HttpUtil, RandomUtil } from '@/utils';\nimport { useState } from 'react';\nimport type { RealityScanResult } from '@/generated/types';\nimport { validateRealityTarget } from '@/lib/xray/stream-wire-normalize';\nimport RealityTargetScannerModal from '../security/RealityTargetScannerModal';")
