@@ -51,13 +51,39 @@ export type XHttpDownloadSettings""")
 p="frontend/src/pages/inbounds/form/transport/xhttp.tsx"
 patch(p,
 "import { Alert, AutoComplete, Divider, Input, InputNumber, Select, Switch } from 'antd';",
-"import { Alert, AutoComplete, Button, Divider, Input, InputNumber, Select, Switch } from 'antd';")
+"import { Alert, AutoComplete, Button, Divider, Input, InputNumber, Select, Switch, Space, message } from 'antd';")
 patch(p,
 "import { UTLS_FINGERPRINT } from '@/schemas/primitives';",
-"import { UTLS_FINGERPRINT } from '@/schemas/primitives';\nimport { HttpUtil } from '@/utils';")
+"import { UTLS_FINGERPRINT } from '@/schemas/primitives';\nimport { HttpUtil, RandomUtil } from '@/utils';\nimport { useState } from 'react';\nimport type { RealityScanResult } from '@/generated/types';\nimport { validateRealityTarget } from '@/lib/xray/stream-wire-normalize';\nimport RealityTargetScannerModal from '../security/RealityTargetScannerModal';")
 patch(p,
 "  const protocol = useWatch({ control, name: 'protocol' });",
 """  const protocol = useWatch({ control, name: 'protocol' });
+  const [scannerOpen, setScannerOpen] = useState(false);
+  async function scanManagedRealityCandidates(targets?: string): Promise<RealityScanResult[]> {
+    const response = await HttpUtil.post<RealityScanResult[]>(
+      '/panel/api/server/scanRealityTargets',
+      targets ? { targets } : {},
+      { silent: true },
+    );
+    if (!response?.success || !Array.isArray(response.obj)) {
+      message.error(response?.msg || 'REALITY 伪装目标扫描失败');
+      return [];
+    }
+    return response.obj;
+  }
+  function applyManagedRealityScanResult(result: RealityScanResult) {
+    // Reuse the upstream Reality picker: the chosen target carries its own
+    // remote port, independent of the VPS download listen port.
+    const base = 'streamSettings.xhttpSettings.downloadSettings';
+    setValue(`${base}.managedListener.realitySettings.target`, result.target, { shouldDirty: true });
+    const names = (result.serverNames ?? []).filter((name) => typeof name === 'string' && name.trim() !== '');
+    setValue(`${base}.managedListener.realitySettings.serverNames`, names, { shouldDirty: true });
+    const current = getValues(`${base}.realitySettings.serverName`);
+    if (names.length > 0 && !names.includes(current)) {
+      setValue(`${base}.realitySettings.serverName`, names[0], { shouldDirty: true });
+    }
+    if (names.length === 0) message.warning('该目标没有可用 SNI，请手动配置后再保存');
+  }
   const autoReality = !!useWatch({
     control,
     name: 'streamSettings.xhttpSettings.downloadSettings.managedListener.enabled',
