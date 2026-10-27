@@ -135,6 +135,8 @@ append=anchor+"""              {downloadSecurity === 'reality' && (
                         message="此模式将自动把原 TLS/XHTTP 监听改为 TLS/RAW 回落入口，并创建共享的内部 XHTTP 会话与独立 REALITY/RAW 端口。必须使用不同的公网端口（例如 9443），并在防火墙开放；仅在确知服务端无端口冲突时启用。TLS 证书沿用原入站证书。"
                         style={{ marginBottom: 12 }}
                       />
+                      <details>
+                        <summary style={{ cursor: 'pointer', marginBottom: 12 }}>高级设置（通常无需修改）</summary>
                       <FormField
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'listen']}
                         label="REALITY 监听 IP"
@@ -190,8 +192,9 @@ append=anchor+"""              {downloadSecurity === 'reality' && (
                         rules={{required:'必须生成 REALITY 公钥'}}
                       ><Input readOnly /></FormField>
                       <Button onClick={() => void genManagedRealityKeypair()}>
-                        生成 REALITY 密钥对
+                        重新生成 REALITY 密钥对（会同步更新客户端公钥）
                       </Button>
+                      </details>
                     </>
                   )}
                 </>
