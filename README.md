@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.17.7-integrated-alpha`
+当前版本：`0.17.8-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -498,3 +498,10 @@ Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN
 - 启用「REALITY 服务端自动监听」后，在外层直接展开并可编辑全部托管参数：**监听 IP、远端 Target、允许的 SNI 列表（serverNames）、允许的 Short ID 列表（shortIds）、Private Key、服务端 Public Key、minClientVer**。不再引入“高级设置”。
 - 启用托管时若缺少密钥对，通过 3x-ui 原生接口生成；显示「重新生成 REALITY 密钥对」与「重新生成 Short ID」按钮。客户端/服务端公钥、Short ID 与允许列表随用户修改同步；允许手动输入已有密钥对，但手动修改公钥或私钥后必须确保两者匹配。
 - 保存的有效参数继续保留；不会预填下行端口、不会覆盖扫描得到的 REALITY Target 为固定 `SNI:443`。Private Key 只存储在服务端配置元数据，不进入任何客户端订阅或分享链接。
+
+## XHTTP 分离下行 REALITY 的 Mihomo ML-KEM 兼容（0.17.8）
+
+- 3x-ui v3.11.0 自带 Xray-core v26.10.21（REALITY v26.9.8 起要求 X25519MLKEM768 KeyShare）。Mihomo 如未明确启用 `support-x25519mlkem768`，可能删除该 KeyShare 导致 REALITY 验证失败。
+- 3Xpatcher 的 `xhttpDownloadMihomo()` 现在为 **XHTTP 独立 REALITY 下行**的 `xhttp-opts.download-settings.reality-opts` 写入 `support-x25519mlkem768: true`，与 3x-ui 原生 REALITY Clash 导出行为保持一致；TLS 下行、上行 TLS/CDN、XHTTP Host/Path、Vision/ENC 和服务端共享会话保持不变。
+- 增加自动化测试确保 ML-KEM 参数出现在嵌套下行 REALITY 配置，并确保下行 Host 仍继承正确的上行 XHTTP Host。
+- **兼容性注意**：这个开关针对现代 Xray-core REALITY 监听；老旧、不支持 ML-KEM 的独立 REALITY 服务端可能需要用户自行调整客户端配置。实际连通性还要检查下行端口监听、SNI/serverNames、Short ID、配对公私钥，以及私有防火墙。
