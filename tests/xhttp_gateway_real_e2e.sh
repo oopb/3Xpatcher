@@ -3,9 +3,9 @@
 set -Eeuo pipefail
 : "$XRAY_BIN"
 dir="$(mktemp -d)"
-PY_PID=""; CLI_PID=""; SRV_PID=""; SPLIT_PID=""
+PY_PID=""; CLI_PID=""; SRV_PID=""; SPLIT_PID=""; MIHOMO_PID=""
 cleanup() {
-  for pid in "$PY_PID" "$CLI_PID" "$SRV_PID" "$SPLIT_PID"; do
+  for pid in "$PY_PID" "$CLI_PID" "$SRV_PID" "$SPLIT_PID" "$MIHOMO_PID"; do
     if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; fi
   done
   rm -rf "$dir"
@@ -168,5 +168,63 @@ if ! curl -fsS --max-time 15 --socks5-hostname 127.0.0.1:11081 \
   exit 1
 fi
 echo 'PASS: TLS upload + REALITY download with native ML-KEM-768 and Vision.'
+
+# The same real Xray server is now tested with official Mihomo and the *actual*
+# flattened YAML schema that 3Xpatcher generates.
+: "$MIHOMO_BIN"
+cat >"$dir/mihomo.yaml" <<EOF
+mixed-port: 11082
+allow-lan: false
+mode: rule
+log-level: debug
+proxies:
+  - name: TEST
+    type: vless
+    server: 127.0.0.1
+    port: 19043
+    uuid: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+    encryption: "$encryption"
+    flow: xtls-rprx-vision
+    udp: true
+    network: xhttp
+    tls: true
+    skip-cert-verify: true
+    servername: cdn.example.com
+    client-fingerprint: chrome
+    alpn: [h2]
+    xhttp-opts:
+      host: cdn.example.com
+      path: /test_shared
+      mode: auto
+      download-settings:
+        server: 127.0.0.1
+        port: 19443
+        tls: true
+        servername: www.cloudflare.com
+        client-fingerprint: chrome
+        alpn: [h2]
+        host: ""
+        path: /test_shared
+        reality-opts:
+          public-key: "$public_key"
+          short-id: ab12
+rules:
+  - MATCH,TEST
+EOF
+"$MIHOMO_BIN" -t -f "$dir/mihomo.yaml" -d "$dir" >"$dir/mihomo-validation.log" 2>&1 || {
+  cat "$dir/mihomo-validation.log"; exit 1;
+}
+"$MIHOMO_BIN" -f "$dir/mihomo.yaml" -d "$dir" >"$dir/mihomo.log" 2>&1 &
+MIHOMO_PID=$!
+sleep 3
+if ! curl -fsS --max-time 20 --socks5-hostname 127.0.0.1:11082 \
+  https://example.com/ | grep -iq 'example'; then
+  echo "::error::Mihomo REALITY split with ML-KEM/ Vision failed"
+  tail -90 "$dir/mihomo.log"
+  tail -90 "$dir/server-enc.log"
+  exit 1
+fi
+echo 'PASS: Mihomo TLS upload + REALITY download with native ML-KEM-768 and Vision.'
+
 
 
