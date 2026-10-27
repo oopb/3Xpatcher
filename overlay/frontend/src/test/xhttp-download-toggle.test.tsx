@@ -56,6 +56,9 @@ function Harness({ values }: { values: Record<string, unknown> }) {
           const parsed = XHttpStreamSettingsSchema.parse(xhttp);
           setWire(normalizeXhttpForWire(parsed, 'inbound'));
         }}>Serialize inbound</button>
+        <button type="button" onClick={() => {
+          setWire(methods.getValues('streamSettings.xhttpSettings') as unknown as Record<string, unknown>);
+        }}>Inspect XHTTP form</button>
         <pre data-testid="wire">{JSON.stringify(wire)}</pre>
       </Form>
     </FormProvider>
@@ -85,6 +88,63 @@ describe('VLESS XHTTP download switch', () => {
     await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
     fireEvent.click(screen.getByRole('button', { name: 'Serialize inbound' }));
     expect(output()).toHaveProperty('downloadSettings');
+  });
+
+  it('leaves origin address and listen port blank instead of guessing CDN/443/9443', () => {
+    const values = {
+      protocol: 'vless',
+      port: 443,
+      shareAddr: 'cdn.example.com',
+      listen: '0.0.0.0',
+      streamSettings: {
+        network: 'xhttp',
+        security: 'tls',
+        tlsSettings: { serverName: 'cdn.example.com' },
+        xhttpSettings: XHttpStreamSettingsSchema.parse({ path: '/shared', host: 'cdn.example.com' }),
+      },
+    };
+    render(<Harness values={values} />);
+    fireEvent.click(screen.getByRole('switch', { name: '启用独立下行连接' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect XHTTP form' }));
+    const down = output().downloadSettings as Record<string, any>;
+    expect(down.address).toBe('');
+    expect(down.port).toBeUndefined();
+    expect(down.xhttpSettings.host).toBe('');
+    expect(down.realitySettings.serverName).toBe('');
+  });
+
+  it('preserves manually selected REALITY downlink port, Target and minClientVer', async () => {
+    const values = editValues() as Record<string, any>;
+    values.streamSettings.security = 'tls';
+    values.streamSettings.xhttpSettings.downloadSettings = {
+      address: '203.0.113.5',
+      port: 10443,
+      network: 'xhttp',
+      security: 'reality',
+      xhttpSettings: { host: '' },
+      realitySettings: { serverName: 'amd.com', publicKey: 'pk', shortId: 'abcd', fingerprint: 'chrome' },
+      managedListener: {
+        enabled: false,
+        listen: '0.0.0.0',
+        realitySettings: {
+          target: 'amd.com:8443',
+          serverNames: ['amd.com'],
+          shortIds: ['abcd'],
+          privateKey: 'secret',
+          publicKey: 'pk',
+          minClientVer: '2.4.6',
+        },
+      },
+    };
+    render(<Harness values={values} />);
+    const toggle = screen.getByRole('switch', { name: '自动创建 REALITY 入口' });
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect XHTTP form' }));
+    const down = output().downloadSettings as Record<string, any>;
+    expect(down.port).toBe(10443);
+    expect(down.managedListener.realitySettings.target).toBe('amd.com:8443');
+    expect(down.managedListener.realitySettings.minClientVer).toBe('2.4.6');
   });
 
   it('defaults to disabled for a new inbound and discards invalid fields when disabled', async () => {

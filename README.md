@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.17.4-integrated-alpha`
+当前版本：`0.17.5-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -473,3 +473,12 @@ Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN
 - 自动托管 REALITY 下行新增可编辑 `minClientVer`，默认 `1.8.2`；服务端验证 `x.y.z` 语法，已有旧配置自动回退默认值，避免 Mihomo REALITY 认证失败。
 - 分享链接除了标准 Xray `extra.downloadSettings` 外，新增 Shadowrocket 的 `obfsParam` JSON（`downloadTargetHost`, `downloadTargetPort`, `downloadServerName`, `downloadHTTPHost`, `downloadPath`）。面板二维码预览和后端订阅统一。
 - **限制**：这些 Shadowrocket 参数名由实际导出的内部节点结构与公开示例确认，但 Shadowrocket 是闭源客户端，尚无法确认它会从标准 URI `obfsParam` 载入全部字段；下行 REALITY 公钥和 Short ID 在 Shadowrocket 的 URL 导入映射仍无公开可验证依据。本次保留在 Xray `extra.downloadSettings.realitySettings`，**不宣称 iOS 端 REALITY 下行已实机成功**。不要把上行 TLS 改为 REALITY 来迎合 `pbk` 和 `sid`。
+
+
+## XHTTP REALITY 托管入口表单自动设置修复（0.17.5）
+
+- **不再自动指定下行监听端口**：创建独立下行时端口和地址均为空；启用托管 REALITY 时要求明确输入 1–65535 的下行端口，禁止与上行 TLS 入站端口冲突，不再擅自填充或覆盖为 9443。
+- **REALITY Target 不再从 SNI 拼成固定 `:443`**。Target 是独立远端伪装目标，和本机 REALITY 下行监听端口属于不同含义，需手动填写或选取目标扫描结果。
+- **复用官方 REALITY 目标扫描 UI**：托管高级设置内「选择 REALITY 伪装目标 / 自动填充 SNI」调用 3x-ui 自带的 `RealityTargetScannerModal` 和 `scanRealityTargets` API，选取的 Target 保留其自身端口，并同步候选 SNI 至服务端和客户端。
+- **避免过度自动覆盖**：不从 CDN shareAddr 填充直连下行地址，不把原 TLS SNI 或旧公钥带入全新的 REALITY 下行配置；下行 HTTP Host 留空时动态继承上行 XHTTP Host，原先保存的端口、Target、SNI、Short ID 和可编辑的 `minClientVer` 尽量保留。密钥生成失败提供明确提示，已有密钥不完整/冲突时要求核对，不会偷偷替换密钥对。
+- 已保存的有效托管配置不会因为本次更新而被自动重置。新建时需要自行填写端口、地址及 Target 后保存。
