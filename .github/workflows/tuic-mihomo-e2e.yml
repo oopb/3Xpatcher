@@ -5,20 +5,48 @@ on:
   pull_request:
     branches: [main]
     paths:
+      # Scope the expensive TUIC/Mihomo E2E to TUIC/sing-box changes.
+      # VLESS/XHTTP/REALITY patches do not require a TUIC runtime build.
       - UPSTREAM_COMPAT
       - SINGBOX_VERSION
-      - internal/**
-      - overlay/**
-      - scripts/**
+      - internal/singbox/**
+      - overlay/internal/singbox/**
+      - overlay/internal/sub/tuic_*
+      - overlay/internal/sub/singbox_*
+      - overlay/internal/database/model/tuic_runtime.go
+      - overlay/internal/web/controller/singbox_cert.go
+      - scripts/install-singbox.sh
+      - scripts/uninstall-singbox.sh
+      - scripts/update-singbox.sh
+      - scripts/v15-compat-tuic-frontend.py
+      - scripts/v18-tuic-cert-mieru.py
+      - scripts/v19-tuic-native-cert-form.py
+      - scripts/v21-tuic-runtime-selector.py
+      - scripts/v22-tuic-native-ui-polish.py
+      - scripts/v23-tuic-selfsigned-export.py
       - .github/workflows/tuic-mihomo-e2e.yml
   push:
     branches: [main]
     paths:
+      # Scope the expensive TUIC/Mihomo E2E to TUIC/sing-box changes.
+      # VLESS/XHTTP/REALITY patches do not require a TUIC runtime build.
       - UPSTREAM_COMPAT
       - SINGBOX_VERSION
-      - internal/**
-      - overlay/**
-      - scripts/**
+      - internal/singbox/**
+      - overlay/internal/singbox/**
+      - overlay/internal/sub/tuic_*
+      - overlay/internal/sub/singbox_*
+      - overlay/internal/database/model/tuic_runtime.go
+      - overlay/internal/web/controller/singbox_cert.go
+      - scripts/install-singbox.sh
+      - scripts/uninstall-singbox.sh
+      - scripts/update-singbox.sh
+      - scripts/v15-compat-tuic-frontend.py
+      - scripts/v18-tuic-cert-mieru.py
+      - scripts/v19-tuic-native-cert-form.py
+      - scripts/v21-tuic-runtime-selector.py
+      - scripts/v22-tuic-native-ui-polish.py
+      - scripts/v23-tuic-selfsigned-export.py
       - .github/workflows/tuic-mihomo-e2e.yml
 
 permissions:

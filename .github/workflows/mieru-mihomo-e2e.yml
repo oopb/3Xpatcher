@@ -5,22 +5,32 @@ on:
   pull_request:
     branches: [main]
     paths:
+      # Run Mieru E2E only when Mieru/upstream-specific inputs change.
+      # Generic XHTTP/REALITY patch scripts should use their own validation.
       - UPSTREAM_COMPAT
       - MIERU_VERSION
       - internal/mieru/**
       - overlay/internal/mieru/**
       - overlay/internal/sub/mieru_*
-      - scripts/**
+      - overlay/internal/database/model/singbox_protocols.go
+      - scripts/install-mieru.sh
+      - scripts/uninstall-mieru.sh
+      - scripts/v18-tuic-cert-mieru.py
       - .github/workflows/mieru-mihomo-e2e.yml
   push:
     branches: [main]
     paths:
+      # Run Mieru E2E only when Mieru/upstream-specific inputs change.
+      # Generic XHTTP/REALITY patch scripts should use their own validation.
       - UPSTREAM_COMPAT
       - MIERU_VERSION
       - internal/mieru/**
       - overlay/internal/mieru/**
       - overlay/internal/sub/mieru_*
-      - scripts/**
+      - overlay/internal/database/model/singbox_protocols.go
+      - scripts/install-mieru.sh
+      - scripts/uninstall-mieru.sh
+      - scripts/v18-tuic-cert-mieru.py
       - .github/workflows/mieru-mihomo-e2e.yml
 
 permissions:
