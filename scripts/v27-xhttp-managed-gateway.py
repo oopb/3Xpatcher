@@ -119,7 +119,7 @@ anchor="""              <FormField
                 label="下行 HTTP Host（可留空）"
               ><Input placeholder="留空时按 SNI 自动填充，REALITY 下行可留空" /></FormField>
 """
-append=anchor+"""              {downloadSecurity === 'reality' && (
+append=anchor.replace('留空时按 SNI 自动填充，REALITY 下行可留空', '留空时继承上行 XHTTP Host（与服务端匹配）')+"""              {downloadSecurity === 'reality' && (
                 <>
                   <Divider>REALITY 服务端自动监听（可选）</Divider>
                   <div style={{ marginBottom: 12 }}>
