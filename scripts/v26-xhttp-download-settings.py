@@ -186,7 +186,7 @@ extra='''      {protocol === 'vless' && (
                   <Alert
                     type="warning"
                     showIcon
-                    message="兼容性：Mihomo 官方不支持 Xray-core v26.7.11+ 的 REALITY 变更。Clash Verge 请优先选择 TLS 直连下行（源站 IP + 原 TLS 端口与证书 SNI），不需要额外 REALITY 入口；Xray 客户端可使用 REALITY 分离。"
+                    message="REALITY 直连下行：若服务端使用 Xray 26.7.28，开启下方自动托管后会为 REALITY 入站设置 minClientVer=1.8.2，以兼容 Mihomo/Clash Verge 的 REALITY 握手。已通过 Xray 26.7.28 + Mihomo 1.19.33 + ML-KEM/Vision 联网测试。该设置仅作用于自动生成的下行入口。"
                     style={{ marginBottom: 12 }}
                   />
                   <FormField
