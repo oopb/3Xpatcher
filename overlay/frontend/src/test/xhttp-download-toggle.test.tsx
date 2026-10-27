@@ -243,6 +243,9 @@ describe('VLESS XHTTP download switch', () => {
       expect((screen.getByPlaceholderText('自动生成，也可手动输入对应公钥') as HTMLInputElement).value)
         .toBe('custom-pk');
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect XHTTP form' }));
+    expect((output().downloadSettings as Record<string, any>).realitySettings.publicKey)
+      .toBe('custom-pk');
     fireEvent.change(screen.getByPlaceholderText('自动生成，也可手动输入十六进制 Short ID'), {
       target: { value: 'aa12' },
     });
