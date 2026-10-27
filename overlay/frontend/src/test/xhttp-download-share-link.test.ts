@@ -60,54 +60,49 @@ function params(withDownload: boolean, security: 'tls' | 'reality' = 'tls'): URL
   return url.searchParams;
 }
 
-describe('XHTTP split URI Shadowrocket native Host regression', () => {
-  it('keeps the Host scalar while marking split TLS/TLS JSON obfsParam as xhttp', () => {
+describe('XHTTP split links remain Xray-native', () => {
+  it('exports standard TLS/TLS XHTTP downlink without client-specific parameters', () => {
     const query = params(true);
     expect(query.get('type')).toBe('xhttp');
-    expect(query.get('obfs')).toBe('xhttp');
     expect(query.get('host')).toBe('cdn03.ijj.kdns.fr');
-    expect(query.get('host')).not.toContain('{');
     expect(query.get('security')).toBe('tls');
     expect(query.get('encryption')).toBe('mlkem768x25519plus.native.0rtt.EXAMPLE');
-    expect(query.get('obfsParam')).toBeTruthy();
-    expect(JSON.parse(query.get('obfsParam')!)).toMatchObject({
-      Host: 'cdn03.ijj.kdns.fr',
-      '': {
-        downloadHTTPHost: 'cdn03.ijj.kdns.fr',
-        downloadTargetHost: 'cdn03.ijj.kdns.fr',
-        downloadTargetPort: '2083',
-      },
-    });
-    expect(JSON.parse(query.get('extra')!).downloadSettings).toMatchObject({
-      address: 'cdn03.ijj.kdns.fr',
-      security: 'tls',
-    });
-    expect(query.has('pbk')).toBe(false);
-    expect(query.has('sid')).toBe(false);
-  });
-
-  it('preserves standard extra and REALITY downlink keys for TLS/REALITY', () => {
-    const query = params(true, 'reality');
-    expect(query.get('obfs')).toBe('xhttp');
-    expect(query.get('host')).toBe('cdn03.ijj.kdns.fr');
-    expect(query.get('sni')).toBe('cdn03.ijj.kdns.fr');
-    expect(query.get('pbk')).toBe('REALITY_DOWNLOAD_PUBLIC_KEY');
-    expect(query.get('sid')).toBe('aabbccdd');
-    const down = JSON.parse(query.get('extra')!).downloadSettings;
-    expect(down.security).toBe('reality');
-    expect(down.realitySettings.publicKey).toBe('REALITY_DOWNLOAD_PUBLIC_KEY');
-    expect(JSON.parse(query.get('obfsParam')!)['']).toMatchObject({
-      downloadTargetHost: '203.0.113.8',
-      downloadTargetPort: '9443',
-      downloadServerName: 'aws.amazon.com',
-    });
-  });
-
-  it('does not inject either obfs=xhttp or obfsParam into ordinary XHTTP', () => {
-    const query = params(false);
-    expect(query.get('type')).toBe('xhttp');
     expect(query.has('obfs')).toBe(false);
     expect(query.has('obfsParam')).toBe(false);
+    expect(query.has('pbk')).toBe(false);
+    expect(query.has('sid')).toBe(false);
+    expect(JSON.parse(query.get('extra')!).downloadSettings).toMatchObject({
+      address: 'cdn03.ijj.kdns.fr',
+      port: 2083,
+      security: 'tls',
+    });
+  });
+
+  it('keeps REALITY downlink credentials nested under Xray extra only', () => {
+    const query = params(true, 'reality');
+    expect(query.get('type')).toBe('xhttp');
+    expect(query.get('security')).toBe('tls');
+    expect(query.get('sni')).toBe('cdn03.ijj.kdns.fr');
     expect(query.get('host')).toBe('cdn03.ijj.kdns.fr');
+    expect(query.has('pbk')).toBe(false);
+    expect(query.has('sid')).toBe(false);
+    expect(query.has('obfsParam')).toBe(false);
+    expect(query.has('obfs')).toBe(false);
+    const down = JSON.parse(query.get('extra')!).downloadSettings;
+    expect(down).toMatchObject({
+      address: '203.0.113.8',
+      port: 9443,
+      security: 'reality',
+      realitySettings: { publicKey: 'REALITY_DOWNLOAD_PUBLIC_KEY', shortId: 'aabbccdd' },
+    });
+    expect(down.xhttpSettings.path).toBe('/cfw45fc89qy34d');
+  });
+
+  it('does not add client-specific split parameters to ordinary XHTTP', () => {
+    const query = params(false);
+    expect(query.get('type')).toBe('xhttp');
+    expect(query.get('host')).toBe('cdn03.ijj.kdns.fr');
+    expect(query.has('obfs')).toBe(false);
+    expect(query.has('obfsParam')).toBe(false);
   });
 });
