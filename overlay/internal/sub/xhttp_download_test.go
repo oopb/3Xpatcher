@@ -255,7 +255,7 @@ func TestXhttpDownloadStandardExtraPreservesRealityFields(t *testing.T) {
     },
   }
   // Only the documented Xray extra.downloadSettings is produced; the
-  // Shadowrocket-only obfsParam and query-level downlink pbk/sid are removed.
+  // Downlink REALITY credentials stay in the Xray-native nested object.
   extra:=buildXhttpExtra(x)
   down,ok:=extra["downloadSettings"].(map[string]any)
   if !ok {t.Fatalf("missing Xray downloadSettings: %#v",extra)}
