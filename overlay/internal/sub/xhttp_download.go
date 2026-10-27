@@ -224,3 +224,21 @@ func shadowrocketXHTTPDownloadRealityQueryParams(xhttp map[string]any, params ma
 		}
 	}
 }
+
+// shadowrocketXHTTPMarkNativeTransport is limited to VLESS URI generation.
+// Without obfs=xhttp, Shadowrocket can interpret the JSON obfsParam using
+// its legacy generic Host mapping, showing the *whole JSON* as HTTP Host.
+// Xray-native type=xhttp, host=domain, and extra.downloadSettings are all
+// left intact; Xray clients ignore this extra client-specific query option.
+//
+// Only enable the Shadowrocket alias if a valid split-downlink obfsParam was
+// actually emitted. Plain XHTTP nodes keep their original canonical URI.
+func shadowrocketXHTTPMarkNativeTransport(params map[string]string) {
+	if params == nil || params["type"] != "xhttp" {
+		return
+	}
+	if _, exists := params["obfsParam"]; !exists {
+		return
+	}
+	params["obfs"] = "xhttp"
+}
