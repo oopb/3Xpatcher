@@ -270,6 +270,10 @@ append=anchor.replace('留空时按 SNI 自动填充，REALITY 下行可留空',
               )}
 """
 patch(p,anchor,append)
+# Avoid stale UX text referring to an advanced panel that no longer exists.
+patch(p,
+'''message="REALITY 下行的服务器地址与端口需要单独填写，不能从 CDN/TLS 上行推断。REALITY 最低客户端版本在下方托管监听的高级设置中独立配置（默认兼容 Mihomo 1.8.2）。"''',
+'''message="REALITY 下行地址和端口须单独填写；使用 SNI 右侧的原生选择器可自动填入目标和 SNI。托管入口默认兼容 Mihomo 客户端版本 1.8.2。"''')
 # A managed listener is not client-only. Describe the real effect of the toggle.
 patch(p,
 '''message="仅用于客户端订阅/分享链接，不会写入 Xray 服务端 listener。上下行必须汇聚到同一个 XHTTP 入站与 Path；CDN 回源、TLS/REALITY 分流需事先配置。"''',
