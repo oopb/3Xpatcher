@@ -54,7 +54,7 @@ patch(p,
 "import { Alert, AutoComplete, Button, Divider, Form, Input, InputNumber, Select, Space, Switch, message } from 'antd';")
 patch(p,
 "import { UTLS_FINGERPRINT } from '@/schemas/primitives';",
-"import { UTLS_FINGERPRINT } from '@/schemas/primitives';\nimport { HttpUtil, RandomUtil } from '@/utils';\nimport { useState } from 'react';\nimport { SearchOutlined } from '@ant-design/icons';\nimport type { RealityScanResult } from '@/generated/types';\nimport { validateRealityTarget } from '@/lib/xray/stream-wire-normalize';\nimport RealityTargetScannerModal from '../security/RealityTargetScannerModal';")
+"import { UTLS_FINGERPRINT } from '@/schemas/primitives';\nimport { HttpUtil, RandomUtil } from '@/utils';\nimport { useEffect, useState } from 'react';\nimport { SearchOutlined } from '@ant-design/icons';\nimport type { RealityScanResult } from '@/generated/types';\nimport { validateRealityTarget } from '@/lib/xray/stream-wire-normalize';\nimport RealityTargetScannerModal from '../security/RealityTargetScannerModal';")
 patch(p,
 "  const protocol = useWatch({ control, name: 'protocol' });",
 """  const protocol = useWatch({ control, name: 'protocol' });
@@ -102,27 +102,6 @@ patch(p,
         Array.isArray(names) ? [...names, sni] : [sni], { shouldDirty: true });
     }
   }
-  function syncManagedRealityPublicKey(value: unknown) {
-    // Explicitly commit the visible field before updating dependent managed
-    // fields; RHF controllers can otherwise re-render with the stale value.
-    const base = 'streamSettings.xhttpSettings.downloadSettings';
-    const publicKey = typeof value === 'string' ? value.trim() : '';
-    setValue(base + '.realitySettings.publicKey', publicKey, { shouldDirty: true });
-    // A manually supplied public key must still correspond to the server private key.
-    if (getValues(base + '.managedListener.enabled')) {
-      setValue(base + '.managedListener.realitySettings.publicKey',
-        publicKey, { shouldDirty: true });
-    }
-  }
-  function syncManagedRealityShortId(value: unknown) {
-    if (!getValues('streamSettings.xhttpSettings.downloadSettings.managedListener.enabled')) return;
-    const shortId = typeof value === 'string' ? value.trim() : '';
-    const path = 'streamSettings.xhttpSettings.downloadSettings.managedListener.realitySettings.shortIds';
-    const existing = getValues(path);
-    if (Array.isArray(existing) && existing.includes(shortId)) return;
-    setValue(path, shortId ? [...(Array.isArray(existing) ? existing : []), shortId] : [''],
-      { shouldDirty: true });
-  }
   function syncManagedServerPublicKey(value: unknown) {
     const publicKey = typeof value === 'string' ? value.trim() : '';
     setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.publicKey',
@@ -150,6 +129,30 @@ patch(p,
     control,
     name: 'streamSettings.xhttpSettings.downloadSettings.managedListener.enabled',
   });
+  const clientDownloadPublicKey = useWatch({
+    control, name: 'streamSettings.xhttpSettings.downloadSettings.realitySettings.publicKey',
+  }) as string | undefined;
+  const clientDownloadShortId = useWatch({
+    control, name: 'streamSettings.xhttpSettings.downloadSettings.realitySettings.shortId',
+  }) as string | undefined;
+  // Mirror visible client fields after React Hook Form commits them.
+  // Avoid setting siblings during the same input onChange callback: doing so
+  // can make controlled Ant Design Inputs visually change without persisting.
+  useEffect(() => {
+    if (!autoReality || typeof clientDownloadPublicKey !== 'string') return;
+    const path = 'streamSettings.xhttpSettings.downloadSettings.managedListener.realitySettings.publicKey';
+    if (getValues(path) !== clientDownloadPublicKey) {
+      setValue(path, clientDownloadPublicKey, { shouldDirty: true });
+    }
+  }, [autoReality, clientDownloadPublicKey, getValues, setValue]);
+  useEffect(() => {
+    if (!autoReality || !clientDownloadShortId) return;
+    const path = 'streamSettings.xhttpSettings.downloadSettings.managedListener.realitySettings.shortIds';
+    const list = getValues(path);
+    if (!Array.isArray(list) || !list.includes(clientDownloadShortId)) {
+      setValue(path, [...(Array.isArray(list) ? list : []), clientDownloadShortId], { shouldDirty: true });
+    }
+  }, [autoReality, clientDownloadShortId, getValues, setValue]);
   const uplinkSecurity = useWatch({ control, name: 'streamSettings.security' });
   const managedSecurityAllowed = protocol === 'vless' && uplinkSecurity === 'tls';
   async function genManagedRealityKeypair() {
@@ -274,7 +277,6 @@ patch(p,
 """                  <FormField
                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'publicKey']}
                     label="REALITY Public Key"
-                    onAfterChange={syncManagedRealityPublicKey}
                     rules={{ required: 'REALITY 需要公钥' }}
                   ><Input placeholder="自动生成，也可手动输入对应公钥" /></FormField>""")
 patch(p,
@@ -285,7 +287,6 @@ patch(p,
 """                  <FormField
                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'shortId']}
                     label="REALITY Short ID"
-                    onAfterChange={syncManagedRealityShortId}
                     rules={{ validate: (value) =>
                       /^(?:[a-fA-F0-9]{2}){0,8}$/.test(String(value ?? ''))
                         ? true : 'Short ID 只能使用偶数位十六进制字符（最多 16 位）' }}
