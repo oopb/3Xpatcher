@@ -92,8 +92,15 @@ patch(p,
   const managedSecurityAllowed = protocol === 'vless' && uplinkSecurity === 'tls';
   async function genManagedRealityKeypair() {
     const res = await HttpUtil.get('/panel/api/server/getNewX25519Cert');
-    if (!res?.success || !res.obj) return;
+    if (!res?.success || !res.obj) {
+      message.error(res?.msg || 'REALITY 密钥生成失败，请重试');
+      return;
+    }
     const { privateKey, publicKey } = res.obj as { privateKey: string; publicKey: string };
+    if (!privateKey || !publicKey) {
+      message.error('密钥生成接口没有返回完整的密钥对');
+      return;
+    }
     setValue('streamSettings.xhttpSettings.downloadSettings.managedListener.realitySettings.privateKey',
       privateKey, { shouldDirty: true });
     setValue('streamSettings.xhttpSettings.downloadSettings.managedListener.realitySettings.publicKey',
@@ -107,9 +114,6 @@ patch(p,
       setValue(`${base}.managedListener.enabled`, false, { shouldDirty: true });
       return;
     }
-    const existing = getValues(`${base}.managedListener`);
-    setValue(`${base}.managedListener.listen`,
-      existing?.listen || '0.0.0.0', { shouldDirty: true });
     const currentPort = Number(getValues(`${base}.port`));
     const uplinkPort = Number(getValues('port'));
     if (!Number.isInteger(currentPort) || currentPort < 1 || currentPort > 65535) {
