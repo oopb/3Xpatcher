@@ -48,8 +48,8 @@ jobs:
           grep -q "downloadSettings" source/frontend/src/pages/inbounds/form/transport/xhttp.tsx
           grep -q "xhttpClientDownload" source/internal/sub/clash_service.go
           ! grep -q 'shadowrocketXHTTP' source/internal/sub/service.go
-          ! grep -q 'params.set(\x27obfsParam\x27' source/frontend/src/lib/xray/inbound-link.ts
-          ! grep -q 'params.set(\x27obfs\x27, \x27xhttp\x27)' source/frontend/src/lib/xray/inbound-link.ts
+          ! grep -q 'obfsParam' source/frontend/src/lib/xray/inbound-link.ts
+          ! grep -q "params.set('obfs', 'xhttp')" source/frontend/src/lib/xray/inbound-link.ts
           grep -q 'managedXHTTPNeedsReconcile(&running, oldInbound)' source/internal/web/service/inbound.go
           grep -q 'managedXHTTPNeedsReconcile(&ib, nil)' source/internal/web/service/inbound.go
           grep -q 'managedXHTTPNeedsReconcile(nil, inbound)' source/internal/web/service/inbound.go
