@@ -9,6 +9,7 @@ import (
   "encoding/json"
   "fmt"
   "strings"
+  "regexp"
 
   "github.com/mhsanaei/3x-ui/v3/internal/database/model"
   "github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
@@ -48,6 +49,11 @@ func xhttpGatewayConfig(
   if conflict,exists:=used[port];exists {return nil,fmt.Errorf("inbound %s: REALITY port %d conflicts with %s",base.Tag,port,conflict)}
 
   reality,_:=managed["realitySettings"].(map[string]any)
+  minClientVer,_:=reality["minClientVer"].(string)
+  if minClientVer=="" {minClientVer="1.8.2"}
+  if ok,_:=regexp.MatchString(`^[0-9]+\.[0-9]+\.[0-9]+$`,minClientVer); !ok {
+    return nil,fmt.Errorf("inbound %s: invalid REALITY minClientVer %q",base.Tag,minClientVer)
+  }
   target,_:=reality["target"].(string)
   privateKey,_:=reality["privateKey"].(string)
   publicKey,_:=reality["publicKey"].(string)
@@ -119,7 +125,7 @@ func xhttpGatewayConfig(
       // its handshake before XHTTP sessions are reached.
       // Scope this explicit compatibility setting to the opt-in generated
       // REALITY downlink; do not change unrelated inbounds.
-      "minClientVer":"1.8.2",
+      "minClientVer":minClientVer,
     },
   })
   if err!=nil{return nil,err}

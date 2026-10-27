@@ -110,3 +110,18 @@ func TestXHTTPManagedGatewayPreservesMetadataAfterSanitization(t *testing.T) {
         t.Fatalf("managed reality gateway silently absent after sanitization: %#v",cfg.InboundConfigs)
     }
 }
+
+func TestXHTTPManagedGatewayConfigurableMinVersion(t *testing.T) {
+  base:=mockTLSXHTTP(t)
+  down:=mockManagedDown()
+  settings:=down["managedListener"].(map[string]any)["realitySettings"].(map[string]any)
+  settings["minClientVer"]="2.4.6"
+  got,err:=xhttpGatewayConfig(base,11,down,map[int]string{443:base.Tag})
+  if err!=nil {t.Fatal(err)}
+  reality:=xhttpMap(got[2].StreamSettings)["realitySettings"].(map[string]any)
+  if reality["minClientVer"]!="2.4.6" {t.Fatalf("minClientVer should be editable: %#v",reality)}
+  settings["minClientVer"]="bad-version"
+  if _,err=xhttpGatewayConfig(base,11,down,map[int]string{443:base.Tag});err==nil || !strings.Contains(err.Error(),"minClientVer") {
+    t.Fatalf("invalid version must be rejected: %v",err)
+  }
+}

@@ -42,7 +42,8 @@ export type XHttpDownloadSettings""",
       shortIds: z.array(z.string()).default([]),
       privateKey: z.string().default(''),
       publicKey: z.string().default(''),
-    }).default({ target: '', serverNames: [], shortIds: [], privateKey: '', publicKey: '' }),
+      minClientVer: z.string().default('1.8.2'),
+    }).default({ target: '', serverNames: [], shortIds: [], privateKey: '', publicKey: '', minClientVer: '1.8.2' }),
   }).optional(),
 });
 export type XHttpDownloadSettings""")
@@ -108,6 +109,9 @@ patch(p,
       await genManagedRealityKeypair();
       if (!getValues(`${base}.managedListener.realitySettings.privateKey`)) return;
     }
+    if (!getValues(`${base}.managedListener.realitySettings.minClientVer`)) {
+      setValue(`${base}.managedListener.realitySettings.minClientVer`, '1.8.2', { shouldDirty: true });
+    }
     setValue(`${base}.managedListener.enabled`, true, { shouldDirty: true });
   }""")
 anchor="""              <FormField
@@ -115,7 +119,7 @@ anchor="""              <FormField
                 label="下行 HTTP Host（可留空）"
               ><Input placeholder="留空时按 SNI 自动填充，REALITY 下行可留空" /></FormField>
 """
-append=anchor+"""              {downloadSecurity === 'reality' && (
+append=anchor.replace('留空时按 SNI 自动填充，REALITY 下行可留空', '留空时继承上行 XHTTP Host（与服务端匹配）')+r"""              {downloadSecurity === 'reality' && (
                 <>
                   <Divider>REALITY 服务端自动监听（可选）</Divider>
                   <div style={{ marginBottom: 12 }}>
@@ -181,6 +185,11 @@ append=anchor+"""              {downloadSecurity === 'reality' && (
                         setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.shortId',
                           shortId, { shouldDirty: true });
                       }}>生成 Short ID</Button>
+                      <FormField
+                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'minClientVer']}
+                        label="REALITY 最低客户端版本 (minClientVer)"
+                        rules={{ pattern: { value: /^[0-9]+\.[0-9]+\.[0-9]+$/, message: '版本格式应为 x.y.z，例如 1.8.2' } }}
+                      ><Input placeholder="1.8.2 (兼容 Mihomo)" /></FormField>
                       <FormField
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'privateKey']}
                         label="REALITY 私钥（仅服务端保存）"

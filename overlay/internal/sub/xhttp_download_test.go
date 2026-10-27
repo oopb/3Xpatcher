@@ -208,3 +208,42 @@ func TestMihomoRealityDownloadDoesNotInheritCDNHostOrALPN(t *testing.T) {
     t.Fatalf("Reality port/SNI mismatch: %#v",down)
   }
 }
+
+func TestXhttpDownloadInheritsServerHostAndShadowrocketURI(t *testing.T) {
+  x:=map[string]any{
+    "host":"cdn.example.com","path":"/shared","xPaddingBytes":"100-1000",
+    "downloadSettings":map[string]any{
+      "address":"203.0.113.27","port":float64(9443),"security":"reality",
+      "xhttpSettings":map[string]any{"host":""},
+      "realitySettings":map[string]any{
+        "serverName":"target.example.com",
+        "fingerprint":"chrome","publicKey":"pub-key","shortId":"abcd",
+      },
+    },
+  }
+  down:=xhttpClientDownload(x)
+  inner:=down["xhttpSettings"].(map[string]any)
+  if inner["host"]!="cdn.example.com" { t.Fatalf("Host must match shared XHTTP inbound: %#v",inner) }
+  if inner["path"]!="/shared" { t.Fatalf("wrong shared path: %#v",inner) }
+  proxy:=xhttpDownloadMihomo(down)
+  if proxy["host"]!="cdn.example.com" || proxy["servername"]!="target.example.com" {
+    t.Fatalf("HTTP Host and REALITY SNI must stay independent: %#v",proxy)
+  }
+  params:=map[string]string{}
+  shadowrocketXHTTPDownloadParams(x,params)
+  var parsed map[string]any
+  if err:=json.Unmarshal([]byte(params["obfsParam"]),&parsed);err!=nil {t.Fatal(err)}
+  opts:=parsed[""].(map[string]any)
+  for key,want:=range map[string]string{
+    "downloadTargetHost":"203.0.113.27",
+    "downloadTargetPort":"9443",
+    "downloadServerName":"target.example.com",
+    "downloadHTTPHost":"cdn.example.com",
+    "downloadPath":"/shared",
+    "xPaddingBytes":"100-1000",
+  } {
+    if opts[key]!=want {t.Fatalf("%s got %v want %q",key,opts[key],want)}
+  }
+  if parsed["Host"]!="cdn.example.com" {t.Fatalf("uplink Host missing: %#v",parsed)}
+  if strings.Contains(params["obfsParam"],"pub-key") {t.Fatal("do not encode unverified Shadowrocket reality key name")}
+}

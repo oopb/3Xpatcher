@@ -289,7 +289,7 @@ patch(link,
       xhttpSettings: {
         path: xhttp.path,
         mode: xhttp.mode,
-        host: download.xhttpSettings.host || (reality ? '' : download.tlsSettings.serverName),
+        host: download.xhttpSettings.host || xhttp.host || (reality ? '' : download.tlsSettings.serverName),
       },
     };
   }
@@ -419,3 +419,51 @@ patch(hostsub,
 \t}''')
 
 print("XHTTP client download settings patch applied")
+
+
+# Standard Xray extra remains intact; Shadowrocket also consumes its native
+# XHTTP obfsParam mapping, which has different field names.
+patch('internal/sub/service.go',
+    '''\tif extra != nil {
+\t\tif b, err := json.Marshal(extra); err == nil {
+\t\t\tparams["extra"] = string(b)
+\t\t}
+\t}
+}
+
+var kcpMaskToHeaderType''',
+    '''\tif extra != nil {
+\t\tif b, err := json.Marshal(extra); err == nil {
+\t\t\tparams["extra"] = string(b)
+\t\t}
+\t}
+\tshadowrocketXHTTPDownloadParams(xhttp, params)
+}
+
+var kcpMaskToHeaderType''')
+
+
+# QR/link preview in the panel must use the same Shadowrocket dialect as
+# server-generated subscriptions. Keep standard Xray extra untouched.
+patch('frontend/src/lib/xray/inbound-link.ts',
+    "  if (extra) params.set('extra', JSON.stringify(extra));\n}",
+    """  if (extra) params.set('extra', JSON.stringify(extra));
+  const download = xhttp.downloadSettings;
+  if (download?.address && download.port > 0) {
+    const downloadHost = download.xhttpSettings?.host || xhttp.host || '';
+    const nested: Record<string, string> = {
+      downloadTargetHost: download.address,
+      downloadTargetPort: String(download.port),
+      downloadPath: xhttp.path || '',
+      downloadHTTPHost: downloadHost,
+      downloadServerName: download.security === 'reality'
+        ? (download.realitySettings?.serverName || '')
+        : (download.tlsSettings?.serverName || ''),
+    };
+    if (xhttp.xPaddingBytes) nested.xPaddingBytes = xhttp.xPaddingBytes;
+    params.set('obfsParam', JSON.stringify({
+      '': nested,
+      ...(xhttp.host ? { Host: xhttp.host } : {}),
+    }));
+  }
+}""")
