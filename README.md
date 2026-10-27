@@ -518,3 +518,6 @@ Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN
 已撤销此前实验性 Shadowrocket 专用上下行分享链接字段生成（`obfsParam`、`obfs=xhttp`，以及下行 REALITY 公钥/Short ID 错写到顶层 `pbk`/`sid` 的映射）。原生 3x-ui 风格的 `vless://UUID@host:port?encryption=...&type=xhttp&host=...&extra=...` 分享链接保持不变。
 
 此撤销**不影响** Xray `extra.downloadSettings`、Xray JSON 订阅、Mihomo `download-settings`、独立下行配置界面或托管 REALITY 监听功能。Shadowrocket 对独立下行的解析能力尚未通过真实客户端验证，不再添加未经确认的私有 URI 参数。
+
+
+本次回退发布版本：`0.17.12-integrated-alpha`（适配上游 `3x-ui v3.11.0`）。
