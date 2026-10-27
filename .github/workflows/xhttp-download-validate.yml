@@ -10,6 +10,7 @@ on:
       - scripts/v28-xhttp-managed-listener-fix.py
       - scripts/v29-xhttp-port-conflict.py
       - scripts/v30-xhttp-security-context.py
+      - scripts/v31-xhttp-managed-lifecycle.py
       - overlay/internal/web/service/xhttp_managed_port_conflict_test.go
       - overlay/internal/sub/xhttp_download*.go
       - overlay/internal/web/service/xhttp_managed_gateway*.go
@@ -36,7 +37,7 @@ jobs:
           tar -xzf /tmp/upstream.tar.gz -C source --strip-components=1
       - name: Apply overlay and XHTTP split patch
         run: |
-          python3 -m py_compile scripts/v26-xhttp-download-settings.py scripts/v29-xhttp-port-conflict.py scripts/v30-xhttp-security-context.py
+          python3 -m py_compile scripts/v26-xhttp-download-settings.py scripts/v29-xhttp-port-conflict.py scripts/v30-xhttp-security-context.py scripts/v31-xhttp-managed-lifecycle.py
           ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
           cp overlay/internal/sub/xhttp_download_test.go source/internal/sub/xhttp_download_test.go
           cp overlay/internal/web/service/xhttp_managed_gateway_test.go source/internal/web/service/xhttp_managed_gateway_test.go
@@ -45,6 +46,9 @@ jobs:
           cp overlay/frontend/src/test/xhttp-download-wire.test.ts source/frontend/src/test/xhttp-download-wire.test.ts
           grep -q "downloadSettings" source/frontend/src/pages/inbounds/form/transport/xhttp.tsx
           grep -q "xhttpClientDownload" source/internal/sub/clash_service.go
+          grep -q 'managedXHTTPNeedsReconcile(&running, oldInbound)' source/internal/web/service/inbound.go
+          grep -q 'managedXHTTPNeedsReconcile(&ib, nil)' source/internal/web/service/inbound.go
+          grep -q 'managedXHTTPNeedsReconcile(nil, inbound)' source/internal/web/service/inbound.go
       - uses: actions/setup-go@v7
         with:
           go-version-file: source/go.mod
