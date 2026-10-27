@@ -5,6 +5,8 @@ package sub
 // endpoints must both reach the same XHTTP inbound/path; these helpers only
 // describe client connections, never deploy a CDN, reverse proxy, or fallback.
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -150,4 +152,42 @@ func xhttpDownloadMihomo(download map[string]any) map[string]any {
 		out["reality-opts"] = map[string]any{"public-key": ""}
 	}
 	return out
+}
+
+
+// shadowrocketXHTTPDownloadParams adds Shadowrocket's separately exported
+// xhttp obfsParam keys while retaining Xray's full extra.downloadSettings.
+// Shadowrocket's native key names are established by exported node samples.
+// Reality download credentials are still carried in the standard Xray extra;
+// no undocumented Shadowrocket-specific credential names are fabricated.
+func shadowrocketXHTTPDownloadParams(xhttp map[string]any, params map[string]string) {
+	down := xhttpClientDownload(xhttp)
+	if down == nil || params == nil { return }
+	settings, _ := down["xhttpSettings"].(map[string]any)
+	primaryHost, _ := xhttp["host"].(string)
+	nested := map[string]any{
+		"downloadTargetHost": down["address"],
+		"downloadTargetPort": fmt.Sprint(down["port"]),
+	}
+	if path, _ := settings["path"].(string); path != "" {
+		nested["downloadPath"] = path
+	}
+	if host, _ := settings["host"].(string); host != "" {
+		nested["downloadHTTPHost"] = host
+	}
+	var serverName string
+	if down["security"] == "reality" {
+		reality, _ := down["realitySettings"].(map[string]any)
+		serverName, _ = reality["serverName"].(string)
+	} else {
+		tls, _ := down["tlsSettings"].(map[string]any)
+		serverName, _ = tls["serverName"].(string)
+	}
+	if serverName != "" { nested["downloadServerName"] = serverName }
+	if padding, _ := xhttp["xPaddingBytes"].(string); padding != "" {
+		nested["xPaddingBytes"] = padding
+	}
+	obj := map[string]any{"": nested}
+	if primaryHost != "" { obj["Host"] = primaryHost }
+	if raw, err := json.Marshal(obj); err == nil { params["obfsParam"] = string(raw) }
 }
