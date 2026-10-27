@@ -123,3 +123,50 @@ if ! curl -fsS --max-time 15 --socks5-hostname 127.0.0.1:11081   https://example
 fi
 echo 'PASS: TLS upload + REALITY download -> same inner XHTTP backend and user.'
 
+# Cover the exact Xray features used by affected user profiles:
+# native ML-KEM-768 VLESS Encryption + xtls-rprx-vision on XHTTP.
+generated="$("$XRAY_BIN" vlessenc)"
+decryption="$(printf '%s\n' "$generated" | grep '"decryption":' | tail -1 | cut -d'"' -f4)"
+encryption="$(printf '%s\n' "$generated" | grep '"encryption":' | tail -1 | cut -d'"' -f4)"
+if [ -z "$decryption" ] || [ -z "$encryption" ]; then
+  echo "No native ML-KEM VLESS Encryption credentials generated"
+  exit 1
+fi
+python3 - "$dir/server.json" "$dir/split-client.json" "$decryption" "$encryption" <<'PY'
+import json, sys
+server, client, decryption, encryption = sys.argv[1:]
+with open(server) as fh: sc = json.load(fh)
+with open(client) as fh: cc = json.load(fh)
+shared = next(v for v in sc['inbounds'] if v['tag'] == 'test-shared-xhttp')
+shared['settings']['decryption'] = decryption
+shared['settings']['clients'][0]['flow'] = 'xtls-rprx-vision'
+clientuser = cc['outbounds'][0]['settings']['vnext'][0]['users'][0]
+clientuser['encryption'] = encryption
+clientuser['flow'] = 'xtls-rprx-vision'
+for fname, data in [(server, sc), (client, cc)]:
+  with open(fname, 'w') as fh: json.dump(data, fh)
+PY
+kill "$SPLIT_PID" "$SRV_PID"
+wait "$SPLIT_PID" "$SRV_PID" 2>/dev/null || true
+SPLIT_PID=""; SRV_PID=""
+"$XRAY_BIN" run -test -c "$dir/server.json" >"$dir/validate-enc.log" 2>&1 || {
+  cat "$dir/validate-enc.log"; exit 1;
+}
+"$XRAY_BIN" run -test -c "$dir/split-client.json" >"$dir/validate-enc-client.log" 2>&1 || {
+  cat "$dir/validate-enc-client.log"; exit 1;
+}
+"$XRAY_BIN" run -c "$dir/server.json" >"$dir/server-enc.log" 2>&1 &
+SRV_PID=$!
+"$XRAY_BIN" run -c "$dir/split-client.json" >"$dir/split-client-enc.log" 2>&1 &
+SPLIT_PID=$!
+sleep 2
+if ! curl -fsS --max-time 15 --socks5-hostname 127.0.0.1:11081 \
+  https://example.com/ | grep -iq 'example'; then
+  echo "::error::ML-KEM + Vision with TLS-up/REALITY-down failed"
+  tail -90 "$dir/server-enc.log"
+  tail -90 "$dir/split-client-enc.log"
+  exit 1
+fi
+echo 'PASS: TLS upload + REALITY download with native ML-KEM-768 and Vision.'
+
+
