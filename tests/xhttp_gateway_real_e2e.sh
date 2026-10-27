@@ -198,16 +198,14 @@ proxies:
       mode: auto
       download-settings:
         server: 127.0.0.1
-        port: 19443
+        port: 19043
         tls: true
-        servername: www.cloudflare.com
+        servername: cdn.example.com
         client-fingerprint: chrome
+        skip-cert-verify: true
         alpn: [h2]
-        host: ""
+        host: cdn.example.com
         path: /test_shared
-        reality-opts:
-          public-key: "$public_key"
-          short-id: ab12
 rules:
   - MATCH,TEST
 EOF
@@ -219,12 +217,12 @@ MIHOMO_PID=$!
 sleep 3
 if ! curl -fsS --max-time 20 --socks5-hostname 127.0.0.1:11082 \
   https://example.com/ | grep -iq 'example'; then
-  echo "::error::Mihomo REALITY split with ML-KEM/ Vision failed"
+  echo "::error::Mihomo TLS-down split with ML-KEM / Vision failed"
   tail -90 "$dir/mihomo.log"
   tail -90 "$dir/server-enc.log"
   exit 1
 fi
-echo 'PASS: Mihomo TLS upload + REALITY download with native ML-KEM-768 and Vision.'
+echo 'PASS: Mihomo TLS upload + TLS direct download with native ML-KEM-768 and Vision.'
 
 
 
