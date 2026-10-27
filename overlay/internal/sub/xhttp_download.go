@@ -139,6 +139,11 @@ func xhttpDownloadMihomo(download map[string]any) map[string]any {
 		out["reality-opts"] = map[string]any{
 			"public-key": real["publicKey"],
 			"short-id": real["shortId"],
+			// Xray-core 26.9.8+ requires the X25519MLKEM768 KeyShare in
+			// REALITY ClientHello. Mihomo otherwise strips it by default.
+			// Unlike native 3x-ui REALITY exports, the XHTTP split-downlink
+			// branch must set this on its own nested reality-opts.
+			"support-x25519mlkem768": true,
 		}
 	} else {
 		tls, _ := download["tlsSettings"].(map[string]any)
