@@ -2,12 +2,31 @@ import { useState } from 'react';
 import { Form } from 'antd';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FormProvider, useForm } from 'react-hook-form';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import XhttpForm from '@/pages/inbounds/form/transport/xhttp';
 import { rawInboundToFormValues } from '@/lib/xray/inbound-form-adapter';
 import { normalizeXhttpForWire } from '@/lib/xray/stream-wire-normalize';
 import { XHttpStreamSettingsSchema } from '@/schemas/protocols/stream/xhttp';
+
+
+vi.mock('@/pages/inbounds/form/security/RealityTargetScannerModal', () => ({
+  default: ({ open, onPick, onClose }: {
+    open: boolean;
+    onPick: (value: unknown) => void;
+    onClose: () => void;
+  }) => open ? (
+    <button type="button" onClick={() => {
+      onPick({
+        target: 'www.amd.com:443',
+        host: 'www.amd.com',
+        serverNames: ['www.amd.com', 'amd.com'],
+        feasible: true,
+      });
+      onClose();
+    }}>Use scanned REALITY target</button>
+  ) : null,
+}));
 
 const validDownload = {
   address: 'cdn.example.com',
@@ -137,7 +156,7 @@ describe('VLESS XHTTP download switch', () => {
       },
     };
     render(<Harness values={values} />);
-    const toggle = screen.getByRole('switch', { name: '自动创建 REALITY 入口' });
+    const toggle = screen.getByRole('switch', { name: 'REALITY 服务端自动监听' });
     fireEvent.click(toggle);
     await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
     fireEvent.click(screen.getByRole('button', { name: 'Inspect XHTTP form' }));
@@ -145,6 +164,69 @@ describe('VLESS XHTTP download switch', () => {
     expect(down.port).toBe(10443);
     expect(down.managedListener.realitySettings.target).toBe('amd.com:8443');
     expect(down.managedListener.realitySettings.minClientVer).toBe('2.4.6');
+  });
+
+
+  it('places the native REALITY picker beside outer SNI, without advanced settings', () => {
+    const values = editValues() as Record<string, any>;
+    values.streamSettings.security = 'tls';
+    values.streamSettings.xhttpSettings.downloadSettings = {
+      ...validDownload,
+      security: 'reality',
+      realitySettings: { serverName: '', publicKey: '', shortId: '', fingerprint: 'chrome' },
+    };
+    render(<Harness values={values} />);
+    expect(screen.getByRole('button', { name: '选择 REALITY 伪装目标' })).toBeTruthy();
+    expect(screen.getByRole('switch', { name: 'REALITY 服务端自动监听' })).toBeTruthy();
+    expect(screen.queryByText('高级设置（通常无需修改）')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '选择 REALITY 伪装目标' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use scanned REALITY target' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect XHTTP form' }));
+    const down = output().downloadSettings as Record<string, any>;
+    expect(down.realitySettings.serverName).toBe('www.amd.com');
+    expect(down.managedListener.realitySettings.target).toBe('www.amd.com:443');
+    expect(down.managedListener.realitySettings.serverNames).toEqual(['www.amd.com', 'amd.com']);
+    expect(down.managedListener.enabled).toBeFalsy();
+  });
+
+  it('hides managed-only generated secrets and synchronizes manual SNI edits', async () => {
+    const values = editValues() as Record<string, any>;
+    values.streamSettings.security = 'tls';
+    values.streamSettings.xhttpSettings.downloadSettings = {
+      address: '203.0.113.5',
+      port: 10443,
+      network: 'xhttp',
+      security: 'reality',
+      xhttpSettings: { host: '' },
+      realitySettings: { serverName: 'www.amd.com', publicKey: 'pk', shortId: 'abcd', fingerprint: 'chrome' },
+      managedListener: {
+        enabled: false,
+        listen: '0.0.0.0',
+        realitySettings: {
+          target: 'www.amd.com:443', serverNames: ['www.amd.com'],
+          shortIds: ['abcd'], privateKey: 'secret', publicKey: 'pk', minClientVer: '1.8.2',
+        },
+      },
+    };
+    render(<Harness values={values} />);
+    expect(screen.getByText('REALITY Public Key')).toBeTruthy();
+    const toggle = screen.getByRole('switch', { name: 'REALITY 服务端自动监听' });
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+    expect(screen.getByText('REALITY Target（远端伪装目标）')).toBeTruthy();
+    expect(screen.queryByText('REALITY Public Key')).toBeNull();
+    expect(screen.queryByText('REALITY Short ID')).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText('选择或输入 REALITY SNI'), {
+      target: { value: 'new.example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect XHTTP form' }));
+    const down = output().downloadSettings as Record<string, any>;
+    expect(down.realitySettings.serverName).toBe('new.example.com');
+    expect(down.managedListener.realitySettings.serverNames).toEqual(['new.example.com']);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('false'));
+    expect(screen.getByText('REALITY Public Key')).toBeTruthy();
+    expect(screen.queryByText('REALITY Target（远端伪装目标）')).toBeNull();
   });
 
   it('defaults to disabled for a new inbound and discards invalid fields when disabled', async () => {
