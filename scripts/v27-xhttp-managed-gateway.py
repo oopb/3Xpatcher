@@ -74,10 +74,12 @@ patch(p,
     setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.publicKey',
       publicKey, { shouldDirty: true });
   }
-  function enableManagedReality(enabled: boolean) {
+  async function enableManagedReality(enabled: boolean) {
     const base = 'streamSettings.xhttpSettings.downloadSettings';
-    setValue(`${base}.managedListener.enabled`, enabled, { shouldDirty: true });
-    if (!enabled) return;
+    if (!enabled) {
+      setValue(`${base}.managedListener.enabled`, false, { shouldDirty: true });
+      return;
+    }
     const existing = getValues(`${base}.managedListener`);
     setValue(`${base}.managedListener.listen`,
       existing?.listen || '0.0.0.0', { shouldDirty: true });
@@ -93,11 +95,20 @@ patch(p,
       setValue(`${base}.managedListener.realitySettings.serverNames`,
         [reality.serverName], { shouldDirty: true });
     }
+    const target = (getValues(`${base}.managedListener.realitySettings.target`) || '').trim();
+    if (!target || target === reality.serverName + ':' + Number(getValues(`${base}.port`))) {
+      setValue(`${base}.managedListener.realitySettings.target`, reality.serverName + ':443', { shouldDirty: true });
+    }
     const shorts = getValues(`${base}.managedListener.realitySettings.shortIds`) ?? [];
     if (!shorts.length) {
       setValue(`${base}.managedListener.realitySettings.shortIds`,
         [reality.shortId || ''], { shouldDirty: true });
     }
+    if (!getValues(`${base}.managedListener.realitySettings.privateKey`)) {
+      await genManagedRealityKeypair();
+      if (!getValues(`${base}.managedListener.realitySettings.privateKey`)) return;
+    }
+    setValue(`${base}.managedListener.enabled`, true, { shouldDirty: true });
   }""")
 anchor="""              <FormField
                 name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'xhttpSettings', 'host']}
@@ -113,7 +124,7 @@ append=anchor+"""              {downloadSecurity === 'reality' && (
                       aria-label="自动创建 REALITY 入口"
                       checked={autoReality}
                       disabled={!managedSecurityAllowed}
-                      onChange={enableManagedReality}
+                      onChange={(enabled) => void enableManagedReality(enabled)}
                     />
                   </div>
                   {autoReality && (
