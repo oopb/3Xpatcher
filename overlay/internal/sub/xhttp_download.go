@@ -115,7 +115,10 @@ func xhttpDownloadMihomo(download map[string]any) map[string]any {
 	}
 	xhttp, _ := download["xhttpSettings"].(map[string]any)
 	if xhttp != nil {
-		if host, _ := xhttp["host"].(string); host != "" {
+		// Mihomo inherits omitted downlink fields from its uplink. An empty
+		// Reality HTTP Host is intentional; omitting it leaks the CDN Host
+		// into the Reality connection and breaks server-side XHTTP routing.
+		if host, ok := xhttp["host"].(string); ok {
 			out["host"] = host
 		}
 		if path, _ := xhttp["path"].(string); path != "" {
@@ -124,6 +127,9 @@ func xhttpDownloadMihomo(download map[string]any) map[string]any {
 	}
 	if download["security"] == "reality" {
 		real, _ := download["realitySettings"].(map[string]any)
+		// REALITY XHTTP supports H2, not HTTP/1.1 fallback inherited from
+		// a CDN TLS upload's ALPN negotiation preferences.
+		out["alpn"] = []string{"h2"}
 		out["servername"] = real["serverName"]
 		out["client-fingerprint"] = real["fingerprint"]
 		out["reality-opts"] = map[string]any{
