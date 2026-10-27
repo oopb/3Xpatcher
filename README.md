@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.17.9-integrated-alpha`
+当前版本：`0.17.10-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -512,3 +512,10 @@ Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN
 - 3x-ui 原生 `GetXrayConfig → RestartXray → ComputeHotDiff / stop-restart` 已能移除旧监听、接管新端口；现在对开启过托管的入站统一走这一机制，不再直接对单个数据库入站 Tag 做增删。
 - 覆盖新建、编辑（包括上下行端口变化、切换托管开关）、启用/停用和删除。普通非托管 XHTTP 仍走原生快速单入站操作。更新时保留正常用户统计和共享会话拓扑。
 - 测试覆盖：修改 REALITY 端口后新配置不再有旧端口，Xray 原生热更新规则会为 REALITY 端口变更触发完整重启，以及托管开启/关闭/删除状态过渡。
+
+## Shadowrocket XHTTP 下行导入参数修复（0.17.10）
+
+- **Xray/V2Ray 标准格式优先**：不修改 VLESS `UUID@地址:端口` 链接主体、顶层 `encryption=`、`type=xhttp`、TLS/REALITY 上行参数、Vision、`extra.downloadSettings` 和 Mihomo 输出。
+- 依据 Shadowrocket 原生导出的 XHTTP 链接，保留其 `obfsParam` 下行目标地址/端口/SNI/HTTP Host；TLS 上行 + REALITY 下行场景增加 Shadowrocket 读取的顶层 `pbk` 和 `sid`。上行 REALITY 时绝不覆盖现有上行 `pbk`/`sid`，TLS→TLS 不注入 REALITY 选项。
+- `obfsParam` 不再附加与主链接 `path` 重复、原生样本没有的 `downloadPath`；标准 `extra.downloadSettings.xhttpSettings.path` 仍原样导出。面板分享/二维码与订阅使用同样规则。
+- 回归测试检查 TLS→REALITY、TLS→TLS、REALITY 上行密钥隔离和 Xray 标准字段不回退。

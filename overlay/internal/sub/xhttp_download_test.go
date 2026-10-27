@@ -250,11 +250,109 @@ func TestXhttpDownloadInheritsServerHostAndShadowrocketURI(t *testing.T) {
     "downloadTargetPort":"9443",
     "downloadServerName":"target.example.com",
     "downloadHTTPHost":"cdn.example.com",
-    "downloadPath":"/shared",
+    // Native Shadowrocket shares the top-level XHTTP path; no nested downloadPath.
     "xPaddingBytes":"100-1000",
   } {
     if opts[key]!=want {t.Fatalf("%s got %v want %q",key,opts[key],want)}
   }
   if parsed["Host"]!="cdn.example.com" {t.Fatalf("uplink Host missing: %#v",parsed)}
   if strings.Contains(params["obfsParam"],"pub-key") {t.Fatal("do not encode unverified Shadowrocket reality key name")}
+}
+
+
+func TestXhttpDownloadShadowrocketNativeRealityKeysPreserveXrayURI(t *testing.T) {
+  // Regression from a Shadowrocket-exported TLS uplink / REALITY download.
+  // Keep Xray's standard VLESS authority, encryption query, and
+  // extra.downloadSettings; only supply the downlink-specific pbk/sid.
+  x:=map[string]any{
+    "host":"cdn03.ijj.kdns.fr","path":"/fe98239xhnwe7743xfdw",
+    "mode":"auto","xPaddingBytes":"100-1000",
+    "downloadSettings":map[string]any{
+      "address":"23.246.167.78","port":float64(443),"security":"reality",
+      "xhttpSettings":map[string]any{"host":"cdn03.ijj.kdns.fr"},
+      "realitySettings":map[string]any{
+        "serverName":"aws.amazon.com",
+        "publicKey":"7_B0g4hZQ9Kxw6TicXrAIvHxvek3vbfZQmUpko1RBls",
+        "shortId":"b926c80a0e3759","fingerprint":"chrome",
+      },
+    },
+  }
+  params:=map[string]string{
+    "type":"xhttp","security":"tls","encryption":"mlkem768x25519plus.native.0rtt.SAMPLE",
+    "sni":"cdn03.ijj.kdns.fr","flow":"xtls-rprx-vision",
+    "path":"/fe98239xhnwe7743xfdw",
+  }
+  extra:=buildXhttpExtra(x)
+  b,err:=json.Marshal(extra);if err!=nil {t.Fatal(err)}
+  params["extra"]=string(b)
+  shadowrocketXHTTPDownloadParams(x,params)
+  shadowrocketXHTTPDownloadRealityQueryParams(x,params)
+  const key="7_B0g4hZQ9Kxw6TicXrAIvHxvek3vbfZQmUpko1RBls"
+  if params["pbk"]!=key || params["sid"]!="b926c80a0e3759" {
+    t.Fatalf("Shadowrocket downlink REALITY credentials missing: %#v",params)
+  }
+  for k,want:=range map[string]string{
+    "security":"tls","encryption":"mlkem768x25519plus.native.0rtt.SAMPLE",
+    "flow":"xtls-rprx-vision","type":"xhttp","sni":"cdn03.ijj.kdns.fr",
+  } {
+    if params[k]!=want {t.Fatalf("modified standard Xray URI %s: got %q want %q",k,params[k],want)}
+  }
+  var sr map[string]any
+  if err:=json.Unmarshal([]byte(params["obfsParam"]),&sr);err!=nil {t.Fatal(err)}
+  nested,ok:=sr[""].(map[string]any)
+  if !ok {t.Fatalf("non-native Shadowrocket shape: %#v",sr)}
+  for k,want:=range map[string]string{
+    "downloadServerName":"aws.amazon.com","downloadTargetHost":"23.246.167.78",
+    "downloadTargetPort":"443","downloadHTTPHost":"cdn03.ijj.kdns.fr",
+    "xPaddingBytes":"100-1000",
+  } {
+    if nested[k]!=want {t.Fatalf("obfsParam %s got %v, want %q",k,nested[k],want)}
+  }
+  if _,ok:=nested["downloadPath"];ok {t.Fatalf("redundant non-native downloadPath: %#v",nested)}
+  if sr["Host"]!="cdn03.ijj.kdns.fr" {t.Fatalf("missing SR parent Host: %#v",sr)}
+  var canonical map[string]any
+  if err:=json.Unmarshal([]byte(params["extra"]),&canonical);err!=nil {t.Fatal(err)}
+  down,ok:=canonical["downloadSettings"].(map[string]any)
+  if !ok || down["security"]!="reality" || down["address"]!="23.246.167.78" {
+    t.Fatalf("standard Xray downlink damaged: %#v",canonical)
+  }
+  reality:=down["realitySettings"].(map[string]any)
+  if reality["publicKey"]!=key || reality["shortId"]!="b926c80a0e3759" {
+    t.Fatalf("standard Xray REALITY credentials damaged: %#v",reality)
+  }
+  dx:=down["xhttpSettings"].(map[string]any)
+  if dx["path"]!="/fe98239xhnwe7743xfdw" {
+    t.Fatalf("standard Xray downlink path missing: %#v",dx)
+  }
+}
+
+func TestXhttpDownloadShadowrocketKeyIsolation(t *testing.T) {
+ x:=map[string]any{"path":"/same","downloadSettings":map[string]any{
+   "address":"203.0.113.9","port":float64(10443),"security":"reality",
+   "realitySettings":map[string]any{"serverName":"www.example.com","publicKey":"DOWN_KEY","shortId":"DOWN_ID"},
+ }}
+ for _,tc:=range []struct{name string;params map[string]string;pbk,sid string}{
+  {"TLS upstream",map[string]string{"security":"tls"},"DOWN_KEY","DOWN_ID"},
+  {"REALITY upstream",map[string]string{"security":"reality","pbk":"UP_KEY","sid":"UP_ID"},"UP_KEY","UP_ID"},
+  {"plain upstream",map[string]string{"security":"none"},"",""},
+ } {
+   t.Run(tc.name,func(t *testing.T){
+    shadowrocketXHTTPDownloadRealityQueryParams(x,tc.params)
+    if tc.params["pbk"]!=tc.pbk || tc.params["sid"]!=tc.sid {
+     t.Fatalf("uplink security/query polluted: %#v",tc.params)
+    }
+   })
+ }
+ tls:=map[string]any{"path":"/same","downloadSettings":map[string]any{
+    "address":"cdn.example.org","port":float64(2083),"security":"tls",
+    "tlsSettings":map[string]any{"serverName":"cdn.example.org"},
+ }}
+ params:=map[string]string{"security":"tls","encryption":"none"}
+ shadowrocketXHTTPDownloadRealityQueryParams(tls,params)
+ shadowrocketXHTTPDownloadParams(tls,params)
+ if _,has:=params["pbk"];has {t.Fatal("TLS/TLS must not inject REALITY pbk")}
+ if _,has:=params["sid"];has {t.Fatal("TLS/TLS must not inject REALITY sid")}
+ var obfs map[string]any
+ if err:=json.Unmarshal([]byte(params["obfsParam"]),&obfs);err!=nil {t.Fatal(err)}
+ if _,has:=obfs[""].(map[string]any)["downloadPath"];has {t.Fatal("redundant path in TLS/TLS obfs")}
 }
