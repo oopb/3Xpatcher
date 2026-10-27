@@ -103,12 +103,16 @@ patch(p,
     }
   }
   function syncManagedRealityPublicKey(value: unknown) {
-    // Editing the visible client key keeps the generated gateway copy aligned.
-    // Operators setting a custom pair must also update its private key.
-    if (!getValues('streamSettings.xhttpSettings.downloadSettings.managedListener.enabled')) return;
+    // Explicitly commit the visible field before updating dependent managed
+    // fields; RHF controllers can otherwise re-render with the stale value.
+    const base = 'streamSettings.xhttpSettings.downloadSettings';
     const publicKey = typeof value === 'string' ? value.trim() : '';
-    setValue('streamSettings.xhttpSettings.downloadSettings.managedListener.realitySettings.publicKey',
-      publicKey, { shouldDirty: true });
+    setValue(base + '.realitySettings.publicKey', publicKey, { shouldDirty: true });
+    // A manually supplied public key must still correspond to the server private key.
+    if (getValues(base + '.managedListener.enabled')) {
+      setValue(base + '.managedListener.realitySettings.publicKey',
+        publicKey, { shouldDirty: true });
+    }
   }
   function syncManagedRealityShortId(value: unknown) {
     if (!getValues('streamSettings.xhttpSettings.downloadSettings.managedListener.enabled')) return;
