@@ -2,11 +2,12 @@ name: Validate XHTTP download split
 
 on:
   push:
-    branches: [feat/xhttp-download-settings, fix/xhttp-download-toggle, feat/xhttp-managed-reality-gateway]
+    branches: [feat/xhttp-download-settings, fix/xhttp-download-toggle, feat/xhttp-managed-reality-gateway, fix/xhttp-managed-listener-snapshot]
   pull_request:
     paths:
       - scripts/v26-xhttp-download-settings.py
       - scripts/v27-xhttp-managed-gateway.py
+      - scripts/v28-xhttp-managed-listener-fix.py
       - overlay/internal/sub/xhttp_download*.go
       - overlay/internal/web/service/xhttp_managed_gateway*.go
       - overlay/frontend/src/test/xhttp-download*.test.*

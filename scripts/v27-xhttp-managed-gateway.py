@@ -74,10 +74,12 @@ patch(p,
     setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.publicKey',
       publicKey, { shouldDirty: true });
   }
-  function enableManagedReality(enabled: boolean) {
+  async function enableManagedReality(enabled: boolean) {
     const base = 'streamSettings.xhttpSettings.downloadSettings';
-    setValue(`${base}.managedListener.enabled`, enabled, { shouldDirty: true });
-    if (!enabled) return;
+    if (!enabled) {
+      setValue(`${base}.managedListener.enabled`, false, { shouldDirty: true });
+      return;
+    }
     const existing = getValues(`${base}.managedListener`);
     setValue(`${base}.managedListener.listen`,
       existing?.listen || '0.0.0.0', { shouldDirty: true });
@@ -93,11 +95,20 @@ patch(p,
       setValue(`${base}.managedListener.realitySettings.serverNames`,
         [reality.serverName], { shouldDirty: true });
     }
+    const target = (getValues(`${base}.managedListener.realitySettings.target`) || '').trim();
+    if (!target || target === reality.serverName + ':' + Number(getValues(`${base}.port`))) {
+      setValue(`${base}.managedListener.realitySettings.target`, reality.serverName + ':443', { shouldDirty: true });
+    }
     const shorts = getValues(`${base}.managedListener.realitySettings.shortIds`) ?? [];
     if (!shorts.length) {
       setValue(`${base}.managedListener.realitySettings.shortIds`,
         [reality.shortId || ''], { shouldDirty: true });
     }
+    if (!getValues(`${base}.managedListener.realitySettings.privateKey`)) {
+      await genManagedRealityKeypair();
+      if (!getValues(`${base}.managedListener.realitySettings.privateKey`)) return;
+    }
+    setValue(`${base}.managedListener.enabled`, true, { shouldDirty: true });
   }""")
 anchor="""              <FormField
                 name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'xhttpSettings', 'host']}
@@ -113,7 +124,7 @@ append=anchor+"""              {downloadSecurity === 'reality' && (
                       aria-label="自动创建 REALITY 入口"
                       checked={autoReality}
                       disabled={!managedSecurityAllowed}
-                      onChange={enableManagedReality}
+                      onChange={(enabled) => void enableManagedReality(enabled)}
                     />
                   </div>
                   {autoReality && (
@@ -124,6 +135,8 @@ append=anchor+"""              {downloadSecurity === 'reality' && (
                         message="此模式将自动把原 TLS/XHTTP 监听改为 TLS/RAW 回落入口，并创建共享的内部 XHTTP 会话与独立 REALITY/RAW 端口。必须使用不同的公网端口（例如 9443），并在防火墙开放；仅在确知服务端无端口冲突时启用。TLS 证书沿用原入站证书。"
                         style={{ marginBottom: 12 }}
                       />
+                      <details>
+                        <summary style={{ cursor: 'pointer', marginBottom: 12 }}>高级设置（通常无需修改）</summary>
                       <FormField
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'listen']}
                         label="REALITY 监听 IP"
@@ -179,14 +192,21 @@ append=anchor+"""              {downloadSecurity === 'reality' && (
                         rules={{required:'必须生成 REALITY 公钥'}}
                       ><Input readOnly /></FormField>
                       <Button onClick={() => void genManagedRealityKeypair()}>
-                        生成 REALITY 密钥对
+                        重新生成 REALITY 密钥对（会同步更新客户端公钥）
                       </Button>
+                      </details>
                     </>
                   )}
                 </>
               )}
 """
 patch(p,anchor,append)
+# A managed listener is not client-only. Describe the real effect of the toggle.
+patch(p,
+'''message="仅用于客户端订阅/分享链接，不会写入 Xray 服务端 listener。上下行必须汇聚到同一个 XHTTP 入站与 Path；CDN 回源、TLS/REALITY 分流需事先配置。"''',
+'''message={autoReality
+                  ? '已启用服务端托管：保存后会生成独立 REALITY 端口，并让 TLS/REALITY 两条路径汇聚到同一 XHTTP 后端。'
+                  : '当前仅生成客户端的下行配置；若需自动启动 REALITY 下行监听，请开启下方服务端托管开关。'}''')
 
 # The new metadata is stored on the raw inbound exclusively. xhttpClientDownload
 # already constructs an allowlisted outbound, so the privateKey is never emitted.

@@ -122,7 +122,7 @@ func xhttpGatewayConfig(
   return []xray.InboundConfig{inner,front,realityFront},nil
 }
 
-func injectManagedXHTTPGateways(cfg *xray.Config, inbounds []*model.Inbound) error {
+func injectManagedXHTTPGateways(cfg *xray.Config, inbounds []*model.Inbound, downloadsByTag map[string]map[string]any) error {
   used:=map[int]string{}
   for _,entry:=range cfg.InboundConfigs {
     if entry.Port>0 {used[entry.Port]=entry.Tag}
@@ -138,9 +138,9 @@ func injectManagedXHTTPGateways(cfg *xray.Config, inbounds []*model.Inbound) err
       next=append(next,entry)
       continue
     }
-    stored:=xhttpMap([]byte(row.StreamSettings))
-    xhttp,_:=stored["xhttpSettings"].(map[string]any)
-    download,_:=xhttp["downloadSettings"].(map[string]any)
+    // XrayService strips client-only metadata from row.StreamSettings before
+    // invoking us. Always consume the snapshot captured before sanitization.
+    download:=downloadsByTag[entry.Tag]
     managed,_:=download["managedListener"].(map[string]any)
     if managed["enabled"]!=true {
       next=append(next,entry)

@@ -84,12 +84,25 @@ func TestXHTTPManagedGatewayExplicitOptIn(t *testing.T) {
  raw,_:=json.Marshal(stream)
  row:=&model.Inbound{Id:11,Tag:base.Tag,Enable:true,Protocol:model.VLESS,StreamSettings:string(raw)}
  cfg:=&xray.Config{InboundConfigs:[]xray.InboundConfig{base}}
- if err:=injectManagedXHTTPGateways(cfg,[]*model.Inbound{row});err!=nil {t.Fatal(err)}
+ if err:=injectManagedXHTTPGateways(cfg,[]*model.Inbound{row},map[string]map[string]any{base.Tag:mockManagedDown()});err!=nil {t.Fatal(err)}
  if len(cfg.InboundConfigs)!=3 {t.Fatalf("expected 3 generated endpoints, got %d",len(cfg.InboundConfigs))}
  // disabling metadata leaves original TLS/XHTTP endpoint untouched
  xhttp["downloadSettings"].(map[string]any)["managedListener"].(map[string]any)["enabled"]=false
  raw,_=json.Marshal(stream);row.StreamSettings=string(raw)
  cfg=&xray.Config{InboundConfigs:[]xray.InboundConfig{base}}
- if err:=injectManagedXHTTPGateways(cfg,[]*model.Inbound{row});err!=nil {t.Fatal(err)}
+ if err:=injectManagedXHTTPGateways(cfg,[]*model.Inbound{row},map[string]map[string]any{base.Tag:map[string]any{"managedListener":map[string]any{"enabled":false}}});err!=nil {t.Fatal(err)}
  if len(cfg.InboundConfigs)!=1 || cfg.InboundConfigs[0].Port!=443 {t.Fatal("disabled listener must not change original node")}
+}
+
+func TestXHTTPManagedGatewayPreservesMetadataAfterSanitization(t *testing.T) {
+    base := mockTLSXHTTP(t)
+    // GetXrayConfig rewrites row.StreamSettings without client-only settings;
+    // the generator must never try to recover downloadSettings from that row.
+    row := &model.Inbound{Id:11,Tag:base.Tag,Enable:true,Protocol:model.VLESS,StreamSettings:string(base.StreamSettings)}
+    snapshot := map[string]map[string]any{base.Tag:mockManagedDown()}
+    cfg := &xray.Config{InboundConfigs:[]xray.InboundConfig{base}}
+    if err:=injectManagedXHTTPGateways(cfg,[]*model.Inbound{row},snapshot);err!=nil {t.Fatal(err)}
+    if len(cfg.InboundConfigs)!=3 || cfg.InboundConfigs[2].Port!=9443 {
+        t.Fatalf("managed reality gateway silently absent after sanitization: %#v",cfg.InboundConfigs)
+    }
 }
