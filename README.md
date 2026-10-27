@@ -471,8 +471,8 @@ Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN
 
 - 解决 **CDN/TLS 上行 + REALITY 直连下行** 的 Host 分离导致的 404：未设置独立下行 HTTP Host 时，客户端导出自动继承上行的 XHTTP HTTP Host（例如 cdn.example.com），**不会**错误地默认为 REALITY SNI（例如 reality.example.com）；TLS SNI / REALITY SNI 仍独立。
 - 自动托管 REALITY 下行新增可编辑 `minClientVer`，默认 `1.8.2`；服务端验证 `x.y.z` 语法，已有旧配置自动回退默认值，避免 Mihomo REALITY 认证失败。
-- 分享链接除了标准 Xray `extra.downloadSettings` 外，新增 Shadowrocket 的 `obfsParam` JSON（`downloadTargetHost`, `downloadTargetPort`, `downloadServerName`, `downloadHTTPHost`, `downloadPath`）。面板二维码预览和后端订阅统一。
-- **限制**：这些 Shadowrocket 参数名由实际导出的内部节点结构与公开示例确认，但 Shadowrocket 是闭源客户端，尚无法确认它会从标准 URI `obfsParam` 载入全部字段；下行 REALITY 公钥和 Short ID 在 Shadowrocket 的 URL 导入映射仍无公开可验证依据。本次保留在 Xray `extra.downloadSettings.realitySettings`，**不宣称 iOS 端 REALITY 下行已实机成功**。不要把上行 TLS 改为 REALITY 来迎合 `pbk` 和 `sid`。
+- VLESS 原始订阅和面板二维码仅保留 Xray 标准 `extra.downloadSettings`，不添加 Shadowrocket 专用下行 JSON。下行 REALITY 公钥和 Short ID 只存在于 `extra.downloadSettings.realitySettings`，不得写入上行安全层的顶层 `pbk`/`sid`。
+- **客户端兼容性**：不声称 Shadowrocket 支持 TLS 上行 + REALITY 下行；需要支持独立 REALITY 下行安全层的客户端应使用 Xray 原生 JSON 或支持 XHTTP `downloadSettings` 的客户端。
 
 
 ## XHTTP REALITY 托管入口表单自动设置修复（0.17.5）
@@ -513,16 +513,8 @@ Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN
 - 覆盖新建、编辑（包括上下行端口变化、切换托管开关）、启用/停用和删除。普通非托管 XHTTP 仍走原生快速单入站操作。更新时保留正常用户统计和共享会话拓扑。
 - 测试覆盖：修改 REALITY 端口后新配置不再有旧端口，Xray 原生热更新规则会为 REALITY 端口变更触发完整重启，以及托管开启/关闭/删除状态过渡。
 
-## Shadowrocket XHTTP 下行导入参数修复（0.17.10）
+## 小火箭 XHTTP 私有分享链接兼容补丁撤销
 
-- **Xray/V2Ray 标准格式优先**：不修改 VLESS `UUID@地址:端口` 链接主体、顶层 `encryption=`、`type=xhttp`、TLS/REALITY 上行参数、Vision、`extra.downloadSettings` 和 Mihomo 输出。
-- 依据 Shadowrocket 原生导出的 XHTTP 链接，保留其 `obfsParam` 下行目标地址/端口/SNI/HTTP Host；TLS 上行 + REALITY 下行场景增加 Shadowrocket 读取的顶层 `pbk` 和 `sid`。上行 REALITY 时绝不覆盖现有上行 `pbk`/`sid`，TLS→TLS 不注入 REALITY 选项。
-- `obfsParam` 不再附加与主链接 `path` 重复、原生样本没有的 `downloadPath`；标准 `extra.downloadSettings.xhttpSettings.path` 仍原样导出。面板分享/二维码与订阅使用同样规则。
-- 回归测试检查 TLS→REALITY、TLS→TLS、REALITY 上行密钥隔离和 Xray 标准字段不回退。
+已撤销此前实验性 Shadowrocket 专用上下行分享链接字段生成（`obfsParam`、`obfs=xhttp`，以及下行 REALITY 公钥/Short ID 错写到顶层 `pbk`/`sid` 的映射）。原生 3x-ui 风格的 `vless://UUID@host:port?encryption=...&type=xhttp&host=...&extra=...` 分享链接保持不变。
 
-## Shadowrocket XHTTP Host 错误修复（0.17.11）
-
-- 修复独立下行 VLESS/XHTTP 节点中 JSON `obfsParam` 被 Shadowrocket 错当作 HTTP Host 的问题。对于确实存在下行 `obfsParam` 的节点，额外添加小火箭原生传输标记 `obfs=xhttp`，同时保留 Xray 的 `type=xhttp`、`host=<domain>` 以及完整的 `extra.downloadSettings`。
-- 不改变 VLESS UUID、顶层 `encryption=`、TLS/REALITY 上行参数、Vision、下行 REALITY 的 `pbk`/`sid` 或 Mihomo 输出；没有独立下行的普通 XHTTP 节点不添加 `obfs`。
-- 同时修复订阅链接和面板复制/二维码导出。新增 Go 与真实前端链接生成回归测试，验证 Host 始终是纯域名，JSON 只在 `obfsParam` 中。
-- 运行时连接行为仍需 Shadowrocket 真机导入验证；自动化测试不等同于小火箭解析器测试。
+此撤销**不影响** Xray `extra.downloadSettings`、Xray JSON 订阅、Mihomo `download-settings`、独立下行配置界面或托管 REALITY 监听功能。Shadowrocket 对独立下行的解析能力尚未通过真实客户端验证，不再添加未经确认的私有 URI 参数。
