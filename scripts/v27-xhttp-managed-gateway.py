@@ -109,6 +109,9 @@ patch(p,
       await genManagedRealityKeypair();
       if (!getValues(`${base}.managedListener.realitySettings.privateKey`)) return;
     }
+    if (!getValues(`${base}.managedListener.realitySettings.minClientVer`)) {
+      setValue(`${base}.managedListener.realitySettings.minClientVer`, '1.8.2', { shouldDirty: true });
+    }
     setValue(`${base}.managedListener.enabled`, true, { shouldDirty: true });
   }""")
 anchor="""              <FormField
@@ -182,6 +185,11 @@ append=anchor+"""              {downloadSecurity === 'reality' && (
                         setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.shortId',
                           shortId, { shouldDirty: true });
                       }}>生成 Short ID</Button>
+                      <FormField
+                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'minClientVer']}
+                        label="REALITY 最低客户端版本 (minClientVer)"
+                        rules={{ pattern: { value: /^[0-9]+\\.[0-9]+\\.[0-9]+$/, message: '版本格式应为 x.y.z，例如 1.8.2' } }}
+                      ><Input placeholder="1.8.2 (兼容 Mihomo)" /></FormField>
                       <FormField
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'privateKey']}
                         label="REALITY 私钥（仅服务端保存）"
