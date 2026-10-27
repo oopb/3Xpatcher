@@ -12,6 +12,7 @@ fi
 modified=(
   internal/database/model/model.go
   internal/web/service/inbound.go
+  internal/web/service/port_conflict.go
   internal/web/service/inbound_tuic.go
   internal/web/service/inbound_node.go
   internal/web/service/server.go
@@ -78,7 +79,12 @@ fi
 if [[ -f "$SRC/frontend/src/pages/inbounds/qr/QrCodeModal.tsx" ]]; then
   modified+=(frontend/src/pages/inbounds/qr/QrCodeModal.tsx)
 fi
+# Some pinned legacy 3x-ui versions predate transactional port_conflict.go.
+if [[ ! -f "$SRC/internal/web/service/port_conflict.go" ]]; then
+  modified=( "${modified[@]/internal\/web\/service\/port_conflict.go}" )
+fi
 for f in "${modified[@]}"; do
+  [[ -n "$f" ]] || continue
   [[ -f "$SRC/$f" ]] || { echo "Refusing to patch: missing upstream file $f" >&2; exit 1; }
 done
 
@@ -147,8 +153,11 @@ python3 "$ROOT/scripts/disable-sponsors.py" "$SRC"
 python3 "$ROOT/scripts/v26-xhttp-download-settings.py" "$SRC"
 python3 "$ROOT/scripts/v27-xhttp-managed-gateway.py" "$SRC"
 python3 "$ROOT/scripts/v28-xhttp-managed-listener-fix.py" "$SRC"
+python3 "$ROOT/scripts/v29-xhttp-port-conflict.py" "$SRC"
 
 gofmt -w "$SRC/internal/singbox"/*.go "$SRC/internal/mieru"/*.go "$SRC/internal/database/model"/*.go "$SRC/internal/web/controller/server.go" "$SRC/internal/web/controller/index.go" "$SRC/internal/web/controller/singbox_cert.go" "$SRC/internal/web/job/supplemental_traffic_job.go" "$SRC/internal/web/service/supplemental_online.go" "$SRC/internal/web/service/supplemental_tls.go" "$SRC/internal/web/service/inbound_node.go" "$SRC/internal/web/service/server.go" "$SRC/internal/web/service/inbound.go" "$SRC/internal/web/service/inbound_tuic.go" "$SRC/internal/web/service/client_crud.go" "$SRC/internal/web/service/client_inbound_apply.go" "$SRC/internal/web/service/inbound_clients.go" "$SRC/internal/web/service/xray.go" "$SRC/internal/web/web.go" "$SRC/internal/web/runtime/local.go" "$SRC/internal/sub/service.go" "$SRC/internal/sub/host_sub.go" "$SRC/internal/sub/json_service.go" "$SRC/internal/sub/clash_service.go" "$SRC/internal/sub/controller.go" "$SRC/internal/sub/singbox_links.go" "$SRC/internal/sub/singbox_links_test.go" "$SRC/internal/sub/singbox_clash.go" "$SRC/internal/sub/tuic_runtime.go" "$SRC/internal/sub/mieru_links.go" "$SRC/internal/sub/mieru_clash.go" "$SRC/internal/sub/xhttp_download.go" "$SRC/internal/web/service/xhttp_managed_gateway.go"
+
+if [[ -f "$SRC/internal/web/service/port_conflict.go" ]]; then gofmt -w "$SRC/internal/web/service/port_conflict.go"; fi
 
 echo "3Xpatcher V27 overlay applied."
 echo "Backup: $backup"
