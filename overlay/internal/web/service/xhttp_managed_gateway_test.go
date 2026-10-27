@@ -125,3 +125,72 @@ func TestXHTTPManagedGatewayConfigurableMinVersion(t *testing.T) {
     t.Fatalf("invalid version must be rejected: %v",err)
   }
 }
+
+
+func TestXHTTPManagedGatewayPortEditReplacesOldListener(t *testing.T) {
+    base:=mockTLSXHTTP(t)
+    oldDown:=mockManagedDown()
+    oldConfig:=&xray.Config{InboundConfigs:[]xray.InboundConfig{base}}
+    oldStream:=map[string]any{
+        "network":"xhttp","security":"tls",
+        "xhttpSettings":map[string]any{"downloadSettings":oldDown},
+    }
+    oldBytes,_:=json.Marshal(oldStream)
+    row:=&model.Inbound{Id:11,Tag:base.Tag,Enable:true,Protocol:model.VLESS,StreamSettings:string(oldBytes)}
+    if err:=injectManagedXHTTPGateways(oldConfig,[]*model.Inbound{row},
+        map[string]map[string]any{base.Tag:oldDown});err!=nil {t.Fatal(err)}
+    if len(oldConfig.InboundConfigs)!=3 || oldConfig.InboundConfigs[2].Port!=9443 {
+        t.Fatalf("old download port not generated: %#v",oldConfig.InboundConfigs)
+    }
+
+    newDown:=mockManagedDown()
+    newDown["port"]=float64(10443)
+    newConfig:=&xray.Config{InboundConfigs:[]xray.InboundConfig{base}}
+    if err:=injectManagedXHTTPGateways(newConfig,[]*model.Inbound{row},
+        map[string]map[string]any{base.Tag:newDown});err!=nil {t.Fatal(err)}
+    if len(newConfig.InboundConfigs)!=3 || newConfig.InboundConfigs[2].Port!=10443 {
+        t.Fatalf("new download port not generated: %#v",newConfig.InboundConfigs)
+    }
+    for _,entry:=range newConfig.InboundConfigs {
+        if entry.Port==9443 {t.Fatalf("old REALITY port retained in desired config: %#v",entry)}
+    }
+    // Upstream diff refuses REALITY replacement by hot Del+Add; native
+    // RestartXray therefore stops the old process (releasing :9443) before
+    // installing the new desired config on :10443.
+    if _,ok:=xray.ComputeHotDiff(oldConfig,newConfig);ok {
+        t.Fatal("REALITY port edit must trigger the native full process restart")
+    }
+}
+
+func TestXHTTPManagedGatewayLifecycleRequiresReconciliation(t *testing.T) {
+    base:=mockTLSXHTTP(t)
+    managed:=map[string]any{
+        "network":"xhttp","security":"tls",
+        "xhttpSettings":map[string]any{"downloadSettings":mockManagedDown()},
+    }
+    data,_:=json.Marshal(managed)
+    active:=&model.Inbound{
+        Id:11,Protocol:model.VLESS,Tag:base.Tag,Enable:true,
+        StreamSettings:string(data),
+    }
+    if !managedXHTTPNeedsReconcile(nil,active) {t.Fatal("new managed entry must reconcile")}
+    edited:=*active
+    down:=managed["xhttpSettings"].(map[string]any)["downloadSettings"].(map[string]any)
+    down["port"]=float64(10443)
+    editedBytes,_:=json.Marshal(managed)
+    edited.StreamSettings=string(editedBytes)
+    if !managedXHTTPNeedsReconcile(active,&edited) {t.Fatal("port edit must reconcile")}
+
+    down["managedListener"].(map[string]any)["enabled"]=false
+    offBytes,_:=json.Marshal(managed)
+    disabled:=*active
+    disabled.StreamSettings=string(offBytes)
+    if !managedXHTTPNeedsReconcile(active,&disabled) {
+        t.Fatal("turning off management must release synthetic TLS/REALITY listeners")
+    }
+    if !managedXHTTPNeedsReconcile(active,nil) {t.Fatal("delete must release synthetic listeners")}
+    if !managedXHTTPNeedsReconcile(nil,active) {t.Fatal("re-enable must restore synthetic listeners")}
+    if managedXHTTPNeedsReconcile(&disabled,&disabled) {
+        t.Fatal("plain XHTTP inbound must retain native single-handler update path")
+    }
+}
