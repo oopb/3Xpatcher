@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.17.3-integrated-alpha`
+当前版本：`0.17.4-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -465,3 +465,11 @@ Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN
 **Shadowrocket 仍是独立问题**：已有 VLESS 分享链接内 `extra.downloadSettings` 存在，但其导出 JSON 未出现独立下行内容；缺乏官方确认的 Shadowrocket 分享链接扩展格式，故不臆造转换或声称小火箭已修复。
 
 资料：[MetaCubeX/Mihomo #3132](https://github.com/MetaCubeX/mihomo/issues/3132) · [Xray-core #6477](https://github.com/XTLS/Xray-core/issues/6477) · [Mihomo TLS 配置](https://wiki.metacubex.one/config/proxies/tls/)。
+
+
+## XHTTP 上下行分离 Host 与 Shadowrocket 导入（0.17.4）
+
+- 解决 **CDN/TLS 上行 + REALITY 直连下行** 的 Host 分离导致的 404：未设置独立下行 HTTP Host 时，客户端导出自动继承上行的 XHTTP HTTP Host（例如 cdn.example.com），**不会**错误地默认为 REALITY SNI（例如 reality.example.com）；TLS SNI / REALITY SNI 仍独立。
+- 自动托管 REALITY 下行新增可编辑 `minClientVer`，默认 `1.8.2`；服务端验证 `x.y.z` 语法，已有旧配置自动回退默认值，避免 Mihomo REALITY 认证失败。
+- 分享链接除了标准 Xray `extra.downloadSettings` 外，新增 Shadowrocket 的 `obfsParam` JSON（`downloadTargetHost`, `downloadTargetPort`, `downloadServerName`, `downloadHTTPHost`, `downloadPath`）。面板二维码预览和后端订阅统一。
+- **限制**：这些 Shadowrocket 参数名由实际导出的内部节点结构与公开示例确认，但 Shadowrocket 是闭源客户端，尚无法确认它会从标准 URI `obfsParam` 载入全部字段；下行 REALITY 公钥和 Short ID 在 Shadowrocket 的 URL 导入映射仍无公开可验证依据。本次保留在 Xray `extra.downloadSettings.realitySettings`，**不宣称 iOS 端 REALITY 下行已实机成功**。不要把上行 TLS 改为 REALITY 来迎合 `pbk` 和 `sid`。
