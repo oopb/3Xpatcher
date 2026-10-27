@@ -12,7 +12,6 @@ fi
 modified=(
   internal/database/model/model.go
   internal/web/service/inbound.go
-  internal/web/service/port_conflict.go
   internal/web/service/inbound_tuic.go
   internal/web/service/inbound_node.go
   internal/web/service/server.go
@@ -79,9 +78,9 @@ fi
 if [[ -f "$SRC/frontend/src/pages/inbounds/qr/QrCodeModal.tsx" ]]; then
   modified+=(frontend/src/pages/inbounds/qr/QrCodeModal.tsx)
 fi
-# Some pinned legacy 3x-ui versions predate transactional port_conflict.go.
-if [[ ! -f "$SRC/internal/web/service/port_conflict.go" ]]; then
-  modified=( "${modified[@]/internal\/web\/service\/port_conflict.go}" )
+# Preserve transactional conflict checker only where upstream supplies it.
+if [[ -f "$SRC/internal/web/service/port_conflict.go" ]]; then
+  modified+=(internal/web/service/port_conflict.go)
 fi
 for f in "${modified[@]}"; do
   [[ -n "$f" ]] || continue
