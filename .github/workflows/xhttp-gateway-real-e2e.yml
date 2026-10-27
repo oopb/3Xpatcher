@@ -1,0 +1,39 @@
+name: XHTTP managed gateway real network E2E
+
+on:
+  push:
+    branches: [fix/xhttp-mihomo-downlink-host]
+  pull_request:
+    paths:
+      - 'tests/xhttp_gateway_real_e2e.sh'
+      - 'overlay/internal/sub/xhttp_download.go'
+      - '.github/workflows/xhttp-gateway-real-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tls-raw-fallback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare upstream build environment
+        run: |
+          mkdir source
+          curl -fsSL --retry 5 --retry-all-errors \
+            "https://codeload.github.com/MHSanaei/3x-ui/tar.gz/$(cat UPSTREAM_COMPAT)" -o /tmp/source.tar.gz
+          tar -xf /tmp/source.tar.gz -C source --strip-components=1
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: source/go.mod
+          cache: true
+          cache-dependency-path: source/go.sum
+      - name: Build pinned official Xray-core executable
+        working-directory: source
+        run: go build -o /tmp/xray-e2e github.com/xtls/xray-core/main
+      - name: Perform real Xray-core TLS gateway and XHTTP session test
+        env:
+          XRAY_BIN: /tmp/xray-e2e
+        run: bash tests/xhttp_gateway_real_e2e.sh
