@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.17.6-integrated-alpha`
+当前版本：`0.17.7-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -490,3 +490,11 @@ Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN
 - 托管入口监听 IP 默认 `0.0.0.0`，`minClientVer` 默认 `1.8.2`；密钥对通过 3x-ui 原生接口自动生成，Short ID 自动产生，已保存的有效值保留。托管开启时自动同步客户端 Public Key、Short ID 和服务端允许的 SNI；无需在高级设置中重复输入。
 - 未开启托管时仍支持连接外部 REALITY 下行服务器，用户可以在外层自行填写 Public Key 和 Short ID。所有模式均保留手动指定下行地址、端口和 uTLS 的能力。
 - 该改动只精简表单展示，不改变已经生效的共享 XHTTP 会话、TLS 上行和 REALITY 下行的后端拓扑。
+
+## XHTTP REALITY 可见参数与同步编辑（0.17.7）
+
+- 保留 0.17.6 的外层原生 REALITY 目标扫描器与简洁的托管监听开关，但纠正“自动生成即隐藏字段”的问题。
+- 下行 REALITY 客户端参数始终展示并可编辑：**SNI、Public Key、Short ID、uTLS、下行地址与端口、HTTP Host**；上行的 XHTTP Path/mode 保持原生表单配置。
+- 启用「REALITY 服务端自动监听」后，在外层直接展开并可编辑全部托管参数：**监听 IP、远端 Target、允许的 SNI 列表（serverNames）、允许的 Short ID 列表（shortIds）、Private Key、服务端 Public Key、minClientVer**。不再引入“高级设置”。
+- 启用托管时若缺少密钥对，通过 3x-ui 原生接口生成；显示「重新生成 REALITY 密钥对」与「重新生成 Short ID」按钮。客户端/服务端公钥、Short ID 与允许列表随用户修改同步；允许手动输入已有密钥对，但手动修改公钥或私钥后必须确保两者匹配。
+- 保存的有效参数继续保留；不会预填下行端口、不会覆盖扫描得到的 REALITY Target 为固定 `SNI:443`。Private Key 只存储在服务端配置元数据，不进入任何客户端订阅或分享链接。
