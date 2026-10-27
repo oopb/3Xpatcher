@@ -168,6 +168,14 @@ extra='''      {protocol === 'vless' && (
               <FormField
                 name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'security']}
                 label="下行安全层"
+                onAfterChange={(value) => {
+                  // A TLS download uses the existing upstream TLS listener.
+                  // Any previously managed REALITY sidecar must be disabled.
+                  if (value === 'tls') {
+                    setValue('streamSettings.xhttpSettings.downloadSettings.managedListener.enabled',
+                      false, { shouldDirty: true });
+                  }
+                }}
               >
                 <Select
                   options={[{value:'tls',label:'TLS (支持 CDN)'},{value:'reality',label:'REALITY (源站直连)'}]}
@@ -175,6 +183,12 @@ extra='''      {protocol === 'vless' && (
               </FormField>
               {downloadSecurity === 'reality' ? (
                 <>
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="兼容性：Mihomo 官方不支持 Xray-core v26.7.11+ 的 REALITY 变更。Clash Verge 请优先选择 TLS 直连下行（源站 IP + 原 TLS 端口与证书 SNI），不需要额外 REALITY 入口；Xray 客户端可使用 REALITY 分离。"
+                    style={{ marginBottom: 12 }}
+                  />
                   <FormField
                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'serverName']}
                     label="REALITY SNI"
