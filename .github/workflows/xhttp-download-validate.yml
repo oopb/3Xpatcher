@@ -12,6 +12,7 @@ on:
       - scripts/v30-xhttp-security-context.py
       - scripts/v31-xhttp-managed-lifecycle.py
       - scripts/v32-shadowrocket-xhttp-download.py
+      - scripts/v33-shadowrocket-xhttp-host.py
       - overlay/internal/web/service/xhttp_managed_port_conflict_test.go
       - overlay/internal/sub/xhttp_download*.go
       - overlay/internal/web/service/xhttp_managed_gateway*.go
@@ -38,13 +39,14 @@ jobs:
           tar -xzf /tmp/upstream.tar.gz -C source --strip-components=1
       - name: Apply overlay and XHTTP split patch
         run: |
-          python3 -m py_compile scripts/v26-xhttp-download-settings.py scripts/v29-xhttp-port-conflict.py scripts/v30-xhttp-security-context.py scripts/v31-xhttp-managed-lifecycle.py scripts/v32-shadowrocket-xhttp-download.py
+          python3 -m py_compile scripts/v26-xhttp-download-settings.py scripts/v29-xhttp-port-conflict.py scripts/v30-xhttp-security-context.py scripts/v31-xhttp-managed-lifecycle.py scripts/v32-shadowrocket-xhttp-download.py scripts/v33-shadowrocket-xhttp-host.py
           ./scripts/apply-overlay.sh "$GITHUB_WORKSPACE/source"
           cp overlay/internal/sub/xhttp_download_test.go source/internal/sub/xhttp_download_test.go
           cp overlay/internal/web/service/xhttp_managed_gateway_test.go source/internal/web/service/xhttp_managed_gateway_test.go
           cp overlay/internal/web/service/xhttp_managed_port_conflict_test.go source/internal/web/service/xhttp_managed_port_conflict_test.go
           cp overlay/frontend/src/test/xhttp-download-toggle.test.tsx source/frontend/src/test/xhttp-download-toggle.test.tsx
           cp overlay/frontend/src/test/xhttp-download-wire.test.ts source/frontend/src/test/xhttp-download-wire.test.ts
+          cp overlay/frontend/src/test/xhttp-download-share-link.test.ts source/frontend/src/test/xhttp-download-share-link.test.ts
           grep -q "downloadSettings" source/frontend/src/pages/inbounds/form/transport/xhttp.tsx
           grep -q "xhttpClientDownload" source/internal/sub/clash_service.go
           grep -q 'managedXHTTPNeedsReconcile(&running, oldInbound)' source/internal/web/service/inbound.go
@@ -52,6 +54,8 @@ jobs:
           grep -q 'managedXHTTPNeedsReconcile(nil, inbound)' source/internal/web/service/inbound.go
           grep -q 'shadowrocketXHTTPDownloadRealityQueryParams(xhttp, params)' source/internal/sub/service.go
           grep -q "params.set('pbk', download.realitySettings.publicKey)" source/frontend/src/lib/xray/inbound-link.ts
+          grep -q 'shadowrocketXHTTPMarkNativeTransport(params)' source/internal/sub/service.go
+          grep -q "params.set('obfs', 'xhttp')" source/frontend/src/lib/xray/inbound-link.ts
       - uses: actions/setup-go@v7
         with:
           go-version-file: source/go.mod
@@ -72,5 +76,5 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm run typecheck
-          npm run test -- src/test/xhttp-download-toggle.test.tsx src/test/xhttp-download-wire.test.ts
+          npm run test -- src/test/xhttp-download-toggle.test.tsx src/test/xhttp-download-wire.test.ts src/test/xhttp-download-share-link.test.ts
           npm run build
