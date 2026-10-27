@@ -171,9 +171,9 @@ func shadowrocketXHTTPDownloadParams(xhttp map[string]any, params map[string]str
 		"downloadTargetHost": down["address"],
 		"downloadTargetPort": fmt.Sprint(down["port"]),
 	}
-	if path, _ := settings["path"].(string); path != "" {
-		nested["downloadPath"] = path
-	}
+// The two XHTTP legs deliberately share the top-level URI path. Native
+	// Shadowrocket exports do not add downloadPath in obfsParam; keeping a
+	// duplicate here can cause the app to choose the wrong path parser.
 	if host, _ := settings["host"].(string); host != "" {
 		nested["downloadHTTPHost"] = host
 	}
@@ -192,4 +192,35 @@ func shadowrocketXHTTPDownloadParams(xhttp map[string]any, params map[string]str
 	obj := map[string]any{"": nested}
 	if primaryHost != "" { obj["Host"] = primaryHost }
 	if raw, err := json.Marshal(obj); err == nil { params["obfsParam"] = string(raw) }
+}
+
+// shadowrocketXHTTPDownloadRealityQueryParams supplies the two fields a
+// *native* Shadowrocket export carries at URI query level (pbk/sid) when a
+// TLS uplink has a separate REALITY downlink. The canonical Xray
+// extra.downloadSettings is retained unchanged. In particular, never
+// overwrite pbk/sid for an upstream that itself uses REALITY, because
+// those keys belong to the uplink in Xray/V2Ray's standard URI syntax.
+//
+// Call this only for VLESS after the upstream security options are emitted.
+func shadowrocketXHTTPDownloadRealityQueryParams(xhttp map[string]any, params map[string]string) {
+	if params == nil || params["security"] != "tls" {
+		return
+	}
+	down := xhttpClientDownload(xhttp)
+	if down == nil || down["security"] != "reality" {
+		return
+	}
+	real, _ := down["realitySettings"].(map[string]any)
+	key, _ := real["publicKey"].(string)
+	if key == "" {
+		return
+	}
+	if _, exists := params["pbk"]; !exists {
+		params["pbk"] = key
+	}
+	if short, _ := real["shortId"].(string); short != "" {
+		if _, exists := params["sid"]; !exists {
+			params["sid"] = short
+		}
+	}
 }
