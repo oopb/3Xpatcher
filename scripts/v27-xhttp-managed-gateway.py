@@ -54,7 +54,7 @@ patch(p,
 "import { Alert, AutoComplete, Button, Divider, Form, Input, InputNumber, Select, Space, Switch, message } from 'antd';")
 patch(p,
 "import { UTLS_FINGERPRINT } from '@/schemas/primitives';",
-"import { UTLS_FINGERPRINT } from '@/schemas/primitives';\nimport { HttpUtil, RandomUtil } from '@/utils';\nimport { useState } from 'react';\nimport { SearchOutlined } from '@ant-design/icons';\nimport type { RealityScanResult } from '@/generated/types';\nimport { validateRealityTarget } from '@/lib/xray/stream-wire-normalize';\nimport RealityTargetScannerModal from '../security/RealityTargetScannerModal';")
+"import { UTLS_FINGERPRINT } from '@/schemas/primitives';\nimport { HttpUtil, RandomUtil } from '@/utils';\nimport { useEffect, useState } from 'react';\nimport { SearchOutlined } from '@ant-design/icons';\nimport type { RealityScanResult } from '@/generated/types';\nimport { validateRealityTarget } from '@/lib/xray/stream-wire-normalize';\nimport RealityTargetScannerModal from '../security/RealityTargetScannerModal';")
 patch(p,
 "  const protocol = useWatch({ control, name: 'protocol' });",
 """  const protocol = useWatch({ control, name: 'protocol' });
@@ -98,13 +98,61 @@ patch(p,
       setValue(base + '.managedListener.realitySettings.serverNames', [], { shouldDirty: true });
     } else if (!Array.isArray(names) || !names.includes(sni)) {
       // A manual SNI edit must not leave a disabled client/server SNI pair.
-      setValue(base + '.managedListener.realitySettings.serverNames', [sni], { shouldDirty: true });
+      setValue(base + '.managedListener.realitySettings.serverNames',
+        Array.isArray(names) ? [...names, sni] : [sni], { shouldDirty: true });
+    }
+  }
+  function syncManagedServerPublicKey(value: unknown) {
+    const publicKey = typeof value === 'string' ? value.trim() : '';
+    setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.publicKey',
+      publicKey, { shouldDirty: true });
+  }
+  function syncManagedServerNames(value: unknown) {
+    const names = Array.isArray(value) ? value.filter((name): name is string =>
+      typeof name === 'string' && name.trim() !== '') : [];
+    const path = 'streamSettings.xhttpSettings.downloadSettings.realitySettings.serverName';
+    const current = getValues(path);
+    if (names.length && !names.includes(current)) {
+      setValue(path, names[0], { shouldDirty: true });
+    }
+  }
+  function syncManagedServerShortIds(value: unknown) {
+    const shorts = Array.isArray(value) ? value.filter((id): id is string =>
+      typeof id === 'string') : [];
+    const path = 'streamSettings.xhttpSettings.downloadSettings.realitySettings.shortId';
+    const current = getValues(path);
+    if (shorts.length && !shorts.includes(current)) {
+      setValue(path, shorts[0], { shouldDirty: true });
     }
   }
   const autoReality = !!useWatch({
     control,
     name: 'streamSettings.xhttpSettings.downloadSettings.managedListener.enabled',
   });
+  const clientDownloadPublicKey = useWatch({
+    control, name: 'streamSettings.xhttpSettings.downloadSettings.realitySettings.publicKey',
+  }) as string | undefined;
+  const clientDownloadShortId = useWatch({
+    control, name: 'streamSettings.xhttpSettings.downloadSettings.realitySettings.shortId',
+  }) as string | undefined;
+  // Mirror visible client fields after React Hook Form commits them.
+  // Avoid setting siblings during the same input onChange callback: doing so
+  // can make controlled Ant Design Inputs visually change without persisting.
+  useEffect(() => {
+    if (!autoReality || typeof clientDownloadPublicKey !== 'string') return;
+    const path = 'streamSettings.xhttpSettings.downloadSettings.managedListener.realitySettings.publicKey';
+    if (getValues(path) !== clientDownloadPublicKey) {
+      setValue(path, clientDownloadPublicKey, { shouldDirty: true });
+    }
+  }, [autoReality, clientDownloadPublicKey, getValues, setValue]);
+  useEffect(() => {
+    if (!autoReality || !clientDownloadShortId) return;
+    const path = 'streamSettings.xhttpSettings.downloadSettings.managedListener.realitySettings.shortIds';
+    const list = getValues(path);
+    if (!Array.isArray(list) || !list.includes(clientDownloadShortId)) {
+      setValue(path, [...(Array.isArray(list) ? list : []), clientDownloadShortId], { shouldDirty: true });
+    }
+  }, [autoReality, clientDownloadShortId, getValues, setValue]);
   const uplinkSecurity = useWatch({ control, name: 'streamSettings.security' });
   const managedSecurityAllowed = protocol === 'vless' && uplinkSecurity === 'tls';
   async function genManagedRealityKeypair() {
@@ -218,20 +266,32 @@ patch(p,
                      scanRealityCandidates={scanManagedRealityCandidates}
                      onPick={applyManagedRealityScanResult}
                    />""")
-# Hide automatically managed key material, but retain editable fields for
-# client-only download to an independently configured REALITY server.
+# Client fields must always remain visible even with a generated REALITY gateway.
+# Manual edits are mirrored into the managed server allow-lists and public key.
 patch(p,
 """                  <FormField
-                    name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'publicKey']}""",
-"""                   {!autoReality && (<>
-                   <FormField
-                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'publicKey']}""")
+                    name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'publicKey']}
+                    label="REALITY Public Key"
+                    rules={{ required: 'REALITY 需要公钥' }}
+                  ><Input /></FormField>""",
+"""                  <FormField
+                    name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'publicKey']}
+                    label="REALITY Public Key"
+                    rules={{ required: 'REALITY 需要公钥' }}
+                  ><Input placeholder="自动生成，也可手动输入对应公钥" /></FormField>""")
 patch(p,
 """                  <FormField
-                    name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'fingerprint']}""",
-"""                   </>)}
-                   <FormField
-                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'fingerprint']}""")
+                    name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'shortId']}
+                    label="REALITY Short ID"
+                  ><Input /></FormField>""",
+"""                  <FormField
+                    name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'shortId']}
+                    label="REALITY Short ID"
+                    rules={{ validate: (value) =>
+                      /^(?:[a-fA-F0-9]{2}){0,8}$/.test(String(value ?? ''))
+                        ? true : 'Short ID 只能使用偶数位十六进制字符（最多 16 位）' }}
+                  ><Input placeholder="自动生成，也可手动输入十六进制 Short ID" /></FormField>""")
+
 anchor="""              <FormField
                 name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'xhttpSettings', 'host']}
                 label="下行 HTTP Host（可留空）"
@@ -253,9 +313,13 @@ append=anchor.replace('留空时按 SNI 自动填充，REALITY 下行可留空',
                       <Alert
                         type="info"
                         showIcon
-                        message="自动生成监听、密钥、Short ID 和 SNI 列表。下行端口请在上方填写；Target 可由 SNI 旁的原生扫描器选取。"
+                        message="以下为实际生效的托管监听参数，均可查看并修改。自动生成密钥会同时更新服务端公钥和客户端公钥；手动填写时请确保公私钥配对。"
                         style={{ marginBottom: 12 }}
                       />
+                      <FormField
+                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'listen']}
+                        label="REALITY 监听 IP"
+                      ><Input placeholder="0.0.0.0" /></FormField>
                       <FormField
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'target']}
                         label="REALITY Target（远端伪装目标）"
@@ -263,7 +327,51 @@ append=anchor.replace('留空时按 SNI 自动填充，REALITY 下行可留空',
                           required: '请先选取或填写 REALITY Target',
                           validate: (value) => validateRealityTarget(typeof value === 'string' ? value : '') ?? true,
                         }}
-                      ><Input placeholder="通过 SNI 旁的选取目标自动填充，或手动填写 host:port" /></FormField>
+                      ><Input placeholder="SNI 旁的选取目标可自动填充，亦可输入 host:port" /></FormField>
+                      <FormField
+                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'serverNames']}
+                        label="REALITY serverNames（允许的 SNI）"
+                        rules={{ validate: (value) =>
+                          Array.isArray(value) && value.length > 0 ? true : '至少需要一个 REALITY SNI' }}
+                        onAfterChange={syncManagedServerNames}
+                      ><Select mode="tags" tokenSeparators={[',']} placeholder="允许的 SNI 列表" /></FormField>
+                      <FormField
+                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'shortIds']}
+                        label="REALITY shortIds（允许的 Short ID）"
+                        rules={{ validate: (value) =>
+                          Array.isArray(value) && value.length > 0 &&
+                          value.every((id: unknown) => typeof id === 'string' &&
+                            /^(?:[a-fA-F0-9]{2}){0,8}$/.test(id))
+                            ? true : 'Short ID 为偶数位十六进制，最多 16 位' }}
+                        onAfterChange={syncManagedServerShortIds}
+                      ><Select mode="tags" tokenSeparators={[',']} placeholder="允许的 Short ID 列表" /></FormField>
+                      <Button style={{ marginBottom: 12 }} onClick={() => {
+                        const shortId = RandomUtil.randomShortIds().split(',').map((id) => id.trim()).find(Boolean) || '';
+                        if (!shortId) return;
+                        setValue('streamSettings.xhttpSettings.downloadSettings.realitySettings.shortId',
+                          shortId, { shouldDirty: true });
+                        setValue('streamSettings.xhttpSettings.downloadSettings.managedListener.realitySettings.shortIds',
+                          [shortId], { shouldDirty: true });
+                      }}>重新生成 Short ID（同步客户端）</Button>
+                      <FormField
+                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'privateKey']}
+                        label="REALITY Private Key（私钥，仅服务端）"
+                        rules={{ required: 'REALITY 私钥不能为空' }}
+                      ><Input.Password autoComplete="off" placeholder="自动生成，也可输入与公钥匹配的私钥" /></FormField>
+                      <FormField
+                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'publicKey']}
+                        label="REALITY 服务端 Public Key"
+                        rules={{ required: 'REALITY 服务端公钥不能为空' }}
+                        onAfterChange={syncManagedServerPublicKey}
+                      ><Input placeholder="自动生成，与客户端公钥保持一致" /></FormField>
+                      <Button style={{ marginBottom: 12 }} onClick={() => void genManagedRealityKeypair()}>
+                        重新生成 REALITY 密钥对（同步公钥）
+                      </Button>
+                      <FormField
+                        name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'minClientVer']}
+                        label="REALITY 最低客户端版本 (minClientVer)"
+                        rules={{ pattern: { value: /^[0-9]+\.[0-9]+\.[0-9]+$/, message: '版本格式应为 x.y.z，例如 1.8.2' } }}
+                      ><Input placeholder="1.8.2" /></FormField>
                     </>
                   )}
                 </>
