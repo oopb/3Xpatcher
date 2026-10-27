@@ -55,9 +55,11 @@ SRV_PID=$!
 "$XRAY_BIN" run -c "$dir/client.json" >"$dir/client.log" 2>&1 &
 CLI_PID=$!
 sleep 3
-if ! curl -fsS --max-time 20 --retry 2 --retry-delay 1 \
+# Xray 26.x deliberately blocks loopback targets through Freedom to prevent
+# SSRF, so test with an external HTTPS destination instead of 127.0.0.1:18080.
+if ! curl -fsS --max-time 15 --retry 1 --retry-delay 1 \
   --socks5-hostname 127.0.0.1:11080 \
-  http://127.0.0.1:18080/ | grep -q 'XHTTP_GATEWAY_REAL_E2E_OK'; then
+  https://example.com/ | grep -iq 'example'; then
   echo "::error::TLS/RAW gateway to XHTTP shared backend FAILED"
   echo "======= server log ======="
   tail -100 "$dir/server.log"
