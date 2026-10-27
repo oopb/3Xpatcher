@@ -104,7 +104,9 @@ patch(ui,
       ? '' : configuredAddress;
     setValue(base, {
       address,
-      port: Number(getValues('port')) || 443,
+      // A distinct download endpoint has no safe assumed port.
+      // Leave it blank until the administrator explicitly chooses it.
+      port: undefined,
       security: primarySecurity === 'reality' ? 'reality' : 'tls',
       network: 'xhttp',
       xhttpSettings: { host: getValues('streamSettings.xhttpSettings.host') || '' },
@@ -113,7 +115,8 @@ patch(ui,
         alpn: primaryTls.alpn?.length ? primaryTls.alpn : ['h2'],
       },
       realitySettings: {
-        serverName,
+        // TLS uplink SNI is not a valid default for a distinct REALITY peer.
+        serverName: primarySecurity === 'reality' ? serverName : '',
         fingerprint: primaryReality.settings?.fingerprint || 'chrome',
         publicKey: primaryReality.settings?.publicKey || '',
         shortId: primaryReality.shortIds?.[0] || '',
@@ -161,7 +164,7 @@ extra='''      {protocol === 'vless' && (
               <FormField
                 name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'port']}
                 label="下行端口"
-                rules={{ min: { value: 1, message: '端口必须大于 0' } }}
+                rules={{ required: '请选择独立下行端口', min: { value: 1, message: '端口必须大于 0' } }}
               >
                 <InputNumber min={1} max={65535} style={{ width: '100%' }} />
               </FormField>
@@ -186,7 +189,7 @@ extra='''      {protocol === 'vless' && (
                   <Alert
                     type="warning"
                     showIcon
-                    message="REALITY 直连下行：若服务端使用 Xray 26.7.28，开启下方自动托管后会为 REALITY 入站设置 minClientVer=1.8.2，以兼容 Mihomo/Clash Verge 的 REALITY 握手。已通过 Xray 26.7.28 + Mihomo 1.19.33 + ML-KEM/Vision 联网测试。该设置仅作用于自动生成的下行入口。"
+                    message="REALITY 下行的服务器地址与端口需要单独填写，不能从 CDN/TLS 上行推断。REALITY 最低客户端版本在下方托管监听的高级设置中独立配置（默认兼容 Mihomo 1.8.2）。"
                     style={{ marginBottom: 12 }}
                   />
                   <FormField
