@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.17.5-integrated-alpha`
+当前版本：`0.17.6-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -482,3 +482,11 @@ Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN
 - **复用官方 REALITY 目标扫描 UI**：托管高级设置内「选择 REALITY 伪装目标 / 自动填充 SNI」调用 3x-ui 自带的 `RealityTargetScannerModal` 和 `scanRealityTargets` API，选取的 Target 保留其自身端口，并同步候选 SNI 至服务端和客户端。
 - **避免过度自动覆盖**：不从 CDN shareAddr 填充直连下行地址，不把原 TLS SNI 或旧公钥带入全新的 REALITY 下行配置；下行 HTTP Host 留空时动态继承上行 XHTTP Host，原先保存的端口、Target、SNI、Short ID 和可编辑的 `minClientVer` 尽量保留。密钥生成失败提供明确提示，已有密钥不完整/冲突时要求核对，不会偷偷替换密钥对。
 - 已保存的有效托管配置不会因为本次更新而被自动重置。新建时需要自行填写端口、地址及 Target 后保存。
+
+## XHTTP REALITY 极简配置（0.17.6）
+
+- 「启用独立下行连接」的 **REALITY SNI** 旁直接使用 3x-ui v3.11.0 原生 `RealityTargetScannerModal`，通过官方 `scanRealityTargets` 扫描选择，自动同步选中的 Target、候选 SNI 和客户端 SNI；切换伪装目标不保留旧目标的 SNI。
+- 「REALITY 服务端自动监听」仅保留一个开关，不再显示独立高级设置区；仅启用后显示必须明确选择的远端 REALITY Target，未扫描时允许手动填写，但必须通过表单校验，**不会猜测 Target:443**。
+- 托管入口监听 IP 默认 `0.0.0.0`，`minClientVer` 默认 `1.8.2`；密钥对通过 3x-ui 原生接口自动生成，Short ID 自动产生，已保存的有效值保留。托管开启时自动同步客户端 Public Key、Short ID 和服务端允许的 SNI；无需在高级设置中重复输入。
+- 未开启托管时仍支持连接外部 REALITY 下行服务器，用户可以在外层自行填写 Public Key 和 Short ID。所有模式均保留手动指定下行地址、端口和 uTLS 的能力。
+- 该改动只精简表单展示，不改变已经生效的共享 XHTTP 会话、TLS 上行和 REALITY 下行的后端拓扑。
