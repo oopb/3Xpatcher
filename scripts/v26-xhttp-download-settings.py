@@ -99,9 +99,9 @@ patch(ui,
       primarySecurity === 'reality'
         ? (primaryReality.settings?.serverName || primaryReality.serverNames?.[0] || '')
         : (primaryTls.serverName || '');
-    const configuredAddress = getValues('shareAddr') || getValues('listen') || '';
-    const address = ['0.0.0.0', '::', '127.0.0.1', 'localhost'].includes(configuredAddress)
-      ? '' : configuredAddress;
+    // A separate REALITY download connects directly to an origin endpoint.
+    // Neither the upstream CDN share address nor the listener bind IP is safe.
+    const address = '';
     setValue(base, {
       address,
       // A distinct download endpoint has no safe assumed port.
@@ -109,7 +109,8 @@ patch(ui,
       port: undefined,
       security: primarySecurity === 'reality' ? 'reality' : 'tls',
       network: 'xhttp',
-      xhttpSettings: { host: getValues('streamSettings.xhttpSettings.host') || '' },
+      // Empty means inherit the current uplink XHTTP Host at export time.
+      xhttpSettings: { host: '' },
       tlsSettings: {
         serverName, fingerprint: primaryTls.settings?.fingerprint || 'chrome',
         alpn: primaryTls.alpn?.length ? primaryTls.alpn : ['h2'],
@@ -118,8 +119,8 @@ patch(ui,
         // TLS uplink SNI is not a valid default for a distinct REALITY peer.
         serverName: primarySecurity === 'reality' ? serverName : '',
         fingerprint: primaryReality.settings?.fingerprint || 'chrome',
-        publicKey: primaryReality.settings?.publicKey || '',
-        shortId: primaryReality.shortIds?.[0] || '',
+        publicKey: primarySecurity === 'reality' ? (primaryReality.settings?.publicKey || '') : '',
+        shortId: primarySecurity === 'reality' ? (primaryReality.shortIds?.[0] || '') : '',
       },
     }, { shouldDirty: true });
   }""")
