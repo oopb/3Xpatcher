@@ -84,13 +84,13 @@ func TestXHTTPManagedGatewayExplicitOptIn(t *testing.T) {
  raw,_:=json.Marshal(stream)
  row:=&model.Inbound{Id:11,Tag:base.Tag,Enable:true,Protocol:model.VLESS,StreamSettings:string(raw)}
  cfg:=&xray.Config{InboundConfigs:[]xray.InboundConfig{base}}
- if err:=injectManagedXHTTPGateways(cfg,[]*model.Inbound{row},map[string]map[string]any{base.Tag:map[string]any{"managedListener":map[string]any{"enabled":false}}});err!=nil {t.Fatal(err)}
+ if err:=injectManagedXHTTPGateways(cfg,[]*model.Inbound{row},map[string]map[string]any{base.Tag:mockManagedDown()});err!=nil {t.Fatal(err)}
  if len(cfg.InboundConfigs)!=3 {t.Fatalf("expected 3 generated endpoints, got %d",len(cfg.InboundConfigs))}
  // disabling metadata leaves original TLS/XHTTP endpoint untouched
  xhttp["downloadSettings"].(map[string]any)["managedListener"].(map[string]any)["enabled"]=false
  raw,_=json.Marshal(stream);row.StreamSettings=string(raw)
  cfg=&xray.Config{InboundConfigs:[]xray.InboundConfig{base}}
- if err:=injectManagedXHTTPGateways(cfg,[]*model.Inbound{row});err!=nil {t.Fatal(err)}
+ if err:=injectManagedXHTTPGateways(cfg,[]*model.Inbound{row},map[string]map[string]any{base.Tag:map[string]any{"managedListener":map[string]any{"enabled":false}}});err!=nil {t.Fatal(err)}
  if len(cfg.InboundConfigs)!=1 || cfg.InboundConfigs[0].Port!=443 {t.Fatal("disabled listener must not change original node")}
 }
 
