@@ -9,6 +9,7 @@ import (
   "encoding/json"
   "fmt"
   "strings"
+  "regexp"
 
   "github.com/mhsanaei/3x-ui/v3/internal/database/model"
   "github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
@@ -48,6 +49,61 @@ func xhttpGatewayConfig(
   if conflict,exists:=used[port];exists {return nil,fmt.Errorf("inbound %s: REALITY port %d conflicts with %s",base.Tag,port,conflict)}
 
   reality,_:=managed["realitySettings"].(map[string]any)
+  minClientVer,_:=reality["minClientVer"].(string)
+  if minClientVer=="" { minClientVer="1.8.2" } // backward compatibility
+  if ok,_:=regexp.MatchString(`^[0-9]+\.[0-9]+\.[0-9]+package service
+
+// XHTTP paired TLS/REALITY entrypoints are generated only for explicit
+// opt-in on a VLESS/XHTTP/TLS inbound. Both outer gateways use RAW VLESS
+// fallback to the same internal plaintext XHTTP listener, as in the official
+// Xray 5-in-1 layout. Generating two independent XHTTP inbounds is incorrect
+// because upload/download sessions would not be shared.
+import (
+  "encoding/json"
+  "fmt"
+  "strings"
+  "regexp"
+
+  "github.com/mhsanaei/3x-ui/v3/internal/database/model"
+  "github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
+  "github.com/mhsanaei/3x-ui/v3/internal/xray"
+)
+
+func marshalXHTTPGateway(v any) (json_util.RawMessage,error) {
+  b,err:=json.Marshal(v)
+  return json_util.RawMessage(b),err
+}
+
+func xhttpMap(b []byte) map[string]any {
+  m:=map[string]any{}
+  _=json.Unmarshal(b,&m)
+  return m
+}
+
+func xhttpGatewayConfig(
+  base xray.InboundConfig,
+  inboundID int,
+  down map[string]any,
+  used map[int]string,
+) ([]xray.InboundConfig,error) {
+  orig:=xhttpMap(base.StreamSettings)
+  if orig["network"]!="xhttp" || orig["security"]!="tls" || base.Protocol!="vless" {
+    return nil,fmt.Errorf("inbound %s: managed REALITY download requires VLESS/XHTTP/TLS",base.Tag)
+  }
+  managed,_:=down["managedListener"].(map[string]any)
+  if managed["enabled"]!=true {return nil,nil}
+  if down["security"]!="reality" {return nil,fmt.Errorf("inbound %s: managed listener needs REALITY downlink",base.Tag)}
+  port:=0
+  switch v:=down["port"].(type) {
+  case int: port=v
+  case float64: port=int(v)
+  }
+  if port<1 || port>65535 {return nil,fmt.Errorf("inbound %s: invalid REALITY downlink port",base.Tag)}
+  if conflict,exists:=used[port];exists {return nil,fmt.Errorf("inbound %s: REALITY port %d conflicts with %s",base.Tag,port,conflict)}
+
+,minClientVer);!ok {
+    return nil,fmt.Errorf("inbound %s: invalid REALITY minClientVer %q",base.Tag,minClientVer)
+  }
   target,_:=reality["target"].(string)
   privateKey,_:=reality["privateKey"].(string)
   publicKey,_:=reality["publicKey"].(string)
@@ -119,7 +175,7 @@ func xhttpGatewayConfig(
       // its handshake before XHTTP sessions are reached.
       // Scope this explicit compatibility setting to the opt-in generated
       // REALITY downlink; do not change unrelated inbounds.
-      "minClientVer":"1.8.2",
+      "minClientVer":minClientVer,
     },
   })
   if err!=nil{return nil,err}
