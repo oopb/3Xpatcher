@@ -289,7 +289,7 @@ patch(link,
       xhttpSettings: {
         path: xhttp.path,
         mode: xhttp.mode,
-        host: download.xhttpSettings.host || (reality ? '' : download.tlsSettings.serverName),
+        host: download.xhttpSettings.host || xhttp.host || (reality ? '' : download.tlsSettings.serverName),
       },
     };
   }
