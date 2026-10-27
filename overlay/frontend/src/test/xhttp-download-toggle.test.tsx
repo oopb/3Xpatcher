@@ -57,7 +57,7 @@ function Harness({ values }: { values: Record<string, unknown> }) {
           setWire(normalizeXhttpForWire(parsed, 'inbound'));
         }}>Serialize inbound</button>
         <button type="button" onClick={() => {
-          setWire(methods.getValues('streamSettings.xhttpSettings') as Record<string, unknown>);
+          setWire(methods.getValues('streamSettings.xhttpSettings') as unknown as Record<string, unknown>);
         }}>Inspect XHTTP form</button>
         <pre data-testid="wire">{JSON.stringify(wire)}</pre>
       </Form>
