@@ -33,7 +33,16 @@ jobs:
       - name: Build pinned official Xray-core executable
         working-directory: source
         run: go build -o /tmp/xray-e2e github.com/xtls/xray-core/main
-      - name: Perform real Xray-core TLS gateway and XHTTP session test
+      - name: Download pinned official Mihomo v1.19.33
+        run: |
+          curl -fL --retry 5 --retry-all-errors \
+            'https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz' \
+            -o /tmp/mihomo-e2e.gz
+          gunzip /tmp/mihomo-e2e.gz
+          chmod +x /tmp/mihomo-e2e
+          /tmp/mihomo-e2e -v
+      - name: Perform real Xray/Mihomo split XHTTP handshake test
         env:
           XRAY_BIN: /tmp/xray-e2e
+          MIHOMO_BIN: /tmp/mihomo-e2e
         run: bash tests/xhttp_gateway_real_e2e.sh
