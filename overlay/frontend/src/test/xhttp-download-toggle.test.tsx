@@ -236,7 +236,7 @@ describe('VLESS XHTTP download switch', () => {
     const down = output().downloadSettings as Record<string, any>;
     expect(down.realitySettings.serverName).toBe('new.example.com');
     expect(down.managedListener.realitySettings.serverNames).toEqual(['www.amd.com', 'new.example.com']);
-    fireEvent.change(screen.getByPlaceholderText('自动生成，也可手动输入对应公钥'), {
+    fireEvent.input(screen.getByPlaceholderText('自动生成，也可手动输入对应公钥'), {
       target: { value: 'custom-pk' },
     });
     await waitFor(() => {
@@ -246,10 +246,10 @@ describe('VLESS XHTTP download switch', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Inspect XHTTP form' }));
     expect((output().downloadSettings as Record<string, any>).realitySettings.publicKey)
       .toBe('custom-pk');
-    fireEvent.change(screen.getByPlaceholderText('自动生成，也可手动输入十六进制 Short ID'), {
+    fireEvent.input(screen.getByPlaceholderText('自动生成，也可手动输入十六进制 Short ID'), {
       target: { value: 'aa12' },
     });
-    fireEvent.change(screen.getByPlaceholderText('自动生成，也可输入与公钥匹配的私钥'), {
+    fireEvent.input(screen.getByPlaceholderText('自动生成，也可输入与公钥匹配的私钥'), {
       target: { value: 'custom-private' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Inspect XHTTP form' }));
