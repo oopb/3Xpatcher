@@ -220,7 +220,7 @@ func TestMihomoRealityDownloadDoesNotInheritCDNHostOrALPN(t *testing.T) {
   }
 }
 
-func TestXhttpDownloadInheritsServerHostAndShadowrocketURI(t *testing.T) {
+func TestXhttpDownloadInheritsServerHostAndPreservesRealitySNI(t *testing.T) {
   x:=map[string]any{
     "host":"cdn.example.com","path":"/shared","xPaddingBytes":"100-1000",
     "downloadSettings":map[string]any{
@@ -240,162 +240,34 @@ func TestXhttpDownloadInheritsServerHostAndShadowrocketURI(t *testing.T) {
   if proxy["host"]!="cdn.example.com" || proxy["servername"]!="target.example.com" {
     t.Fatalf("HTTP Host and REALITY SNI must stay independent: %#v",proxy)
   }
-  params:=map[string]string{}
-  shadowrocketXHTTPDownloadParams(x,params)
-  var parsed map[string]any
-  if err:=json.Unmarshal([]byte(params["obfsParam"]),&parsed);err!=nil {t.Fatal(err)}
-  opts:=parsed[""].(map[string]any)
-  for key,want:=range map[string]string{
-    "downloadTargetHost":"203.0.113.27",
-    "downloadTargetPort":"9443",
-    "downloadServerName":"target.example.com",
-    "downloadHTTPHost":"cdn.example.com",
-    // Native Shadowrocket shares the top-level XHTTP path; no nested downloadPath.
-    "xPaddingBytes":"100-1000",
-  } {
-    if opts[key]!=want {t.Fatalf("%s got %v want %q",key,opts[key],want)}
-  }
-  if parsed["Host"]!="cdn.example.com" {t.Fatalf("uplink Host missing: %#v",parsed)}
-  if strings.Contains(params["obfsParam"],"pub-key") {t.Fatal("do not encode unverified Shadowrocket reality key name")}
 }
 
-
-func TestXhttpDownloadShadowrocketNativeRealityKeysPreserveXrayURI(t *testing.T) {
-  // Regression from a Shadowrocket-exported TLS uplink / REALITY download.
-  // Keep Xray's standard VLESS authority, encryption query, and
-  // extra.downloadSettings; only supply the downlink-specific pbk/sid.
+func TestXhttpDownloadStandardExtraPreservesRealityFields(t *testing.T) {
   x:=map[string]any{
-    "host":"cdn03.ijj.kdns.fr","path":"/fe98239xhnwe7743xfdw",
-    "mode":"auto","xPaddingBytes":"100-1000",
+    "host":"cdn.example.com", "path":"/single-session", "mode":"auto",
     "downloadSettings":map[string]any{
-      "address":"23.246.167.78","port":float64(443),"security":"reality",
-      "xhttpSettings":map[string]any{"host":"cdn03.ijj.kdns.fr"},
+      "address":"203.0.113.25", "port":float64(443), "security":"reality",
       "realitySettings":map[string]any{
-        "serverName":"aws.amazon.com",
-        "publicKey":"7_B0g4hZQ9Kxw6TicXrAIvHxvek3vbfZQmUpko1RBls",
-        "shortId":"b926c80a0e3759","fingerprint":"chrome",
+        "serverName":"www.example.com", "publicKey":"CLIENT_PUBLIC_KEY",
+        "shortId":"aabbccdd", "fingerprint":"chrome",
       },
+      "xhttpSettings":map[string]any{"host":"cdn.example.com"},
     },
   }
-  params:=map[string]string{
-    "type":"xhttp","security":"tls","encryption":"mlkem768x25519plus.native.0rtt.SAMPLE",
-    "sni":"cdn03.ijj.kdns.fr","flow":"xtls-rprx-vision",
-    "path":"/fe98239xhnwe7743xfdw",
-    "host":"cdn03.ijj.kdns.fr",
-  }
+  // Only the documented Xray extra.downloadSettings is produced; the
+  // Downlink REALITY credentials stay in the Xray-native nested object.
   extra:=buildXhttpExtra(x)
-  b,err:=json.Marshal(extra);if err!=nil {t.Fatal(err)}
-  params["extra"]=string(b)
-  shadowrocketXHTTPDownloadParams(x,params)
-  shadowrocketXHTTPMarkNativeTransport(params)
-  shadowrocketXHTTPDownloadRealityQueryParams(x,params)
-  // Native Shadowrocket requires this selector before it can unpack
-  // the JSON obfsParam. Otherwise the entire JSON becomes HTTP Host.
-  if params["obfs"]!="xhttp" || params["host"]!="cdn03.ijj.kdns.fr" {
-    t.Fatalf("JSON obfsParam may replace host without matching xhttp selector: %#v",params)
+  down,ok:=extra["downloadSettings"].(map[string]any)
+  if !ok {t.Fatalf("missing Xray downloadSettings: %#v",extra)}
+  if down["address"]!="203.0.113.25" || down["security"]!="reality" {
+    t.Fatalf("wrong Xray downlink: %#v",down)
   }
-  const key="7_B0g4hZQ9Kxw6TicXrAIvHxvek3vbfZQmUpko1RBls"
-  if params["pbk"]!=key || params["sid"]!="b926c80a0e3759" {
-    t.Fatalf("Shadowrocket downlink REALITY credentials missing: %#v",params)
+  real:=down["realitySettings"].(map[string]any)
+  if real["publicKey"]!="CLIENT_PUBLIC_KEY" || real["shortId"]!="aabbccdd" {
+    t.Fatalf("downlink credentials lost: %#v",real)
   }
-  for k,want:=range map[string]string{
-    "security":"tls","encryption":"mlkem768x25519plus.native.0rtt.SAMPLE",
-    "flow":"xtls-rprx-vision","type":"xhttp","sni":"cdn03.ijj.kdns.fr",
-  } {
-    if params[k]!=want {t.Fatalf("modified standard Xray URI %s: got %q want %q",k,params[k],want)}
-  }
-  var sr map[string]any
-  if err:=json.Unmarshal([]byte(params["obfsParam"]),&sr);err!=nil {t.Fatal(err)}
-  nested,ok:=sr[""].(map[string]any)
-  if !ok {t.Fatalf("non-native Shadowrocket shape: %#v",sr)}
-  for k,want:=range map[string]string{
-    "downloadServerName":"aws.amazon.com","downloadTargetHost":"23.246.167.78",
-    "downloadTargetPort":"443","downloadHTTPHost":"cdn03.ijj.kdns.fr",
-    "xPaddingBytes":"100-1000",
-  } {
-    if nested[k]!=want {t.Fatalf("obfsParam %s got %v, want %q",k,nested[k],want)}
-  }
-  if _,ok:=nested["downloadPath"];ok {t.Fatalf("redundant non-native downloadPath: %#v",nested)}
-  if sr["Host"]!="cdn03.ijj.kdns.fr" {t.Fatalf("missing SR parent Host: %#v",sr)}
-  var canonical map[string]any
-  if err:=json.Unmarshal([]byte(params["extra"]),&canonical);err!=nil {t.Fatal(err)}
-  down,ok:=canonical["downloadSettings"].(map[string]any)
-  if !ok || down["security"]!="reality" || down["address"]!="23.246.167.78" {
-    t.Fatalf("standard Xray downlink damaged: %#v",canonical)
-  }
-  reality:=down["realitySettings"].(map[string]any)
-  if reality["publicKey"]!=key || reality["shortId"]!="b926c80a0e3759" {
-    t.Fatalf("standard Xray REALITY credentials damaged: %#v",reality)
-  }
-  dx:=down["xhttpSettings"].(map[string]any)
-  if dx["path"]!="/fe98239xhnwe7743xfdw" {
-    t.Fatalf("standard Xray downlink path missing: %#v",dx)
-  }
-}
-
-func TestXhttpDownloadShadowrocketKeyIsolation(t *testing.T) {
- x:=map[string]any{"path":"/same","downloadSettings":map[string]any{
-   "address":"203.0.113.9","port":float64(10443),"security":"reality",
-   "realitySettings":map[string]any{"serverName":"www.example.com","publicKey":"DOWN_KEY","shortId":"DOWN_ID"},
- }}
- for _,tc:=range []struct{name string;params map[string]string;pbk,sid string}{
-  {"TLS upstream",map[string]string{"security":"tls"},"DOWN_KEY","DOWN_ID"},
-  {"REALITY upstream",map[string]string{"security":"reality","pbk":"UP_KEY","sid":"UP_ID"},"UP_KEY","UP_ID"},
-  {"plain upstream",map[string]string{"security":"none"},"",""},
- } {
-   t.Run(tc.name,func(t *testing.T){
-    shadowrocketXHTTPDownloadRealityQueryParams(x,tc.params)
-    if tc.params["pbk"]!=tc.pbk || tc.params["sid"]!=tc.sid {
-     t.Fatalf("uplink security/query polluted: %#v",tc.params)
-    }
-   })
- }
- tls:=map[string]any{"path":"/same","downloadSettings":map[string]any{
-    "address":"cdn.example.org","port":float64(2083),"security":"tls",
-    "tlsSettings":map[string]any{"serverName":"cdn.example.org"},
- }}
- params:=map[string]string{"security":"tls","encryption":"none"}
- shadowrocketXHTTPDownloadRealityQueryParams(tls,params)
- shadowrocketXHTTPDownloadParams(tls,params)
- // As long as a native split obfsParam exists, also mark the XHTTP
- // transport; otherwise a generic VLESS decoder may treat it as Host.
- params["type"]="xhttp"
- params["host"]="cdn.example.org"
- shadowrocketXHTTPMarkNativeTransport(params)
- if params["obfs"]!="xhttp" || params["host"]!="cdn.example.org" {t.Fatal("TLS/TLS native import Host regression")}
- if _,has:=params["pbk"];has {t.Fatal("TLS/TLS must not inject REALITY pbk")}
- if _,has:=params["sid"];has {t.Fatal("TLS/TLS must not inject REALITY sid")}
- var obfs map[string]any
- if err:=json.Unmarshal([]byte(params["obfsParam"]),&obfs);err!=nil {t.Fatal(err)}
- if _,has:=obfs[""].(map[string]any)["downloadPath"];has {t.Fatal("redundant path in TLS/TLS obfs")}
-}
-
-
-func TestXhttpDownloadShadowrocketHostMarkerScope(t *testing.T) {
-  // Ordinary VLESS XHTTP and other transports must retain their original
-  // Xray URI without any Shadowrocket-only obfs alias.
-  for _,tc:=range []struct{
-    name string
-    params map[string]string
-    mark bool
-  }{
-    {"regular-XHTTP",map[string]string{"type":"xhttp","host":"origin.example.com"},false},
-    {"websocket",map[string]string{"type":"ws","host":"origin.example.com","obfsParam":"not JSON"},false},
-    {"split-XHTTP",map[string]string{
-      "type":"xhttp","host":"cdn.example.com","security":"tls",
-      "obfsParam":`{"":{"downloadTargetHost":"203.0.113.8"},"Host":"cdn.example.com"}`,
-    },true},
-  }{
-    t.Run(tc.name,func(t *testing.T){
-      beforeHost:=tc.params["host"]
-      beforeObfsParam:=tc.params["obfsParam"]
-      shadowrocketXHTTPMarkNativeTransport(tc.params)
-      if (tc.params["obfs"]=="xhttp")!=tc.mark{
-        t.Fatalf("invalid Shadowrocket XHTTP marker: %#v",tc.params)
-      }
-      if tc.params["host"]!=beforeHost || tc.params["obfsParam"]!=beforeObfsParam {
-        t.Fatalf("standard Host or Shadowrocket JSON unexpectedly changed: %#v",tc.params)
-      }
-    })
+  transport:=down["xhttpSettings"].(map[string]any)
+  if transport["path"]!="/single-session" || transport["host"]!="cdn.example.com" {
+    t.Fatalf("XHTTP downlink transport corrupted: %#v",transport)
   }
 }
