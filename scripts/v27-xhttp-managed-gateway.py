@@ -192,11 +192,11 @@ patch(p,
 # Put the exact upstream RealityTargetScannerModal next to the REALITY SNI,
 # not inside a second advanced-settings editor.
 patch(p,
-"""                   <FormField
-                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'serverName']}
-                     label="REALITY SNI"
-                     rules={{ required: 'REALITY 需要 SNI' }}
-                   ><Input placeholder="reality.example.com" /></FormField>""",
+"""                  <FormField
+                    name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'serverName']}
+                    label="REALITY SNI"
+                    rules={{ required: 'REALITY 需要 SNI' }}
+                  ><Input placeholder="reality.example.com" /></FormField>""",
 """                   <Form.Item label="REALITY SNI">
                      <Space.Compact block style={{ display: 'flex' }}>
                        <FormField
@@ -221,14 +221,14 @@ patch(p,
 # Hide automatically managed key material, but retain editable fields for
 # client-only download to an independently configured REALITY server.
 patch(p,
-"""                   <FormField
-                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'publicKey']}""",
+"""                  <FormField
+                    name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'publicKey']}""",
 """                   {!autoReality && (<>
                    <FormField
                      name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'publicKey']}""")
 patch(p,
-"""                   <FormField
-                     name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'fingerprint']}""",
+"""                  <FormField
+                    name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'fingerprint']}""",
 """                   </>)}
                    <FormField
                      name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'realitySettings', 'fingerprint']}""")
