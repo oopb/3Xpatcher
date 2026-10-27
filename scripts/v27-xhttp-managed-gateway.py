@@ -203,7 +203,7 @@ append=anchor+"""              {downloadSecurity === 'reality' && (
 patch(p,anchor,append)
 # A managed listener is not client-only. Describe the real effect of the toggle.
 patch(p,
-'''message="仅用于客户端订阅/分享链接，不会写入 Xray 服务端 listener。上下行必须汇聚到同一个 XHTTP 入站与 Path；CDN 回源、TLS/REALITY 分流需事先配置."''',
+'''message="仅用于客户端订阅/分享链接，不会写入 Xray 服务端 listener。上下行必须汇聚到同一个 XHTTP 入站与 Path；CDN 回源、TLS/REALITY 分流需事先配置。"''',
 '''message={autoReality
                   ? '已启用服务端托管：保存后会生成独立 REALITY 端口，并让 TLS/REALITY 两条路径汇聚到同一 XHTTP 后端。'
                   : '当前仅生成客户端的下行配置；若需自动启动 REALITY 下行监听，请开启下方服务端托管开关。'}''')
