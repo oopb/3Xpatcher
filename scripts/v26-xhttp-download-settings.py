@@ -441,3 +441,29 @@ var kcpMaskToHeaderType''',
 }
 
 var kcpMaskToHeaderType''')
+
+
+# QR/link preview in the panel must use the same Shadowrocket dialect as
+# server-generated subscriptions. Keep standard Xray extra untouched.
+patch('frontend/src/lib/xray/inbound-link.ts',
+    "  if (extra) params.set('extra', JSON.stringify(extra));\n}",
+    """  if (extra) params.set('extra', JSON.stringify(extra));
+  const download = xhttp.downloadSettings;
+  if (download?.address && download.port > 0) {
+    const downloadHost = download.xhttpSettings?.host || xhttp.host || '';
+    const nested: Record<string, string> = {
+      downloadTargetHost: download.address,
+      downloadTargetPort: String(download.port),
+      downloadPath: xhttp.path || '',
+      downloadHTTPHost: downloadHost,
+      downloadServerName: download.security === 'reality'
+        ? (download.realitySettings?.serverName || '')
+        : (download.tlsSettings?.serverName || ''),
+    };
+    if (xhttp.xPaddingBytes) nested.xPaddingBytes = xhttp.xPaddingBytes;
+    params.set('obfsParam', JSON.stringify({
+      '': nested,
+      ...(xhttp.host ? { Host: xhttp.host } : {}),
+    }));
+  }
+}""")
