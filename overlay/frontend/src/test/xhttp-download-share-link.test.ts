@@ -35,7 +35,12 @@ function fixture(withDownload: boolean, security: 'tls' | 'reality' = 'tls'): In
       tlsSettings: {
         serverName: 'cdn03.ijj.kdns.fr',
         alpn: ['h2', 'http/1.1'],
-        settings: { fingerprint: 'chrome' },
+        settings: {
+          fingerprint: 'chrome',
+          echConfigList: '',
+          verifyPeerCertByName: '',
+          pinnedPeerCertSha256: [],
+        },
       },
       xhttpSettings: xhttp,
     },
