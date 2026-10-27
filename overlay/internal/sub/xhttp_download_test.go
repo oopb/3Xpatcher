@@ -177,3 +177,34 @@ func TestXhttpManagedRealityDoesNotLeakPrivateKey(t *testing.T) {
        t.Fatal("server-side REALITY private key leaked into Mihomo YAML")
     }
 }
+
+func TestMihomoRealityDownloadDoesNotInheritCDNHostOrALPN(t *testing.T) {
+  xhttp := map[string]any{
+    "path": "/same-xhttp",
+    "mode": "auto",
+    "downloadSettings": map[string]any{
+      "address": "198.51.100.20",
+      "port": float64(9443),
+      "security": "reality",
+      "realitySettings": map[string]any{
+        "serverName": "www.example.com",
+        "publicKey": "EXAMPLE_PUBLIC_KEY",
+        "shortId": "ab12",
+        "fingerprint": "chrome",
+      },
+      "xhttpSettings": map[string]any{"host": ""},
+    },
+  }
+  opts:=buildXhttpClashOpts(xhttp)
+  down,ok:=opts["download-settings"].(map[string]any)
+  if !ok {t.Fatalf("no downlink output: %#v",opts)}
+  host,hasHost:=down["host"]
+  if !hasHost || host!="" {t.Fatalf("empty Reality Host must be explicit to disable CDN Host inheritance: %#v",down)}
+  alpn,ok:=down["alpn"].([]string)
+  if !ok || len(alpn)!=1 || alpn[0]!="h2" {
+    t.Fatalf("Reality downlink must override uplink ALPN with h2: %#v",down)
+  }
+  if down["servername"]!="www.example.com" || down["port"]!=float64(9443) {
+    t.Fatalf("Reality port/SNI mismatch: %#v",down)
+  }
+}
