@@ -281,6 +281,7 @@ func TestXhttpDownloadShadowrocketNativeRealityKeysPreserveXrayURI(t *testing.T)
     "type":"xhttp","security":"tls","encryption":"mlkem768x25519plus.native.0rtt.SAMPLE",
     "sni":"cdn03.ijj.kdns.fr","flow":"xtls-rprx-vision",
     "path":"/fe98239xhnwe7743xfdw",
+    "host":"cdn03.ijj.kdns.fr",
   }
   extra:=buildXhttpExtra(x)
   b,err:=json.Marshal(extra);if err!=nil {t.Fatal(err)}
