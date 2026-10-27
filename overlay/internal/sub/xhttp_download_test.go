@@ -32,9 +32,20 @@ func TestXhttpDownloadTLSCDN(t *testing.T) {
 	if m["server"] != "cdn.example.com" || m["tls"] != true {
 		t.Fatalf("wrong Mihomo downlink: %#v", m)
 	}
-	real := m["reality-opts"].(map[string]any)
+	if _, ok := m["reality-opts"]; ok {
+		t.Fatalf("TLS upstream and TLS download must not introduce REALITY options: %#v", m)
+	}
+	split := buildXhttpClashOpts(x, "tls")
+	got := split["download-settings"].(map[string]any)
+	if _, ok := got["reality-opts"]; ok {
+		t.Fatalf("full TLS/TLS subscription output must have no REALITY options: %#v", got)
+	}
+	// TLS downlink with a REALITY uplink is a different transport
+	// transition: explicitly clear the inherited outer REALITY public key.
+	reset := xhttpDownloadMihomo(d, "reality")
+	real := reset["reality-opts"].(map[string]any)
 	if real["public-key"] != "" {
-		t.Fatalf("REALITY key must be reset on TLS downlink: %#v", real)
+		t.Fatalf("REALITY-to-TLS must explicitly reset inherited key: %#v", real)
 	}
 }
 
