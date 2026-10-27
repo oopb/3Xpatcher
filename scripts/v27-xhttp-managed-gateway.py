@@ -174,7 +174,7 @@ append=anchor.replace('留空时按 SNI 自动填充，REALITY 下行可留空',
                       <Alert
                         type="warning"
                         showIcon
-                        message="此模式将自动把原 TLS/XHTTP 监听改为 TLS/RAW 回落入口，并创建共享的内部 XHTTP 会话与独立 REALITY/RAW 端口。必须使用不同的公网端口（例如 9443），并在防火墙开放；仅在确知服务端无端口冲突时启用。TLS 证书沿用原入站证书。"
+                        message="托管入口将原 TLS/XHTTP 变为 TLS/RAW 回落，并新建独立 REALITY 端口；请先在上方填写可用的下行监听端口并开放防火墙。REALITY Target 是独立的远端伪装目标，必须手动输入或从扫描结果中选择，不会根据下行端口自动生成。"
                         style={{ marginBottom: 12 }}
                       />
                       <details>
@@ -185,9 +185,21 @@ append=anchor.replace('留空时按 SNI 自动填充，REALITY 下行可留空',
                       ><Input placeholder="0.0.0.0" /></FormField>
                       <FormField
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'target']}
-                        label="REALITY Target (伪装目标 host:port)"
-                        rules={{required:'REALITY target 不能为空'}}
-                      ><Input placeholder="www.example.com:443" /></FormField>
+                        label="REALITY Target（远端伪装目标，与下行监听端口无关）"
+                        rules={{
+                          required: '请选择或填写 REALITY Target',
+                          validate: (value) => validateRealityTarget(typeof value === 'string' ? value : '') ?? true,
+                        }}
+                      ><Input placeholder="域名:远端端口（请扫描选择或手动填写）" /></FormField>
+                      <Button onClick={() => setScannerOpen(true)}>
+                        选择 REALITY 伪装目标 / 自动填充 SNI
+                      </Button>
+                      <RealityTargetScannerModal
+                        open={scannerOpen}
+                        onClose={() => setScannerOpen(false)}
+                        scanRealityCandidates={scanManagedRealityCandidates}
+                        onPick={applyManagedRealityScanResult}
+                      />
                       <FormField
                         name={['streamSettings', 'xhttpSettings', 'downloadSettings', 'managedListener', 'realitySettings', 'serverNames']}
                         label="REALITY serverNames (SNI)"
