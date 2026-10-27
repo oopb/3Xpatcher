@@ -42,7 +42,8 @@ export type XHttpDownloadSettings""",
       shortIds: z.array(z.string()).default([]),
       privateKey: z.string().default(''),
       publicKey: z.string().default(''),
-    }).default({ target: '', serverNames: [], shortIds: [], privateKey: '', publicKey: '' }),
+      minClientVer: z.string().default('1.8.2'),
+    }).default({ target: '', serverNames: [], shortIds: [], privateKey: '', publicKey: '', minClientVer: '1.8.2' }),
   }).optional(),
 });
 export type XHttpDownloadSettings""")
