@@ -66,6 +66,9 @@ func TestXhttpDownloadREALITY(t *testing.T) {
 	if m["reality-opts"].(map[string]any)["short-id"] != "a1b2" {
 		t.Fatalf("downlink short ID lost: %#v", m)
 	}
+	if m["reality-opts"].(map[string]any)["support-x25519mlkem768"] != true {
+		t.Fatalf("Xray 26.9.8+ REALITY downlink requires Mihomo ML-KEM hint: %#v", m)
+	}
 }
 
 func TestXhttpDownloadFailClosed(t *testing.T) {
@@ -228,6 +231,10 @@ func TestXhttpDownloadInheritsServerHostAndShadowrocketURI(t *testing.T) {
   proxy:=xhttpDownloadMihomo(down)
   if proxy["host"]!="cdn.example.com" || proxy["servername"]!="target.example.com" {
     t.Fatalf("HTTP Host and REALITY SNI must stay independent: %#v",proxy)
+  }
+  opts,ok:=proxy["reality-opts"].(map[string]any)
+  if !ok || opts["support-x25519mlkem768"]!=true {
+    t.Fatalf("Mihomo split REALITY must enable ML-KEM: %#v",proxy)
   }
   params:=map[string]string{}
   shadowrocketXHTTPDownloadParams(x,params)
