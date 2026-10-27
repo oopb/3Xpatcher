@@ -112,28 +112,40 @@ patch(p,
       existing?.listen || '0.0.0.0', { shouldDirty: true });
     const currentPort = Number(getValues(`${base}.port`));
     const uplinkPort = Number(getValues('port'));
-    if (!currentPort || currentPort === uplinkPort) {
-      // An additional listener cannot bind to an occupied TLS port.
-      setValue(`${base}.port`, 9443, { shouldDirty: true });
+    if (!Number.isInteger(currentPort) || currentPort < 1 || currentPort > 65535) {
+      message.warning('请先填写有效的下行监听端口（1–65535）；不会自动指定端口');
+      return;
     }
+    if (currentPort === uplinkPort) {
+      message.warning('REALITY 下行监听端口不能与原 TLS 上行端口相同');
+      return;
+    }
+    // The REALITY Target is a separate remote camouflage endpoint, not
+    // the VPS listener. Never fabricate host:443 from the download SNI.
     const reality = getValues(`${base}.realitySettings`) ?? {};
-    const names = getValues(`${base}.managedListener.realitySettings.serverNames`) ?? [];
-    if (!names.length && reality.serverName) {
-      setValue(`${base}.managedListener.realitySettings.serverNames`,
-        [reality.serverName], { shouldDirty: true });
-    }
-    const target = (getValues(`${base}.managedListener.realitySettings.target`) || '').trim();
-    if (!target || target === reality.serverName + ':' + Number(getValues(`${base}.port`))) {
-      setValue(`${base}.managedListener.realitySettings.target`, reality.serverName + ':443', { shouldDirty: true });
-    }
     const shorts = getValues(`${base}.managedListener.realitySettings.shortIds`) ?? [];
     if (!shorts.length) {
+      const shortId = reality.shortId || RandomUtil.randomShortIds().split(',').map((id) => id.trim()).find(Boolean) || '';
       setValue(`${base}.managedListener.realitySettings.shortIds`,
-        [reality.shortId || ''], { shouldDirty: true });
+        [shortId], { shouldDirty: true });
+      if (!reality.shortId) {
+        setValue(`${base}.realitySettings.shortId`, shortId, { shouldDirty: true });
+      }
     }
-    if (!getValues(`${base}.managedListener.realitySettings.privateKey`)) {
+    const privateKey = getValues(`${base}.managedListener.realitySettings.privateKey`);
+    const publicKey = getValues(`${base}.managedListener.realitySettings.publicKey`);
+    if (!privateKey && !publicKey) {
       await genManagedRealityKeypair();
-      if (!getValues(`${base}.managedListener.realitySettings.privateKey`)) return;
+      if (!getValues(`${base}.managedListener.realitySettings.privateKey`) ||
+          !getValues(`${base}.managedListener.realitySettings.publicKey`)) return;
+    } else if (!privateKey || !publicKey) {
+      message.warning('已有 REALITY 密钥对不完整，请手动重新生成；不会覆盖现有密钥');
+      return;
+    } else if (!reality.publicKey) {
+      setValue(`${base}.realitySettings.publicKey`, publicKey, { shouldDirty: true });
+    } else if (reality.publicKey !== publicKey) {
+      message.warning('客户端 REALITY 公钥与托管入口不一致，请核对后启用');
+      return;
     }
     if (!getValues(`${base}.managedListener.realitySettings.minClientVer`)) {
       setValue(`${base}.managedListener.realitySettings.minClientVer`, '1.8.2', { shouldDirty: true });
