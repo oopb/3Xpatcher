@@ -232,7 +232,7 @@ Mieru 使用 official `mita`，支持当前集成字段，包括：
 
 ## XHTTP 自动 REALITY 下行入口（0.17.0 实验性）
 
-在 VLESS + XHTTP + TLS 入站的 **Streaming → Download Settings** 中，将下行安全类型设为 REALITY 后，可选择 **自动创建 REALITY 入口**。面板通过原生密钥生成 API 创建 REALITY X25519 密钥对，可填写独立下行监听 IP/端口、Target、SNI 列表及 Short ID；客户端公钥与服务端私钥分离保存。建议使用独立端口（默认候选 9443），不要与原 TLS 上行端口抢占。端口必须自行在防火墙开放。
+在 VLESS + XHTTP + TLS 入站的 **Streaming → Download Settings** 中，将下行安全类型设为 REALITY 后，可选择 **自动创建 REALITY 入口**。面板通过原生密钥生成 API 创建 REALITY X25519 密钥对，可填写独立下行监听 IP/端口、Target、SNI 列表及 Short ID；客户端公钥与服务端私钥分离保存。下行端口不提供默认候选值，必须手动选择有效且未被占用的独立监听端口，不能与原 TLS 上行端口冲突；该端口需要自行在防火墙开放。
 
 启用后运行配置将原 TLS/XHTTP 入口替换为 TLS/RAW 回落前端，并添加 REALITY/RAW 回落前端，两者回落到**同一个内部 Unix 抽象套接字 XHTTP 入站**；原用户、Path 和入站流量统计保留在内部共享入站。关闭时恢复原始 TLS/XHTTP 入站结构。配置生成阶段会拒绝重复端口、缺失密钥、SNI/Short ID 不一致。
 
