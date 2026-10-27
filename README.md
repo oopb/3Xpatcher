@@ -4,7 +4,7 @@
 
 目标是在尽量保持 3x-ui 原生 **Inbounds / Clients / Subscription / Traffic / Online / Nodes** 工作流不变的前提下，保留官方 Xray，同时增加彼此隔离的 sing-box 与 Mieru 运行时，使一个 3x-ui 面板能够统一管理更多协议。
 
-当前版本：`0.17.7-integrated-alpha`
+当前版本：`0.17.8-integrated-alpha`
 
 当前兼容上游：`3x-ui v3.11.0`（保留 v3.7.0、v3.8.5、v3.9.0、v3.10.0 的预构建支持）
 
@@ -498,3 +498,10 @@ Mihomo 下行导出仍显式携带 `host: ""`、`alpn: [h2]` 以避免继承 CDN
 - 启用「REALITY 服务端自动监听」后，在外层直接展开并可编辑全部托管参数：**监听 IP、远端 Target、允许的 SNI 列表（serverNames）、允许的 Short ID 列表（shortIds）、Private Key、服务端 Public Key、minClientVer**。不再引入“高级设置”。
 - 启用托管时若缺少密钥对，通过 3x-ui 原生接口生成；显示「重新生成 REALITY 密钥对」与「重新生成 Short ID」按钮。客户端/服务端公钥、Short ID 与允许列表随用户修改同步；允许手动输入已有密钥对，但手动修改公钥或私钥后必须确保两者匹配。
 - 保存的有效参数继续保留；不会预填下行端口、不会覆盖扫描得到的 REALITY Target 为固定 `SNI:443`。Private Key 只存储在服务端配置元数据，不进入任何客户端订阅或分享链接。
+
+## XHTTP 管理监听端口冲突 / Mihomo TLS 下行配置（0.17.8）
+
+- 托管 REALITY 下行作为额外 TCP 监听，会参与 3x-ui v3.11.0 保存、编辑和启用入站时的事务性端口冲突检查：上行与下行相撞、与其他入站主端口冲突、与其他托管下行冲突都会返回清晰错误；同时对新申请的托管 TCP 端口进行系统 socket 预检查。对于编辑已运行且未变动的托管监听端口，不会把自己的 Xray socket 误判为外部占用。不影响 TCP 与 UDP 同端口合法共存，也不会未经授权自动改端口。
+- Mihomo 的 `xhttp-opts.download-settings` 根据上下行**实际安全类型**生成：TLS → TLS 不再生成 `reality-opts`；REALITY → TLS 仍可在下行清除继承的 REALITY 公钥；TLS → REALITY 保持公钥、Short ID 等设置。不使用最终 YAML 空字段清理或文本替换。
+- 原有 3x-ui v3.7–v3.10 兼容映射保持原样；新增端口事务检查只适配提供 `internal/web/service/port_conflict.go` 的新版上游。
+- 端口可用性预检查不是系统级原子锁：极短竞态仍须由最终 Xray bind 决定。升级不会改动现有节点端口，请自行核对实际监听和防火墙。

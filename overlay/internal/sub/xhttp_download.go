@@ -105,10 +105,10 @@ func xhttpClientDownload(xhttp map[string]any) map[string]any {
 	return down
 }
 
-// Mihomo's download-settings is a flat override of proxy/XHTTP fields.
-// It cannot consume the Xray-core streamSettings object. Security transitions
-// must explicitly clear a Reality public key when switching downlink to TLS.
-func xhttpDownloadMihomo(download map[string]any) map[string]any {
+// Mihomo's download-settings inherits fields from its parent VLESS proxy.
+// A REALITY-to-TLS transition must clear the inherited REALITY public key;
+// TLS-to-TLS must not introduce any REALITY option at all.
+func xhttpDownloadMihomo(download map[string]any, upstreamSecurity ...string) map[string]any {
 	if download == nil {
 		return nil
 	}
@@ -147,9 +147,11 @@ func xhttpDownloadMihomo(download map[string]any) map[string]any {
 		if alpn, ok := tls["alpn"]; ok {
 			out["alpn"] = alpn
 		}
-		// When uplink is REALITY, retaining the outer proxy's public key
-		// would make Mihomo attempt REALITY on the downlink CDN connection.
-		out["reality-opts"] = map[string]any{"public-key": ""}
+		// Only a REALITY uplink contributes a public key that needs clearing.
+		// Do not synthesize a REALITY option for an all-TLS XHTTP route.
+		if len(upstreamSecurity) > 0 && upstreamSecurity[0] == "reality" {
+			out["reality-opts"] = map[string]any{"public-key": ""}
+		}
 	}
 	return out
 }
